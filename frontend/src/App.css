@@ -32,6 +32,34 @@ p {
   gap: 0.4rem;
 }
 
+.racePanel {
+  margin-top: 0.55rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.raceStateBox {
+  margin-top: 0.55rem;
+  border: 1px solid #6f6f6f;
+  background: #efefef;
+  padding: 0.4rem 0.55rem;
+  font-size: 0.9rem;
+  color: #111;
+  display: grid;
+  gap: 0.25rem;
+}
+
+.racePlayers {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.raceResult {
+  font-weight: 800;
+}
+
 input,
 select,
 button {

@@ -64,6 +64,12 @@ function App() {
   const [canRedo, setCanRedo] = useState(false);
   const [elapsedSec, setElapsedSec] = useState(0);
   const [timerRunning, setTimerRunning] = useState(false);
+  const [nickname, setNickname] = useState("");
+  const [roomCodeInput, setRoomCodeInput] = useState("");
+  const [raceRoomCode, setRaceRoomCode] = useState("");
+  const [racePlayerId, setRacePlayerId] = useState("");
+  const [raceState, setRaceState] = useState(null);
+  const [raceSubmitting, setRaceSubmitting] = useState(false);
   const boardRef = useRef(null);
   const canvasRef = useRef(null);
   const dragRef = useRef(null); // { button: 'left'|'right', paintValue }
@@ -76,6 +82,8 @@ function App() {
   const undoStackRef = useRef([]);
   const redoStackRef = useRef([]);
   const autoSolvedShownRef = useRef(false);
+  const racePollRef = useRef(0);
+  const raceFinishedSentRef = useRef(false);
   const deferredCells = useDeferredValue(cells);
 
   useEffect(() => {
@@ -85,6 +93,7 @@ function App() {
   useEffect(() => {
     return () => {
       if (frameRef.current) cancelAnimationFrame(frameRef.current);
+      if (racePollRef.current) clearInterval(racePollRef.current);
     };
   }, []);
 
@@ -152,6 +161,19 @@ function App() {
     return solvedRows.size === puzzle.height && solvedCols.size === puzzle.width;
   }, [puzzle, solvedRows, solvedCols]);
 
+  const myRacePlayer = useMemo(() => {
+    if (!raceState || !racePlayerId) return null;
+    return raceState.players?.find((p) => p.playerId === racePlayerId) || null;
+  }, [raceState, racePlayerId]);
+
+  const raceResultText = useMemo(() => {
+    if (!raceState?.winner) return "";
+    if (raceState.winner.playerId === racePlayerId) {
+      return `You win (${raceState.winner.elapsedSec}s).`;
+    }
+    return `Winner: ${raceState.winner.nickname} (${raceState.winner.elapsedSec}s)`;
+  }, [raceState, racePlayerId]);
+
   const resetHistory = () => {
     undoStackRef.current = [];
     redoStackRef.current = [];
@@ -190,6 +212,34 @@ function App() {
     setCanRedo(redoStackRef.current.length > 0);
   };
 
+  const initializePuzzle = (p, { resume = true, message = "" } = {}) => {
+    const saveKey = `nonogram-progress-${p.id}`;
+    let initial = new Array(p.width * p.height).fill(0);
+    if (resume) {
+      const saved = localStorage.getItem(saveKey);
+      if (saved) {
+        try {
+          const parsed = JSON.parse(saved);
+          if (Array.isArray(parsed) && parsed.length === initial.length) {
+            initial = parsed.map((v) => (v === 1 ? 1 : v === 2 ? 2 : 0));
+          }
+        } catch {
+          // ignore malformed local save
+        }
+      }
+    }
+    setPuzzleId(String(p.id));
+    setPuzzle(p);
+    applySnapshot(initial);
+    setActiveHints(new Set());
+    resetHistory();
+    autoSolvedShownRef.current = false;
+    raceFinishedSentRef.current = false;
+    setElapsedSec(0);
+    setTimerRunning(true);
+    setStatus(message || `Puzzle ${p.id} loaded.`);
+  };
+
   const loadPuzzle = async () => {
     const id = Number(puzzleId);
     if (!Number.isInteger(id)) {
@@ -206,29 +256,7 @@ function App() {
       if (!res.ok || !data.ok) {
         throw new Error(data.error || "Failed to load puzzle.");
       }
-
-      const p = data.puzzle;
-      const saveKey = `nonogram-progress-${p.id}`;
-      const saved = localStorage.getItem(saveKey);
-      let initial = new Array(p.width * p.height).fill(0);
-      if (saved) {
-        try {
-          const parsed = JSON.parse(saved);
-          if (Array.isArray(parsed) && parsed.length === initial.length) {
-            initial = parsed.map((v) => (v === 1 ? 1 : v === 2 ? 2 : 0));
-          }
-        } catch {
-          // ignore malformed local save
-        }
-      }
-      setPuzzle(p);
-      applySnapshot(initial);
-      setActiveHints(new Set());
-      resetHistory();
-      autoSolvedShownRef.current = false;
-      setElapsedSec(0);
-      setTimerRunning(true);
-      setStatus(`Puzzle ${p.id} loaded.`);
+      initializePuzzle(data.puzzle, { resume: true, message: `Puzzle ${data.puzzle.id} loaded.` });
     } catch (err) {
       setPuzzle(null);
       setCells([]);
@@ -258,35 +286,144 @@ function App() {
       if (!res.ok || !data.ok) {
         throw new Error(data.error || "Failed to load random puzzle.");
       }
-
-      const p = data.puzzle;
-      const saveKey = `nonogram-progress-${p.id}`;
-      const saved = localStorage.getItem(saveKey);
-      let initial = new Array(p.width * p.height).fill(0);
-      if (saved) {
-        try {
-          const parsed = JSON.parse(saved);
-          if (Array.isArray(parsed) && parsed.length === initial.length) {
-            initial = parsed.map((v) => (v === 1 ? 1 : v === 2 ? 2 : 0));
-          }
-        } catch {
-          // ignore malformed local save
-        }
-      }
-
-      setPuzzleId(String(p.id));
-      setPuzzle(p);
-      applySnapshot(initial);
-      setActiveHints(new Set());
-      resetHistory();
-      autoSolvedShownRef.current = false;
-      setElapsedSec(0);
-      setTimerRunning(true);
-      setStatus(`Puzzle ${p.id} (${p.width}x${p.height}) loaded.`);
+      initializePuzzle(data.puzzle, {
+        resume: true,
+        message: `Puzzle ${data.puzzle.id} (${data.puzzle.width}x${data.puzzle.height}) loaded.`,
+      });
     } catch (err) {
       setStatus(err.message);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const leaveRace = () => {
+    if (racePollRef.current) {
+      clearInterval(racePollRef.current);
+      racePollRef.current = 0;
+    }
+    setRaceRoomCode("");
+    setRacePlayerId("");
+    setRaceState(null);
+    setRaceSubmitting(false);
+    raceFinishedSentRef.current = false;
+  };
+
+  const pollRaceRoom = async (roomCode) => {
+    if (!roomCode) return;
+    try {
+      const res = await fetch(`${API_BASE}/race/${roomCode}`);
+      const data = await parseJsonSafe(res);
+      if (!res.ok || !data.ok) return;
+      setRaceState(data.room);
+    } catch {
+      // ignore intermittent poll errors
+    }
+  };
+
+  const startRacePolling = (roomCode) => {
+    if (racePollRef.current) clearInterval(racePollRef.current);
+    pollRaceRoom(roomCode);
+    racePollRef.current = window.setInterval(() => {
+      pollRaceRoom(roomCode);
+    }, 2000);
+  };
+
+  const createRaceRoom = async () => {
+    const name = nickname.trim();
+    if (!name) {
+      setStatus("Enter nickname first.");
+      return;
+    }
+    const [wStr, hStr] = selectedSize.split("x");
+    const width = Number(wStr);
+    const height = Number(hStr);
+    if (!Number.isInteger(width) || !Number.isInteger(height)) {
+      setStatus("Invalid size selection.");
+      return;
+    }
+    setIsLoading(true);
+    try {
+      const res = await fetch(`${API_BASE}/race/create`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ nickname: name, width, height }),
+      });
+      const data = await parseJsonSafe(res);
+      if (!res.ok || !data.ok) throw new Error(data.error || "Failed to create room.");
+      setRaceRoomCode(data.roomCode);
+      setRacePlayerId(data.playerId);
+      setRaceState(data.room);
+      setRoomCodeInput(data.roomCode);
+      initializePuzzle(data.puzzle, {
+        resume: false,
+        message: `Room ${data.roomCode} created. Share code and race.`,
+      });
+      startRacePolling(data.roomCode);
+    } catch (err) {
+      setStatus(err.message);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const joinRaceRoom = async () => {
+    const name = nickname.trim();
+    const code = roomCodeInput.trim().toUpperCase();
+    if (!name) {
+      setStatus("Enter nickname first.");
+      return;
+    }
+    if (!code) {
+      setStatus("Enter room code first.");
+      return;
+    }
+    setIsLoading(true);
+    try {
+      const res = await fetch(`${API_BASE}/race/join`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ nickname: name, roomCode: code }),
+      });
+      const data = await parseJsonSafe(res);
+      if (!res.ok || !data.ok) throw new Error(data.error || "Failed to join room.");
+      setRaceRoomCode(data.roomCode);
+      setRacePlayerId(data.playerId);
+      setRaceState(data.room);
+      initializePuzzle(data.puzzle, {
+        resume: false,
+        message: `Joined room ${data.roomCode}. Time attack started.`,
+      });
+      startRacePolling(data.roomCode);
+    } catch (err) {
+      setStatus(err.message);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const submitRaceFinish = async () => {
+    if (!raceRoomCode || !racePlayerId || raceFinishedSentRef.current) return;
+    raceFinishedSentRef.current = true;
+    setRaceSubmitting(true);
+    try {
+      const res = await fetch(`${API_BASE}/race/finish`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          roomCode: raceRoomCode,
+          playerId: racePlayerId,
+          elapsedSec,
+        }),
+      });
+      const data = await parseJsonSafe(res);
+      if (!res.ok || !data.ok) throw new Error(data.error || "Failed to submit finish.");
+      setRaceState(data.room);
+    } catch (err) {
+      raceFinishedSentRef.current = false;
+      setStatus(err.message);
+    } finally {
+      setRaceSubmitting(false);
     }
   };
 
@@ -563,6 +700,7 @@ function App() {
       }
       if (data.isCorrect) {
         setTimerRunning(false);
+        submitRaceFinish();
       }
       setStatus(data.isCorrect ? "Correct." : "Not correct yet.");
     } catch (err) {
@@ -597,6 +735,7 @@ function App() {
       autoSolvedShownRef.current = true;
       setTimerRunning(false);
       setStatus("Success! Puzzle solved.");
+      submitRaceFinish();
     }
     if (!isBoardCompleteByHints) {
       autoSolvedShownRef.current = false;
@@ -641,6 +780,48 @@ function App() {
             Clear
           </button>
         </div>
+
+        <div className="racePanel">
+          <input
+            type="text"
+            value={nickname}
+            onChange={(e) => setNickname(e.target.value)}
+            placeholder="Nickname"
+          />
+          <input
+            type="text"
+            value={roomCodeInput}
+            onChange={(e) => setRoomCodeInput(e.target.value.toUpperCase())}
+            placeholder="Room Code"
+          />
+          <button onClick={createRaceRoom} disabled={isLoading || !nickname.trim()}>
+            Create Room
+          </button>
+          <button onClick={joinRaceRoom} disabled={isLoading || !nickname.trim() || !roomCodeInput.trim()}>
+            Join Room
+          </button>
+          <button onClick={leaveRace} disabled={!raceRoomCode}>
+            Leave Room
+          </button>
+        </div>
+
+        {raceRoomCode && (
+          <div className="raceStateBox">
+            <div>
+              Room: <b>{raceRoomCode}</b>
+            </div>
+            <div>Submit: {raceSubmitting ? "Sending..." : "Idle"}</div>
+            {myRacePlayer && <div>Me: {myRacePlayer.nickname}</div>}
+            {raceResultText && <div className="raceResult">{raceResultText}</div>}
+            <div className="racePlayers">
+              {(raceState?.players || []).map((p) => (
+                <span key={p.playerId}>
+                  {p.nickname}: {Number.isInteger(p.elapsedSec) ? `${p.elapsedSec}s` : "playing"}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
 
         {puzzle && (
           <div className="meta">
