@@ -160,6 +160,7 @@ function App() {
     if (!puzzle) return false;
     return solvedRows.size === puzzle.height && solvedCols.size === puzzle.width;
   }, [puzzle, solvedRows, solvedCols]);
+  const isInRaceRoom = Boolean(raceRoomCode);
 
   const myRacePlayer = useMemo(() => {
     if (!raceState || !racePlayerId) return null;
@@ -241,6 +242,10 @@ function App() {
   };
 
   const loadPuzzle = async () => {
+    if (isInRaceRoom) {
+      setStatus("You cannot change puzzle while in a race room.");
+      return;
+    }
     const id = Number(puzzleId);
     if (!Number.isInteger(id)) {
       setStatus("Enter a numeric puzzle ID.");
@@ -267,6 +272,10 @@ function App() {
   };
 
   const loadRandomBySize = async () => {
+    if (isInRaceRoom) {
+      setStatus("You cannot change puzzle while in a race room.");
+      return;
+    }
     const [wStr, hStr] = selectedSize.split("x");
     const width = Number(wStr);
     const height = Number(hStr);
@@ -749,13 +758,17 @@ function App() {
         <p>Left drag: fill, Right drag: mark X, click hints to toggle highlight.</p>
 
         <div className="controls">
-          <select value={selectedSize} onChange={(e) => setSelectedSize(e.target.value)}>
+          <select
+            value={selectedSize}
+            onChange={(e) => setSelectedSize(e.target.value)}
+            disabled={isInRaceRoom}
+          >
             <option value="5x5">5x5</option>
             <option value="10x10">10x10</option>
             <option value="15x15">15x15</option>
             <option value="25x25">25x25</option>
           </select>
-          <button onClick={loadRandomBySize} disabled={isLoading}>
+          <button onClick={loadRandomBySize} disabled={isLoading || isInRaceRoom}>
             {isLoading ? "Loading..." : "Load Random Size"}
           </button>
           <input
@@ -763,8 +776,9 @@ function App() {
             value={puzzleId}
             onChange={(e) => setPuzzleId(e.target.value)}
             placeholder="Puzzle ID"
+            disabled={isInRaceRoom}
           />
-          <button onClick={loadPuzzle} disabled={isLoading}>
+          <button onClick={loadPuzzle} disabled={isLoading || isInRaceRoom}>
             {isLoading ? "Loading..." : "Load Puzzle"}
           </button>
           <button onClick={checkAnswer} disabled={!puzzle || isChecking}>
@@ -794,10 +808,13 @@ function App() {
             onChange={(e) => setRoomCodeInput(e.target.value.toUpperCase())}
             placeholder="Room Code"
           />
-          <button onClick={createRaceRoom} disabled={isLoading || !nickname.trim()}>
+          <button onClick={createRaceRoom} disabled={isLoading || !nickname.trim() || isInRaceRoom}>
             Create Room
           </button>
-          <button onClick={joinRaceRoom} disabled={isLoading || !nickname.trim() || !roomCodeInput.trim()}>
+          <button
+            onClick={joinRaceRoom}
+            disabled={isLoading || !nickname.trim() || !roomCodeInput.trim() || isInRaceRoom}
+          >
             Join Room
           </button>
           <button onClick={leaveRace} disabled={!raceRoomCode}>
