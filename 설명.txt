@@ -1,0 +1,252 @@
+Nonogram Ranked Multiplayer Project — Current State Summary
+Overview
+
+This project is building a real-time competitive Nonogram game with ranked matchmaking.
+
+Core requirements:
+
+Serve puzzles from database
+
+Verify user solutions server-side
+
+Support ranked multiplayer
+
+Prevent cheating by validating against stored solution_bits
+
+Environment: Windows 10
+Project root example:
+
+C:\Users\<username>\Documents\nono\nonogram-scraper
+Current Completed Steps
+1. Puzzle Scraping — COMPLETE
+
+Tool:
+
+Node.js
+
+Playwright
+
+Source:
+https://ko.puzzle-nonograms.com/
+
+Result:
+Scraped puzzles stored as JSON files:
+
+nonogram-scraper/
+  out/
+    25x25/
+      878202.json
+      878203.json
+      ...
+
+Total puzzles scraped:
+
+7368 puzzles
+
+JSON structure example:
+
+{
+  "puzzleId": 878202,
+  "width": 25,
+  "height": 25,
+  "row_hints": [[6,6,3], ...],
+  "col_hints": [[11,5], ...],
+  "source_url": "...",
+  "scraped_at": "..."
+}
+2. PostgreSQL Installation — COMPLETE
+
+Installed via binary zip.
+
+Install location:
+
+C:\pssql\
+
+Data directory:
+
+C:\pssql\data
+
+Server start command:
+
+C:\pssql\bin\pg_ctl -D C:\pssql\data -l C:\pssql\logfile start
+
+Connection test successful:
+
+C:\pssql\bin\psql -U postgres -d nonogram_prod
+3. Database Created — COMPLETE
+
+Database name:
+
+nonogram_prod
+4. puzzles_raw Table Created — COMPLETE
+
+Schema:
+
+CREATE TABLE puzzles_raw (
+  id BIGINT PRIMARY KEY,
+  width SMALLINT NOT NULL,
+  height SMALLINT NOT NULL,
+  row_hints JSONB NOT NULL,
+  col_hints JSONB NOT NULL,
+  source_url TEXT,
+  scraped_at TIMESTAMPTZ
+);
+5. Raw Puzzle Insert — COMPLETE
+
+Script:
+
+insert-puzzles.js
+
+Result:
+
+7368 inserted
+0 failed
+
+Verified via:
+
+SELECT count(*) FROM puzzles_raw;
+
+Result:
+
+7368
+Current Objective (NEXT STEP)
+
+Create service-ready puzzles table containing solution_bits for server-side verification.
+
+New table required:
+
+puzzles
+
+Schema:
+
+CREATE TABLE puzzles (
+  id BIGINT PRIMARY KEY,
+  width SMALLINT NOT NULL,
+  height SMALLINT NOT NULL,
+  row_hints JSONB NOT NULL,
+  col_hints JSONB NOT NULL,
+  solution_bits BYTEA NOT NULL,
+  is_unique BOOLEAN NOT NULL,
+  solve_time_ms INT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+Required Next Task
+
+Codex must implement:
+
+Python Nonogram Solver Pipeline
+
+Purpose:
+Read puzzles_raw and populate puzzles table with:
+
+solution_bits (packed bitset)
+
+is_unique flag
+
+solve_time_ms
+
+Constraints:
+
+Must support 25x25 puzzles
+
+Must detect multiple solutions
+
+Must pack grid into bitset format:
+
+Bit index:
+
+index = y * width + x
+byte_index = index // 8
+bit_index = index % 8
+
+Bit value:
+
+1 = filled
+0 = empty
+
+Stored as BYTEA.
+
+Solver Pipeline Flow
+puzzles_raw
+   ↓
+solver
+   ↓
+puzzles
+
+Only insert solved puzzles.
+
+Target Final System Architecture
+React Frontend
+     ↓
+Node.js Backend (Express + WebSocket)
+     ↓
+PostgreSQL
+     ↓
+puzzles table
+
+Verification logic (Node.js):
+
+if (Buffer.from(userBits).equals(solution_bits)) {
+  // correct
+}
+PostgreSQL Connection Info
+
+Host:
+
+localhost
+
+Port:
+
+5432
+
+Database:
+
+nonogram_prod
+
+User:
+
+postgres
+
+Password:
+
+<set locally>
+Current File Structure
+nonogram-scraper/
+  insert-puzzles.js
+  solve_and_insert.py  (to be implemented)
+  out/
+    25x25/
+      *.json
+Codex Tasks Summary
+
+Codex must implement:
+
+Efficient Python Nonogram solver
+
+solution_bits generation
+
+uniqueness detection
+
+insert solved puzzles into puzzles table
+
+skip unsolvable puzzles
+
+Performance target:
+Solve all 7368 puzzles efficiently.
+
+Do NOT modify
+
+puzzles_raw table
+
+existing JSON files
+
+Only populate puzzles table.
+
+End State Goal
+
+Database contains:
+
+puzzles_raw   (7368 rows)
+puzzles       (solved puzzles)
+
+Ready for game server usage
