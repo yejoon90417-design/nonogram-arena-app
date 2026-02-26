@@ -70,6 +70,7 @@ function App() {
   const [racePlayerId, setRacePlayerId] = useState("");
   const [raceState, setRaceState] = useState(null);
   const [raceSubmitting, setRaceSubmitting] = useState(false);
+  const [nowMs, setNowMs] = useState(Date.now());
   const boardRef = useRef(null);
   const canvasRef = useRef(null);
   const dragRef = useRef(null); // { button: 'left'|'right', paintValue }
@@ -84,6 +85,7 @@ function App() {
   const autoSolvedShownRef = useRef(false);
   const racePollRef = useRef(0);
   const raceFinishedSentRef = useRef(false);
+  const raceResultShownRef = useRef(false);
   const deferredCells = useDeferredValue(cells);
 
   useEffect(() => {
@@ -161,6 +163,12 @@ function App() {
     return solvedRows.size === puzzle.height && solvedCols.size === puzzle.width;
   }, [puzzle, solvedRows, solvedCols]);
   const isInRaceRoom = Boolean(raceRoomCode);
+  const racePhase = raceState?.state || "idle";
+  const isRaceLobby = isInRaceRoom && racePhase === "lobby";
+  const isRaceCountdown = isInRaceRoom && racePhase === "countdown";
+  const isRacePlaying = isInRaceRoom && racePhase === "playing";
+  const isRaceFinished = isInRaceRoom && racePhase === "finished";
+  const canInteractBoard = !isInRaceRoom || isRacePlaying;
 
   const myRacePlayer = useMemo(() => {
     if (!raceState || !racePlayerId) return null;
@@ -170,10 +178,16 @@ function App() {
   const raceResultText = useMemo(() => {
     if (!raceState?.winner) return "";
     if (raceState.winner.playerId === racePlayerId) {
-      return `You win (${raceState.winner.elapsedSec}s).`;
+      return `승리하였습니다 (${raceState.winner.elapsedSec}s)`;
     }
-    return `Winner: ${raceState.winner.nickname} (${raceState.winner.elapsedSec}s)`;
+    return `패배하였습니다 (승자: ${raceState.winner.nickname}, ${raceState.winner.elapsedSec}s)`;
   }, [raceState, racePlayerId]);
+
+  const countdownLeft = useMemo(() => {
+    if (!isRaceCountdown || !raceState?.gameStartAt) return null;
+    const ms = new Date(raceState.gameStartAt).getTime() - nowMs;
+    return Math.max(0, Math.ceil(ms / 1000));
+  }, [isRaceCountdown, raceState, nowMs]);
 
   const resetHistory = () => {
     undoStackRef.current = [];
@@ -213,7 +227,7 @@ function App() {
     setCanRedo(redoStackRef.current.length > 0);
   };
 
-  const initializePuzzle = (p, { resume = true, message = "" } = {}) => {
+  const initializePuzzle = (p, { resume = true, message = "", startTimer = true } = {}) => {
     const saveKey = `nonogram-progress-${p.id}`;
     let initial = new Array(p.width * p.height).fill(0);
     if (resume) {
@@ -236,8 +250,9 @@ function App() {
     resetHistory();
     autoSolvedShownRef.current = false;
     raceFinishedSentRef.current = false;
+    raceResultShownRef.current = false;
     setElapsedSec(0);
-    setTimerRunning(true);
+    setTimerRunning(startTimer);
     setStatus(message || `Puzzle ${p.id} loaded.`);
   };
 
@@ -316,6 +331,16 @@ function App() {
     setRaceState(null);
     setRaceSubmitting(false);
     raceFinishedSentRef.current = false;
+    raceResultShownRef.current = false;
+    setTimerRunning(true);
+  };
+
+  const applyRaceRoomState = (room, playerIdOverride = racePlayerId) => {
+    setRaceState(room);
+    const me = room?.players?.find((p) => p.playerId === playerIdOverride);
+    if (me && Number.isInteger(me.elapsedSec)) {
+      setElapsedSec(me.elapsedSec);
+    }
   };
 
   const pollRaceRoom = async (roomCode) => {
@@ -324,7 +349,7 @@ function App() {
       const res = await fetch(`${API_BASE}/race/${roomCode}`);
       const data = await parseJsonSafe(res);
       if (!res.ok || !data.ok) return;
-      setRaceState(data.room);
+      applyRaceRoomState(data.room);
     } catch {
       // ignore intermittent poll errors
     }
@@ -335,7 +360,7 @@ function App() {
     pollRaceRoom(roomCode);
     racePollRef.current = window.setInterval(() => {
       pollRaceRoom(roomCode);
-    }, 2000);
+    }, 700);
   };
 
   const createRaceRoom = async () => {
@@ -362,11 +387,12 @@ function App() {
       if (!res.ok || !data.ok) throw new Error(data.error || "Failed to create room.");
       setRaceRoomCode(data.roomCode);
       setRacePlayerId(data.playerId);
-      setRaceState(data.room);
+      applyRaceRoomState(data.room, data.playerId);
       setRoomCodeInput(data.roomCode);
       initializePuzzle(data.puzzle, {
         resume: false,
-        message: `Room ${data.roomCode} created. Share code and race.`,
+        startTimer: false,
+        message: `Room ${data.roomCode} created. Wait for ready.`,
       });
       startRacePolling(data.roomCode);
     } catch (err) {
@@ -398,10 +424,11 @@ function App() {
       if (!res.ok || !data.ok) throw new Error(data.error || "Failed to join room.");
       setRaceRoomCode(data.roomCode);
       setRacePlayerId(data.playerId);
-      setRaceState(data.room);
+      applyRaceRoomState(data.room, data.playerId);
       initializePuzzle(data.puzzle, {
         resume: false,
-        message: `Joined room ${data.roomCode}. Time attack started.`,
+        startTimer: false,
+        message: `Joined room ${data.roomCode}. Press ready.`,
       });
       startRacePolling(data.roomCode);
     } catch (err) {
@@ -411,8 +438,41 @@ function App() {
     }
   };
 
+  const setReady = async (ready) => {
+    if (!raceRoomCode || !racePlayerId) return;
+    try {
+      const res = await fetch(`${API_BASE}/race/ready`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ roomCode: raceRoomCode, playerId: racePlayerId, ready }),
+      });
+      const data = await parseJsonSafe(res);
+      if (!res.ok || !data.ok) throw new Error(data.error || "Failed to update ready.");
+      applyRaceRoomState(data.room);
+    } catch (err) {
+      setStatus(err.message);
+    }
+  };
+
+  const startRace = async () => {
+    if (!raceRoomCode || !racePlayerId) return;
+    try {
+      const res = await fetch(`${API_BASE}/race/start`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ roomCode: raceRoomCode, playerId: racePlayerId }),
+      });
+      const data = await parseJsonSafe(res);
+      if (!res.ok || !data.ok) throw new Error(data.error || "Failed to start race.");
+      applyRaceRoomState(data.room);
+      setStatus("5초 후 시작합니다.");
+    } catch (err) {
+      setStatus(err.message);
+    }
+  };
+
   const submitRaceFinish = async () => {
-    if (!raceRoomCode || !racePlayerId || raceFinishedSentRef.current) return;
+    if (!raceRoomCode || !racePlayerId || raceFinishedSentRef.current || !isRacePlaying) return;
     raceFinishedSentRef.current = true;
     setRaceSubmitting(true);
     try {
@@ -427,7 +487,7 @@ function App() {
       });
       const data = await parseJsonSafe(res);
       if (!res.ok || !data.ok) throw new Error(data.error || "Failed to submit finish.");
-      setRaceState(data.room);
+      applyRaceRoomState(data.room);
     } catch (err) {
       raceFinishedSentRef.current = false;
       setStatus(err.message);
@@ -534,6 +594,7 @@ function App() {
   };
 
   const onBoardPointerDown = (event) => {
+    if (!canInteractBoard) return;
     const index = getIndexFromClientPoint(event.clientX, event.clientY);
     if (index == null) return;
     onCellPointerDown(event, index);
@@ -729,11 +790,28 @@ function App() {
 
   useEffect(() => {
     if (!puzzle || !timerRunning) return undefined;
+    if (isInRaceRoom) return undefined;
     const id = setInterval(() => {
       setElapsedSec((s) => s + 1);
     }, 1000);
     return () => clearInterval(id);
-  }, [puzzle, timerRunning]);
+  }, [puzzle, timerRunning, isInRaceRoom]);
+
+  useEffect(() => {
+    if (!isInRaceRoom || (!isRaceCountdown && !isRacePlaying)) return undefined;
+    const id = setInterval(() => setNowMs(Date.now()), 200);
+    return () => clearInterval(id);
+  }, [isInRaceRoom, isRaceCountdown, isRacePlaying]);
+
+  useEffect(() => {
+    if (!isInRaceRoom || !raceState?.gameStartAt) return;
+    if (isRacePlaying) {
+      const sec = Math.max(0, Math.floor((nowMs - new Date(raceState.gameStartAt).getTime()) / 1000));
+      setElapsedSec(sec);
+    } else if (isRaceCountdown || isRaceLobby) {
+      setElapsedSec(0);
+    }
+  }, [isInRaceRoom, isRacePlaying, isRaceCountdown, isRaceLobby, raceState, nowMs]);
 
   useEffect(() => {
     if (!puzzle) {
@@ -750,6 +828,17 @@ function App() {
       autoSolvedShownRef.current = false;
     }
   }, [isBoardCompleteByHints, puzzle]);
+
+  useEffect(() => {
+    if (!isInRaceRoom || !raceState?.winnerPlayerId || raceResultShownRef.current) return;
+    raceResultShownRef.current = true;
+    if (raceState.winnerPlayerId === racePlayerId) {
+      setStatus("승리하였습니다.");
+    } else {
+      setStatus("패배하였습니다.");
+      setTimerRunning(false);
+    }
+  }, [isInRaceRoom, raceState, racePlayerId]);
 
   return (
     <main className="page">
@@ -781,16 +870,16 @@ function App() {
           <button onClick={loadPuzzle} disabled={isLoading || isInRaceRoom}>
             {isLoading ? "Loading..." : "Load Puzzle"}
           </button>
-          <button onClick={checkAnswer} disabled={!puzzle || isChecking}>
+          <button onClick={checkAnswer} disabled={!puzzle || isChecking || !canInteractBoard}>
             {isChecking ? "Checking..." : "Check Answer"}
           </button>
-          <button onClick={undo} disabled={!puzzle || !canUndo}>
+          <button onClick={undo} disabled={!puzzle || !canUndo || !canInteractBoard}>
             Undo
           </button>
-          <button onClick={redo} disabled={!puzzle || !canRedo}>
+          <button onClick={redo} disabled={!puzzle || !canRedo || !canInteractBoard}>
             Redo
           </button>
-          <button onClick={resetGrid} disabled={!puzzle}>
+          <button onClick={resetGrid} disabled={!puzzle || !canInteractBoard}>
             Clear
           </button>
         </div>
@@ -827,13 +916,33 @@ function App() {
             <div>
               Room: <b>{raceRoomCode}</b>
             </div>
+            <div>State: {racePhase}</div>
             <div>Submit: {raceSubmitting ? "Sending..." : "Idle"}</div>
             {myRacePlayer && <div>Me: {myRacePlayer.nickname}</div>}
+            {isRaceLobby && (
+              <div className="raceActions">
+                <button
+                  onClick={() => setReady(!(myRacePlayer?.isReady === true))}
+                  disabled={!myRacePlayer}
+                >
+                  {myRacePlayer?.isReady ? "Unready" : "Ready"}
+                </button>
+                <button
+                  onClick={startRace}
+                  disabled={raceState?.hostPlayerId !== racePlayerId || !raceState?.canStart}
+                >
+                  Start (Host)
+                </button>
+              </div>
+            )}
             {raceResultText && <div className="raceResult">{raceResultText}</div>}
             <div className="racePlayers">
               {(raceState?.players || []).map((p) => (
                 <span key={p.playerId}>
-                  {p.nickname}: {Number.isInteger(p.elapsedSec) ? `${p.elapsedSec}s` : "playing"}
+                  {p.nickname}
+                  {raceState?.hostPlayerId === p.playerId ? " [host]" : ""}
+                  {p.isReady ? " [ready]" : " [not ready]"}:
+                  {Number.isInteger(p.elapsedSec) ? ` ${p.elapsedSec}s` : " playing"}
                 </span>
               ))}
             </div>
@@ -932,11 +1041,17 @@ function App() {
                 style={{
                   width: `${puzzle.width * cellSize}px`,
                   height: `${puzzle.height * cellSize}px`,
+                  cursor: canInteractBoard ? "crosshair" : "not-allowed",
                 }}
                 onPointerDown={onBoardPointerDown}
                 onContextMenu={(e) => e.preventDefault()}
               >
                 <canvas ref={canvasRef} className="boardCanvas" />
+                {isRaceCountdown && (
+                  <div className="countdownOverlay">{countdownLeft ?? 0}</div>
+                )}
+                {isRaceLobby && <div className="countdownOverlay wait">READY 대기</div>}
+                {isRaceFinished && <div className="countdownOverlay result">{raceResultText}</div>}
               </div>
             </div>
           </div>

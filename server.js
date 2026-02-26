@@ -21,6 +21,7 @@ const app = express();
 const pool = new Pool(DB_CONFIG);
 const raceRooms = new Map();
 const ROOM_TTL_MS = 1000 * 60 * 60 * 12;
+const COUNTDOWN_MS = 5000;
 
 app.use(cors());
 app.use((req, res, next) => {
@@ -92,7 +93,19 @@ function normalizeNickname(raw) {
   return s.slice(0, 24);
 }
 
+function syncRoomState(room) {
+  if (room.state === "countdown" && room.gameStartAt && Date.now() >= room.gameStartAt) {
+    room.state = "playing";
+  }
+}
+
+function canStartRoom(room) {
+  if (room.players.size < 2) return false;
+  return Array.from(room.players.values()).every((p) => p.isReady === true);
+}
+
 function roomPublicState(room) {
+  syncRoomState(room);
   const players = Array.from(room.players.values())
     .map((p) => ({
       playerId: p.playerId,
@@ -100,25 +113,28 @@ function roomPublicState(room) {
       joinedAt: p.joinedAt,
       finishedAt: p.finishedAt,
       elapsedSec: p.elapsedSec,
+      isReady: p.isReady,
     }))
     .sort((a, b) => (a.joinedAt > b.joinedAt ? 1 : -1));
-
-  const finished = players.filter((p) => Number.isInteger(p.elapsedSec));
-  finished.sort((a, b) => {
-    if (a.elapsedSec !== b.elapsedSec) return a.elapsedSec - b.elapsedSec;
-    return a.finishedAt > b.finishedAt ? 1 : -1;
-  });
-
-  const winner = finished[0] || null;
+  const winner = room.winnerPlayerId
+    ? players.find((p) => p.playerId === room.winnerPlayerId) || null
+    : null;
   return {
     roomCode: room.roomCode,
     puzzleId: room.puzzleId,
     width: room.width,
     height: room.height,
     createdAt: room.createdAt,
+    hostPlayerId: room.hostPlayerId,
+    state: room.state,
+    countdownStartAt: room.countdownStartAt,
+    gameStartAt: room.gameStartAt,
+    canStart: canStartRoom(room),
+    winnerPlayerId: room.winnerPlayerId,
     players,
     winner,
-    isFinished: Boolean(winner),
+    isFinished: room.state === "finished",
+    serverNow: Date.now(),
   };
 }
 
@@ -228,6 +244,11 @@ app.post("/race/create", async (req, res) => {
       width: puzzle.width,
       height: puzzle.height,
       createdAt: Date.now(),
+      hostPlayerId: playerId,
+      state: "lobby",
+      countdownStartAt: null,
+      gameStartAt: null,
+      winnerPlayerId: null,
       players: new Map(),
     };
     room.players.set(playerId, {
@@ -236,6 +257,7 @@ app.post("/race/create", async (req, res) => {
       joinedAt: nowIso,
       finishedAt: null,
       elapsedSec: null,
+      isReady: false,
     });
     raceRooms.set(roomCode, room);
 
@@ -264,6 +286,10 @@ app.post("/race/join", async (req, res) => {
   if (!room) {
     return res.status(404).json({ ok: false, error: "Room not found" });
   }
+  syncRoomState(room);
+  if (room.state !== "lobby") {
+    return res.status(400).json({ ok: false, error: "Room already started" });
+  }
 
   try {
     const { rows } = await pool.query(
@@ -283,6 +309,7 @@ app.post("/race/join", async (req, res) => {
       joinedAt: new Date().toISOString(),
       finishedAt: null,
       elapsedSec: null,
+      isReady: false,
     });
 
     return res.json({
@@ -295,6 +322,63 @@ app.post("/race/join", async (req, res) => {
   } catch (err) {
     return res.status(500).json({ ok: false, error: err.message });
   }
+});
+
+app.post("/race/ready", (req, res) => {
+  const roomCode = String(req.body?.roomCode || "").trim().toUpperCase();
+  const playerId = String(req.body?.playerId || "").trim();
+  const ready = Boolean(req.body?.ready);
+  if (!roomCode || !playerId) {
+    return res.status(400).json({ ok: false, error: "roomCode/playerId are required" });
+  }
+  const room = raceRooms.get(roomCode);
+  if (!room) {
+    return res.status(404).json({ ok: false, error: "Room not found" });
+  }
+  syncRoomState(room);
+  if (room.state !== "lobby") {
+    return res.status(400).json({ ok: false, error: "Cannot change ready after start" });
+  }
+  const player = room.players.get(playerId);
+  if (!player) {
+    return res.status(404).json({ ok: false, error: "Player not found in room" });
+  }
+  player.isReady = ready;
+  return res.json({ ok: true, room: roomPublicState(room) });
+});
+
+app.post("/race/start", (req, res) => {
+  const roomCode = String(req.body?.roomCode || "").trim().toUpperCase();
+  const playerId = String(req.body?.playerId || "").trim();
+  if (!roomCode || !playerId) {
+    return res.status(400).json({ ok: false, error: "roomCode/playerId are required" });
+  }
+  const room = raceRooms.get(roomCode);
+  if (!room) {
+    return res.status(404).json({ ok: false, error: "Room not found" });
+  }
+  syncRoomState(room);
+  if (room.state !== "lobby") {
+    return res.status(400).json({ ok: false, error: "Room already started" });
+  }
+  if (room.hostPlayerId !== playerId) {
+    return res.status(403).json({ ok: false, error: "Only host can start" });
+  }
+  if (!canStartRoom(room)) {
+    return res.status(400).json({ ok: false, error: "All players must be ready (min 2 players)" });
+  }
+
+  const now = Date.now();
+  room.state = "countdown";
+  room.countdownStartAt = now;
+  room.gameStartAt = now + COUNTDOWN_MS;
+  room.winnerPlayerId = null;
+  for (const p of room.players.values()) {
+    p.finishedAt = null;
+    p.elapsedSec = null;
+  }
+
+  return res.json({ ok: true, room: roomPublicState(room) });
 });
 
 app.get("/race/:roomCode", (req, res) => {
@@ -318,6 +402,10 @@ app.post("/race/finish", (req, res) => {
   if (!room) {
     return res.status(404).json({ ok: false, error: "Room not found" });
   }
+  syncRoomState(room);
+  if (room.state !== "playing" && room.state !== "finished") {
+    return res.status(400).json({ ok: false, error: "Race has not started yet" });
+  }
   const player = room.players.get(playerId);
   if (!player) {
     return res.status(404).json({ ok: false, error: "Player not found in room" });
@@ -326,6 +414,10 @@ app.post("/race/finish", (req, res) => {
   if (!Number.isInteger(player.elapsedSec)) {
     player.elapsedSec = Math.max(0, Math.floor(elapsedSec));
     player.finishedAt = new Date().toISOString();
+  }
+  if (!room.winnerPlayerId) {
+    room.winnerPlayerId = playerId;
+    room.state = "finished";
   }
 
   return res.json({ ok: true, room: roomPublicState(room) });

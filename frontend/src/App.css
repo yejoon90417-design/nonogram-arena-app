@@ -56,6 +56,12 @@ p {
   gap: 0.5rem;
 }
 
+.raceActions {
+  display: flex;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+}
+
 .raceResult {
   font-weight: 800;
 }
@@ -194,6 +200,26 @@ button:disabled {
   width: 100%;
   height: 100%;
   cursor: var(--board-cursor);
+}
+
+.countdownOverlay {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font-size: 72px;
+  font-weight: 900;
+  color: #111;
+  background: rgba(240, 240, 240, 0.72);
+  pointer-events: none;
+}
+
+.countdownOverlay.wait {
+  font-size: 30px;
+}
+
+.countdownOverlay.result {
+  font-size: 34px;
 }
 
 @media (max-width: 680px) {
