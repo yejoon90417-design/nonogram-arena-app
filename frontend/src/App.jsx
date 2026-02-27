@@ -1,5 +1,7 @@
 ﻿import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import EmojiPicker from "emoji-picker-react";
+import { motion } from "framer-motion";
+import { Eraser, LogIn, Redo2, Undo2, UserPlus, Volume2, VolumeX } from "lucide-react";
 import "./App.css";
 
 const API_BASE = (import.meta.env.VITE_API_BASE_URL || "").replace(/\/$/, "");
@@ -1520,7 +1522,14 @@ function App() {
 
   return (
     <main className="page">
-      <section className={`panel ${isModeMenu || isModeAuth ? "panelMenu" : ""}`}>
+      <div className="bgGlow bgGlowA" />
+      <div className="bgGlow bgGlowB" />
+      <motion.section
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.35, ease: "easeOut" }}
+        className={`panel ${isModeMenu || isModeAuth ? "panelMenu" : ""}`}
+      >
         <div className="topBar">
           <div>
             <h1 className="title">Nonogram Arena</h1>
@@ -1537,8 +1546,12 @@ function App() {
                 </>
               ) : (
                 <>
-                  <button onClick={() => openAuthScreen("login", "menu")}>로그인</button>
-                  <button onClick={() => openAuthScreen("signup", "menu")}>회원가입</button>
+                  <button onClick={() => openAuthScreen("login", "menu")}>
+                    <LogIn size={15} /> 로그인
+                  </button>
+                  <button onClick={() => openAuthScreen("signup", "menu")}>
+                    <UserPlus size={15} /> 회원가입
+                  </button>
                 </>
               )}
             </div>
@@ -1547,14 +1560,24 @@ function App() {
 
         {isModeMenu && (
           <div className="modeChooser">
-            <button className="modeBtn modeSingle" onClick={goSingleMode}>
+            <motion.button
+              whileHover={{ y: -2 }}
+              whileTap={{ scale: 0.98 }}
+              className="modeBtn modeSingle"
+              onClick={goSingleMode}
+            >
               <span className="modeName">싱글플레이</span>
               <span className="modeDesc">랜덤 퍼즐 연습 모드</span>
-            </button>
-            <button className="modeBtn modeMulti" onClick={goMultiMode}>
+            </motion.button>
+            <motion.button
+              whileHover={{ y: -2 }}
+              whileTap={{ scale: 0.98 }}
+              className="modeBtn modeMulti"
+              onClick={goMultiMode}
+            >
               <span className="modeName">멀티플레이</span>
               <span className="modeDesc">방 생성/참가 실시간 대결</span>
-            </button>
+            </motion.button>
           </div>
         )}
 
@@ -1710,6 +1733,7 @@ function App() {
               </>
             )}
             <button onClick={handleToggleSfx}>
+              {soundOn ? <Volume2 size={16} /> : <VolumeX size={16} />}
               {soundOn ? "SFX ON" : "SFX OFF"}
             </button>
             <button onClick={backToMenu} disabled={isInRaceRoom}>
@@ -1722,6 +1746,7 @@ function App() {
           <>
             <div className="controls">
               <button onClick={handleToggleSfx}>
+                {soundOn ? <Volume2 size={16} /> : <VolumeX size={16} />}
                 {soundOn ? "SFX ON" : "SFX OFF"}
               </button>
               <button onClick={backToMenu} disabled={isInRaceRoom}>
@@ -1990,7 +2015,7 @@ function App() {
               aria-label="Undo"
               title="Undo"
             >
-              {"\u21B6"}
+              <Undo2 size={16} />
             </button>
             <button
               className="iconBtn"
@@ -1999,7 +2024,7 @@ function App() {
               aria-label="Redo"
               title="Redo"
             >
-              {"\u21B7"}
+              <Redo2 size={16} />
             </button>
             <button
               className="iconBtn danger"
@@ -2008,7 +2033,7 @@ function App() {
               aria-label="Clear board"
               title="Clear"
             >
-              {"\u2715"}
+              <Eraser size={16} />
             </button>
           </div>
         )}
@@ -2225,12 +2250,13 @@ function App() {
             </div>
           </div>
         )}
-      </section>
+      </motion.section>
     </main>
   );
 }
 
 export default App;
+
 
 
 
