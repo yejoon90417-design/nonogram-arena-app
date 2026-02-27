@@ -194,9 +194,9 @@ function App() {
   const raceResultText = useMemo(() => {
     if (!raceState?.winner) return "";
     if (raceState.winner.playerId === racePlayerId) {
-      return `승리하였습니다 (${raceState.winner.elapsedSec}s)`;
+      return "승리하였습니다";
     }
-    return `패배하였습니다 (승자: ${raceState.winner.nickname}, ${raceState.winner.elapsedSec}s)`;
+    return "패배하였습니다";
   }, [raceState, racePlayerId]);
   const roomTitleText = raceState?.roomTitle || "";
 
