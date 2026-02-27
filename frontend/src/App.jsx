@@ -152,13 +152,6 @@ function App() {
     return solved;
   }, [deferredCells, puzzle, colHints]);
 
-  const progressText = useMemo(() => {
-    if (!puzzle) return "";
-    const rowDone = solvedRows.size;
-    const colDone = solvedCols.size;
-    return `Rows ${rowDone}/${puzzle.height}, Cols ${colDone}/${puzzle.width}`;
-  }, [puzzle, solvedRows, solvedCols]);
-
   const formattedTime = useMemo(() => {
     const mm = String(Math.floor(elapsedSec / 60)).padStart(2, "0");
     const ss = String(elapsedSec % 60).padStart(2, "0");
@@ -1065,17 +1058,7 @@ function App() {
           </div>
         )}
 
-        {puzzle && (
-          <div className="meta">
-            <span>ID: {puzzle.id}</span>
-            <span>
-              Size: {puzzle.width}x{puzzle.height}
-            </span>
-            <span>Unique: {String(puzzle.is_unique)}</span>
-            <span>{progressText}</span>
-            <span>Time: {formattedTime}</span>
-          </div>
-        )}
+        {puzzle && <div className="timerBar">TIME {formattedTime}</div>}
 
         {status && <div className="status">{status}</div>}
 

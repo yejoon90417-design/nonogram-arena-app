@@ -29,6 +29,7 @@
   box-shadow: 0 16px 38px rgba(24, 42, 61, 0.14);
   position: relative;
   overflow: hidden;
+  animation: panelEnter 320ms ease-out;
 }
 
 .panel::before {
@@ -61,6 +62,7 @@ p {
   display: flex;
   flex-wrap: wrap;
   gap: 0.45rem;
+  align-items: center;
 }
 
 .racePanel {
@@ -91,6 +93,19 @@ p {
   background: #ffffff;
   border-radius: 999px;
   padding: 0.2rem 0.55rem;
+}
+
+.timerBar {
+  margin-top: 0.65rem;
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid #b7cde0;
+  background: linear-gradient(180deg, #ffffff 0%, #e9f2fb 100%);
+  border-radius: 999px;
+  padding: 0.26rem 0.7rem;
+  font-weight: 900;
+  letter-spacing: 0.05em;
+  color: #114170;
 }
 
 .raceActions {
@@ -154,6 +169,11 @@ button {
   padding: 0.42rem 0.7rem;
   font-size: 0.92rem;
   transition: border-color 140ms ease, box-shadow 140ms ease, transform 80ms ease;
+}
+
+.controls > *,
+.racePanel > * {
+  min-height: 38px;
 }
 
 input:focus,
@@ -239,6 +259,9 @@ button:disabled {
     );
   padding: 0.75rem;
   user-select: none;
+  display: flex;
+  justify-content: center;
+  animation: boardEnter 280ms ease-out;
 }
 
 .nonogram {
@@ -348,6 +371,28 @@ button:disabled {
   font-size: 34px;
   color: #084a35;
   animation: none;
+}
+
+@keyframes panelEnter {
+  0% {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes boardEnter {
+  0% {
+    opacity: 0;
+    transform: scale(0.985);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
 }
 
 @keyframes countdownBeat {
