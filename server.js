@@ -165,6 +165,12 @@ function normalizeRoomTitle(raw) {
   return s.slice(0, 40);
 }
 
+function normalizeChatText(raw) {
+  const s = String(raw || "").trim();
+  if (!s) return null;
+  return s.slice(0, 200);
+}
+
 function normalizeVisibility(raw) {
   const v = String(raw || "").trim().toLowerCase();
   return v === "private" ? "private" : "public";
@@ -372,6 +378,7 @@ function roomPublicState(room) {
     finishedCount,
     rankings,
     players,
+    chatMessages: Array.isArray(room.chatMessages) ? room.chatMessages : [],
     winner,
     isFinished: room.state === "finished",
     serverNow: Date.now(),
@@ -634,6 +641,7 @@ app.post("/race/create", requireAuth, async (req, res) => {
       countdownStartAt: null,
       gameStartAt: null,
       winnerPlayerId: null,
+      chatMessages: [],
       players: new Map(),
     };
     room.players.set(playerId, {
@@ -898,6 +906,47 @@ app.get("/race/:roomCode", (req, res) => {
   const room = raceRooms.get(roomCode);
   if (!room) {
     return res.status(404).json({ ok: false, error: "Room not found" });
+  }
+  return res.json({ ok: true, room: roomPublicState(room) });
+});
+
+app.post("/race/chat", requireAuth, (req, res) => {
+  const roomCode = String(req.body?.roomCode || "").trim().toUpperCase();
+  const playerId = String(req.body?.playerId || "").trim();
+  const text = normalizeChatText(req.body?.text);
+  if (!roomCode || !playerId) {
+    return res.status(400).json({ ok: false, error: "roomCode/playerId are required" });
+  }
+  if (!text) {
+    return res.status(400).json({ ok: false, error: "text is required" });
+  }
+  const room = raceRooms.get(roomCode);
+  if (!room) {
+    return res.status(404).json({ ok: false, error: "Room not found" });
+  }
+  const player = room.players.get(playerId);
+  if (!player) {
+    return res.status(404).json({ ok: false, error: "Player not found in room" });
+  }
+  if (player.userId !== req.authUser.id) {
+    return res.status(403).json({ ok: false, error: "Forbidden player" });
+  }
+  if (player.disconnectedAt) {
+    return res.status(400).json({ ok: false, error: "Disconnected player cannot chat" });
+  }
+
+  if (!Array.isArray(room.chatMessages)) {
+    room.chatMessages = [];
+  }
+  room.chatMessages.push({
+    id: crypto.randomBytes(8).toString("hex"),
+    playerId: player.playerId,
+    nickname: player.nickname,
+    text,
+    createdAt: new Date().toISOString(),
+  });
+  if (room.chatMessages.length > 120) {
+    room.chatMessages = room.chatMessages.slice(-120);
   }
   return res.json({ ok: true, room: roomPublicState(room) });
 });

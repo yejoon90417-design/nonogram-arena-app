@@ -218,6 +218,55 @@
   padding: 0.2rem 0.55rem;
 }
 
+.chatBox {
+  margin-top: 0.35rem;
+  border: 1px solid #c6d6e8;
+  border-radius: 10px;
+  background: #fff;
+  padding: 0.45rem;
+  display: grid;
+  gap: 0.35rem;
+}
+
+.chatTitle {
+  font-size: 0.82rem;
+  font-weight: 900;
+  color: #2a3f5d;
+}
+
+.chatBody {
+  border: 1px solid #d4e1ef;
+  background: #f8fbff;
+  border-radius: 8px;
+  min-height: 112px;
+  max-height: 170px;
+  overflow: auto;
+  padding: 0.35rem 0.45rem;
+  display: grid;
+  gap: 0.2rem;
+}
+
+.chatMsg {
+  font-size: 0.84rem;
+  color: #1b2e46;
+  word-break: break-word;
+}
+
+.chatEmpty {
+  font-size: 0.82rem;
+  color: #6a7b90;
+}
+
+.chatInputRow {
+  display: flex;
+  gap: 0.4rem;
+  align-items: center;
+}
+
+.chatInputRow button {
+  min-width: 64px;
+}
+
 .timerBar {
   margin-top: 0.75rem;
   display: inline-flex;

@@ -113,10 +113,13 @@ function App() {
   const [signupPassword, setSignupPassword] = useState("");
   const [signupError, setSignupError] = useState("");
   const [signupFieldErrors, setSignupFieldErrors] = useState({ username: "", nickname: "", password: "" });
+  const [chatInput, setChatInput] = useState("");
+  const [chatSending, setChatSending] = useState(false);
   const [nowMs, setNowMs] = useState(Date.now());
   const [soundOn, setSoundOn] = useState(true);
   const boardRef = useRef(null);
   const canvasRef = useRef(null);
+  const chatBodyRef = useRef(null);
   const dragRef = useRef(null); // { button: 'left'|'right', paintValue }
   const lastPaintIndexRef = useRef(null);
   const strokeBaseRef = useRef(null);
@@ -268,6 +271,7 @@ function App() {
     return "패배하였습니다";
   }, [raceState, racePlayerId]);
   const roomTitleText = raceState?.roomTitle || "";
+  const chatMessages = Array.isArray(raceState?.chatMessages) ? raceState.chatMessages : [];
 
   const countdownLeft = useMemo(() => {
     if (!isRaceCountdown || !raceState?.gameStartAt) return null;
@@ -667,6 +671,7 @@ function App() {
     setRacePlayerId("");
     setRaceState(null);
     setRaceSubmitting(false);
+    setChatInput("");
     setPublicRooms([]);
     setStatus("");
     raceFinishedSentRef.current = false;
@@ -902,6 +907,28 @@ function App() {
       setStatus(err.message);
     } finally {
       setRaceSubmitting(false);
+    }
+  };
+
+  const sendRaceChat = async () => {
+    if (!raceRoomCode || !racePlayerId) return;
+    const text = chatInput.trim();
+    if (!text || chatSending) return;
+    setChatSending(true);
+    try {
+      const res = await fetch(`${API_BASE}/race/chat`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...authHeaders },
+        body: JSON.stringify({ roomCode: raceRoomCode, playerId: racePlayerId, text }),
+      });
+      const data = await parseJsonSafe(res);
+      if (!res.ok || !data.ok) throw new Error(data.error || "채팅 전송 실패");
+      applyRaceRoomState(data.room);
+      setChatInput("");
+    } catch (err) {
+      setStatus(err.message);
+    } finally {
+      setChatSending(false);
     }
   };
 
@@ -1295,6 +1322,12 @@ function App() {
     }
   }, [isInRaceRoom, status]);
 
+  useEffect(() => {
+    const el = chatBodyRef.current;
+    if (!el) return;
+    el.scrollTop = el.scrollHeight;
+  }, [chatMessages.length, isInRaceRoom]);
+
   return (
     <main className="page">
       <section className={`panel ${isModeMenu || isModeAuth ? "panelMenu" : ""}`}>
@@ -1657,6 +1690,37 @@ function App() {
                       : ` 남은 정답칸 ${Math.max(0, Number(p.remainingAnswerCells || 0))}`}
                 </span>
               ))}
+            </div>
+            <div className="chatBox">
+              <div className="chatTitle">Room Chat</div>
+              <div className="chatBody" ref={chatBodyRef}>
+                {chatMessages.length === 0 ? (
+                  <div className="chatEmpty">아직 채팅이 없습니다.</div>
+                ) : (
+                  chatMessages.map((msg) => (
+                    <div className="chatMsg" key={msg.id}>
+                      <b>{msg.nickname}</b>: {msg.text}
+                    </div>
+                  ))
+                )}
+              </div>
+              <div className="chatInputRow">
+                <input
+                  type="text"
+                  value={chatInput}
+                  onChange={(e) => setChatInput(e.target.value)}
+                  placeholder="메시지 입력..."
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      sendRaceChat();
+                    }
+                  }}
+                />
+                <button onClick={sendRaceChat} disabled={chatSending || !chatInput.trim()}>
+                  {chatSending ? "..." : "전송"}
+                </button>
+              </div>
             </div>
           </div>
         )}
