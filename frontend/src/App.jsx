@@ -52,13 +52,11 @@ async function parseJsonSafe(res) {
 }
 
 function App() {
-  const [puzzleId, setPuzzleId] = useState("1000575");
   const [selectedSize, setSelectedSize] = useState("25x25");
   const [puzzle, setPuzzle] = useState(null);
   const [cells, setCells] = useState([]); // 0 empty, 1 filled, 2 marked(X)
   const [status, setStatus] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-  const [isChecking, setIsChecking] = useState(false);
   const [activeHints, setActiveHints] = useState(new Set());
   const [canUndo, setCanUndo] = useState(false);
   const [canRedo, setCanRedo] = useState(false);
@@ -244,7 +242,6 @@ function App() {
         }
       }
     }
-    setPuzzleId(String(p.id));
     setPuzzle(p);
     applySnapshot(initial);
     setActiveHints(new Set());
@@ -256,36 +253,6 @@ function App() {
     setElapsedSec(0);
     setTimerRunning(startTimer);
     setStatus(message || `Puzzle ${p.id} loaded.`);
-  };
-
-  const loadPuzzle = async () => {
-    if (isInRaceRoom) {
-      setStatus("You cannot change puzzle while in a race room.");
-      return;
-    }
-    const id = Number(puzzleId);
-    if (!Number.isInteger(id)) {
-      setStatus("Enter a numeric puzzle ID.");
-      return;
-    }
-
-    setIsLoading(true);
-    setStatus("");
-
-    try {
-      const res = await fetch(`${API_BASE}/puzzles/${id}`);
-      const data = await parseJsonSafe(res);
-      if (!res.ok || !data.ok) {
-        throw new Error(data.error || "Failed to load puzzle.");
-      }
-      initializePuzzle(data.puzzle, { resume: true, message: `Puzzle ${data.puzzle.id} loaded.` });
-    } catch (err) {
-      setPuzzle(null);
-      setCells([]);
-      setStatus(err.message);
-    } finally {
-      setIsLoading(false);
-    }
   };
 
   const loadRandomBySize = async () => {
@@ -804,34 +771,6 @@ function App() {
     });
   };
 
-  const checkAnswer = async () => {
-    if (!puzzle) return;
-    setIsChecking(true);
-    setStatus("");
-
-    try {
-      const userBitsBase64 = toBase64Bits(cells, puzzle.width, puzzle.height);
-      const res = await fetch(`${API_BASE}/verify`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ puzzleId: puzzle.id, userBitsBase64 }),
-      });
-      const data = await parseJsonSafe(res);
-      if (!res.ok || !data.ok) {
-        throw new Error(data.error || "Verification failed.");
-      }
-      if (data.isCorrect) {
-        setTimerRunning(false);
-        submitRaceFinish();
-      }
-      setStatus(data.isCorrect ? "Correct." : "Not correct yet.");
-    } catch (err) {
-      setStatus(err.message);
-    } finally {
-      setIsChecking(false);
-    }
-  };
-
   useEffect(() => {
     if (!puzzle) return;
     const timer = setTimeout(() => {
@@ -941,29 +880,21 @@ function App() {
               <button onClick={loadRandomBySize} disabled={isLoading}>
                 {isLoading ? "Loading..." : "Load Random Size"}
               </button>
-              <input
-                type="number"
-                value={puzzleId}
-                onChange={(e) => setPuzzleId(e.target.value)}
-                placeholder="Puzzle ID"
-              />
-              <button onClick={loadPuzzle} disabled={isLoading}>
-                {isLoading ? "Loading..." : "Load Puzzle"}
+            </>
+          )}
+          {puzzle && (
+            <>
+              <button onClick={undo} disabled={!canUndo || !canInteractBoard}>
+                Undo
+              </button>
+              <button onClick={redo} disabled={!canRedo || !canInteractBoard}>
+                Redo
+              </button>
+              <button onClick={resetGrid} disabled={!canInteractBoard}>
+                Clear
               </button>
             </>
           )}
-          <button onClick={checkAnswer} disabled={!puzzle || isChecking || !canInteractBoard}>
-            {isChecking ? "Checking..." : "Check Answer"}
-          </button>
-          <button onClick={undo} disabled={!puzzle || !canUndo || !canInteractBoard}>
-            Undo
-          </button>
-          <button onClick={redo} disabled={!puzzle || !canRedo || !canInteractBoard}>
-            Redo
-          </button>
-          <button onClick={resetGrid} disabled={!puzzle || !canInteractBoard}>
-            Clear
-          </button>
         </div>
 
         <div className="racePanel">
