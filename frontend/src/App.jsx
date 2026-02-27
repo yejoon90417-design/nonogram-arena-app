@@ -62,16 +62,17 @@ function App() {
   const [canRedo, setCanRedo] = useState(false);
   const [elapsedSec, setElapsedSec] = useState(0);
   const [timerRunning, setTimerRunning] = useState(false);
-  const [nickname, setNickname] = useState("");
-  const [roomCodeInput, setRoomCodeInput] = useState("");
   const [raceRoomCode, setRaceRoomCode] = useState("");
   const [racePlayerId, setRacePlayerId] = useState("");
   const [raceState, setRaceState] = useState(null);
   const [raceSubmitting, setRaceSubmitting] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [showJoinModal, setShowJoinModal] = useState(false);
   const [createNickname, setCreateNickname] = useState("");
   const [createRoomTitle, setCreateRoomTitle] = useState("");
   const [createSize, setCreateSize] = useState("10x10");
+  const [joinNickname, setJoinNickname] = useState("");
+  const [joinRoomCode, setJoinRoomCode] = useState("");
   const [isRematchLoading, setIsRematchLoading] = useState(false);
   const [nowMs, setNowMs] = useState(Date.now());
   const [soundOn, setSoundOn] = useState(true);
@@ -471,11 +472,9 @@ function App() {
       });
       const data = await parseJsonSafe(res);
       if (!res.ok || !data.ok) throw new Error(data.error || "Failed to create room.");
-      setNickname(name);
       setRaceRoomCode(data.roomCode);
       setRacePlayerId(data.playerId);
       applyRaceRoomState(data.room, data.playerId);
-      setRoomCodeInput(data.roomCode);
       setSelectedSize(createSize);
       setShowCreateModal(false);
       initializePuzzle(data.puzzle, {
@@ -493,14 +492,14 @@ function App() {
   };
 
   const joinRaceRoom = async () => {
-    const name = nickname.trim();
-    const code = roomCodeInput.trim().toUpperCase();
+    const name = joinNickname.trim();
+    const code = joinRoomCode.trim().toUpperCase();
     if (!name) {
-      setStatus("Enter nickname first.");
+      setStatus("닉네임을 입력해줘.");
       return;
     }
     if (!code) {
-      setStatus("Enter room code first.");
+      setStatus("방 코드를 입력해줘.");
       return;
     }
     setIsLoading(true);
@@ -521,6 +520,7 @@ function App() {
         message: `Joined room ${data.roomCode}. Press ready.`,
       });
       startRacePolling(data.roomCode);
+      setShowJoinModal(false);
       playSfx("ui");
     } catch (err) {
       setStatus(err.message);
@@ -1037,21 +1037,8 @@ function App() {
         <div className="racePanel">
           {!isInRaceRoom && (
             <>
-              <input
-                type="text"
-                value={nickname}
-                onChange={(e) => setNickname(e.target.value)}
-                placeholder="Nickname"
-              />
-              <input
-                type="text"
-                value={roomCodeInput}
-                onChange={(e) => setRoomCodeInput(e.target.value.toUpperCase())}
-                placeholder="Room Code"
-              />
               <button
                 onClick={() => {
-                  setCreateNickname(nickname);
                   setCreateRoomTitle("");
                   setCreateSize(selectedSize);
                   setShowCreateModal(true);
@@ -1060,7 +1047,12 @@ function App() {
               >
                 방 만들기
               </button>
-              <button onClick={joinRaceRoom} disabled={isLoading || !nickname.trim() || !roomCodeInput.trim()}>
+              <button
+                onClick={() => {
+                  setShowJoinModal(true);
+                }}
+                disabled={isLoading}
+              >
                 Join Room
               </button>
             </>
@@ -1196,6 +1188,38 @@ function App() {
                 <button onClick={() => setShowCreateModal(false)}>취소</button>
                 <button onClick={createRaceRoom} disabled={isLoading || !createNickname.trim()}>
                   {isLoading ? "생성중..." : "생성"}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {showJoinModal && (
+          <div className="modalBackdrop" onClick={() => setShowJoinModal(false)}>
+            <div className="modalCard" onClick={(e) => e.stopPropagation()}>
+              <h2>방 참가</h2>
+              <label>
+                닉네임
+                <input
+                  type="text"
+                  value={joinNickname}
+                  onChange={(e) => setJoinNickname(e.target.value)}
+                  placeholder="닉네임"
+                />
+              </label>
+              <label>
+                방 코드
+                <input
+                  type="text"
+                  value={joinRoomCode}
+                  onChange={(e) => setJoinRoomCode(e.target.value.toUpperCase())}
+                  placeholder="예: AB12CD"
+                />
+              </label>
+              <div className="modalActions">
+                <button onClick={() => setShowJoinModal(false)}>취소</button>
+                <button onClick={joinRaceRoom} disabled={isLoading || !joinNickname.trim() || !joinRoomCode.trim()}>
+                  {isLoading ? "참가중..." : "참가"}
                 </button>
               </div>
             </div>
