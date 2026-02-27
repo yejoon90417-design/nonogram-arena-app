@@ -6,6 +6,7 @@ const API_BASE = (import.meta.env.VITE_API_BASE_URL || "").replace(/\/$/, "");
 const MAX_HISTORY = 200;
 const AUTH_TOKEN_KEY = "nonogram-auth-token";
 const AUTH_USER_KEY = "nonogram-auth-user";
+const POOP_SFX_URL = "/sounds/poot.mp3";
 
 function toBase64Bits(cells, width, height) {
   const byteLength = Math.ceil((width * height) / 8);
@@ -147,6 +148,7 @@ function App() {
   const countdownCueRef = useRef(-1);
   const prevRacePhaseRef = useRef("idle");
   const lastPaintSfxAtRef = useRef(0);
+  const poopAudioRef = useRef(null);
   const deferredCells = useDeferredValue(cells);
 
   useEffect(() => {
@@ -373,6 +375,21 @@ function App() {
       return;
     }
     tone(500, 60, { type: "triangle", gain: 0.05 });
+  };
+
+  const playPoopSfx = () => {
+    if (!soundOn) return;
+    if (!poopAudioRef.current) {
+      poopAudioRef.current = new Audio(POOP_SFX_URL);
+      poopAudioRef.current.volume = 0.52;
+      poopAudioRef.current.preload = "auto";
+    }
+    try {
+      poopAudioRef.current.currentTime = 0;
+      poopAudioRef.current.play().catch(() => {});
+    } catch {
+      // ignore playback errors
+    }
   };
 
   const handleToggleSfx = () => {
@@ -1378,20 +1395,13 @@ function App() {
         y: from.top + from.height / 2,
         dx: to.left + to.width / 2 - (from.left + from.width / 2),
         dy: to.top + to.height / 2 - (from.top + from.height / 2),
-        go: false,
       });
+      if (event.emoji === "💩") {
+        playPoopSfx();
+      }
     }
     if (!nextFlights.length) return;
     setReactionFlights((prev) => [...prev, ...nextFlights]);
-    requestAnimationFrame(() => {
-      setReactionFlights((prev) =>
-        prev.map((f) => (nextFlights.some((nf) => nf.id === f.id) ? { ...f, go: true } : f))
-      );
-    });
-    const timer = setTimeout(() => {
-      setReactionFlights((prev) => prev.filter((f) => !nextFlights.some((nf) => nf.id === f.id)));
-    }, 900);
-    return () => clearTimeout(timer);
   }, [reactionEvents, isInRaceRoom]);
 
   useEffect(() => {
@@ -1793,12 +1803,15 @@ function App() {
               {reactionFlights.map((f) => (
                 <span
                   key={f.id}
-                  className={`reactionFlight ${f.go ? "go" : ""}`}
+                  className="reactionFlight"
                   style={{
                     left: `${f.x}px`,
                     top: `${f.y}px`,
                     "--dx": `${f.dx}px`,
                     "--dy": `${f.dy}px`,
+                  }}
+                  onAnimationEnd={() => {
+                    setReactionFlights((prev) => prev.filter((x) => x.id !== f.id));
                   }}
                 >
                   {f.emoji}
