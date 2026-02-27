@@ -114,7 +114,7 @@ function App() {
   useEffect(() => {
     const unlock = () => {
       const ctx = ensureAudio();
-      if (ctx && ctx.state === "suspended") ctx.resume();
+      if (ctx && ctx.state === "suspended") ctx.resume().catch(() => {});
     };
     window.addEventListener("pointerdown", unlock, { passive: true });
     return () => window.removeEventListener("pointerdown", unlock);
@@ -205,12 +205,12 @@ function App() {
   }, [isRaceCountdown, raceState, nowMs]);
 
   const ensureAudio = () => {
-    if (audioCtxRef.current) return audioCtxRef.current;
+    if (audioCtxRef.current && audioCtxRef.current.state !== "closed") return audioCtxRef.current;
     const Ctx = window.AudioContext || window.webkitAudioContext;
     if (!Ctx) return null;
     const ctx = new Ctx();
     const master = ctx.createGain();
-    master.gain.value = 0.06;
+    master.gain.value = 0.14;
     master.connect(ctx.destination);
     audioCtxRef.current = ctx;
     masterGainRef.current = master;
@@ -222,7 +222,7 @@ function App() {
     const ctx = ensureAudio();
     const master = masterGainRef.current;
     if (!ctx || !master) return;
-    if (ctx.state === "suspended") ctx.resume();
+    if (ctx.state === "suspended") ctx.resume().catch(() => {});
 
     const osc = ctx.createOscillator();
     const g = ctx.createGain();
@@ -285,6 +285,24 @@ function App() {
       return;
     }
     tone(500, 60, { type: "triangle", gain: 0.05 });
+  };
+
+  const handleToggleSfx = () => {
+    setSoundOn((prev) => {
+      const next = !prev;
+      if (next) {
+        const ctx = ensureAudio();
+        if (ctx && ctx.state === "suspended") ctx.resume().catch(() => {});
+        setTimeout(() => playSfx("ui"), 0);
+      }
+      return next;
+    });
+  };
+
+  const handleTestSfx = () => {
+    const ctx = ensureAudio();
+    if (ctx && ctx.state === "suspended") ctx.resume().catch(() => {});
+    playSfx("go");
   };
 
   const resetHistory = () => {
@@ -1030,14 +1048,10 @@ function App() {
               </button>
             </>
           )}
-          <button
-            onClick={() => {
-              setSoundOn((prev) => !prev);
-              playSfx("ui");
-            }}
-          >
+          <button onClick={handleToggleSfx}>
             {soundOn ? "SFX ON" : "SFX OFF"}
           </button>
+          <button onClick={handleTestSfx}>TEST SFX</button>
         </div>
 
         <div className="racePanel">
