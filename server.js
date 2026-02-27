@@ -22,6 +22,16 @@ const pool = new Pool(DB_CONFIG);
 const raceRooms = new Map();
 const ROOM_TTL_MS = 1000 * 60 * 60 * 12;
 const COUNTDOWN_MS = 5000;
+const POPCOUNT = new Uint8Array(256);
+for (let i = 0; i < 256; i += 1) {
+  let n = i;
+  let c = 0;
+  while (n) {
+    n &= n - 1;
+    c += 1;
+  }
+  POPCOUNT[i] = c;
+}
 
 app.use(cors());
 app.use((req, res, next) => {
@@ -69,6 +79,19 @@ function parseUserBits(body, width, height) {
     return packCells(body.cells, width, height);
   }
   throw new Error("Provide one of: userBitsBase64, userBitsHex, or cells");
+}
+
+function popcountBuffer(buf) {
+  let total = 0;
+  for (let i = 0; i < buf.length; i += 1) total += POPCOUNT[buf[i]];
+  return total;
+}
+
+function countCorrectAnswerCells(solutionBits, userBits) {
+  let total = 0;
+  const len = Math.min(solutionBits.length, userBits.length);
+  for (let i = 0; i < len; i += 1) total += POPCOUNT[solutionBits[i] & userBits[i]];
+  return total;
 }
 
 function randomCode() {
@@ -120,8 +143,8 @@ function roomPublicState(room) {
       finishedAt: p.finishedAt,
       elapsedSec: p.elapsedSec,
       isReady: p.isReady,
-      rowsDone: p.rowsDone ?? 0,
-      colsDone: p.colsDone ?? 0,
+      correctAnswerCells: p.correctAnswerCells ?? 0,
+      remainingAnswerCells: Math.max(0, (room.totalAnswerCells || 0) - (p.correctAnswerCells || 0)),
     }))
     .sort((a, b) => (a.joinedAt > b.joinedAt ? 1 : -1));
   const winner = room.winnerPlayerId
@@ -131,6 +154,7 @@ function roomPublicState(room) {
     roomCode: room.roomCode,
     roomTitle: room.roomTitle,
     puzzleId: room.puzzleId,
+    totalAnswerCells: room.totalAnswerCells || 0,
     width: room.width,
     height: room.height,
     createdAt: room.createdAt,
@@ -197,7 +221,7 @@ const getRandomPuzzleBySize = async (req, res) => {
 
   try {
     const { rows } = await pool.query(
-      `SELECT id, width, height, row_hints, col_hints, is_unique
+      `SELECT id, width, height, row_hints, col_hints, is_unique, solution_bits
        FROM puzzles
        WHERE width = $1 AND height = $2
        ORDER BY random()
@@ -245,6 +269,14 @@ app.post("/race/create", async (req, res) => {
     }
 
     const puzzle = rows[0];
+    const puzzleForClient = {
+      id: puzzle.id,
+      width: puzzle.width,
+      height: puzzle.height,
+      row_hints: puzzle.row_hints,
+      col_hints: puzzle.col_hints,
+      is_unique: puzzle.is_unique,
+    };
     const roomCode = makeRoomCode();
     const playerId = randomPlayerId();
     const nowIso = new Date().toISOString();
@@ -252,6 +284,8 @@ app.post("/race/create", async (req, res) => {
       roomCode,
       roomTitle,
       puzzleId: puzzle.id,
+      solutionBits: Buffer.from(puzzle.solution_bits),
+      totalAnswerCells: popcountBuffer(Buffer.from(puzzle.solution_bits)),
       width: puzzle.width,
       height: puzzle.height,
       createdAt: Date.now(),
@@ -269,8 +303,7 @@ app.post("/race/create", async (req, res) => {
       finishedAt: null,
       elapsedSec: null,
       isReady: false,
-      rowsDone: 0,
-      colsDone: 0,
+      correctAnswerCells: 0,
     });
     raceRooms.set(roomCode, room);
 
@@ -278,7 +311,7 @@ app.post("/race/create", async (req, res) => {
       ok: true,
       roomCode,
       playerId,
-      puzzle,
+      puzzle: puzzleForClient,
       room: roomPublicState(room),
     });
   } catch (err) {
@@ -323,8 +356,7 @@ app.post("/race/join", async (req, res) => {
       finishedAt: null,
       elapsedSec: null,
       isReady: false,
-      rowsDone: 0,
-      colsDone: 0,
+      correctAnswerCells: 0,
     });
 
     return res.json({
@@ -391,8 +423,7 @@ app.post("/race/start", (req, res) => {
   for (const p of room.players.values()) {
     p.finishedAt = null;
     p.elapsedSec = null;
-    p.rowsDone = 0;
-    p.colsDone = 0;
+    p.correctAnswerCells = 0;
   }
 
   return res.json({ ok: true, room: roomPublicState(room) });
@@ -401,10 +432,8 @@ app.post("/race/start", (req, res) => {
 app.post("/race/progress", (req, res) => {
   const roomCode = String(req.body?.roomCode || "").trim().toUpperCase();
   const playerId = String(req.body?.playerId || "").trim();
-  const rowsDone = Number(req.body?.rowsDone);
-  const colsDone = Number(req.body?.colsDone);
-  if (!roomCode || !playerId || !Number.isFinite(rowsDone) || !Number.isFinite(colsDone)) {
-    return res.status(400).json({ ok: false, error: "roomCode/playerId/rowsDone/colsDone are required" });
+  if (!roomCode || !playerId) {
+    return res.status(400).json({ ok: false, error: "roomCode/playerId are required" });
   }
 
   const room = raceRooms.get(roomCode);
@@ -419,9 +448,19 @@ app.post("/race/progress", (req, res) => {
   if (room.state !== "playing" && room.state !== "finished") {
     return res.status(400).json({ ok: false, error: "Race has not started yet" });
   }
-
-  player.rowsDone = Math.max(0, Math.min(room.height, Math.floor(rowsDone)));
-  player.colsDone = Math.max(0, Math.min(room.width, Math.floor(colsDone)));
+  try {
+    const userBits = parseUserBits(req.body, room.width, room.height);
+    const expectedLen = expectedByteLength(room.width, room.height);
+    if (userBits.length !== expectedLen) {
+      return res.status(400).json({
+        ok: false,
+        error: `Invalid bit length: got ${userBits.length}, expected ${expectedLen}`,
+      });
+    }
+    player.correctAnswerCells = countCorrectAnswerCells(room.solutionBits, userBits);
+  } catch (err) {
+    return res.status(400).json({ ok: false, error: err.message });
+  }
   return res.json({ ok: true, room: roomPublicState(room) });
 });
 
@@ -444,7 +483,7 @@ app.post("/race/rematch", async (req, res) => {
 
   try {
     const { rows } = await pool.query(
-      `SELECT id, width, height, row_hints, col_hints, is_unique
+      `SELECT id, width, height, row_hints, col_hints, is_unique, solution_bits
        FROM puzzles
        WHERE width = $1 AND height = $2
        ORDER BY random()
@@ -455,7 +494,17 @@ app.post("/race/rematch", async (req, res) => {
       return res.status(404).json({ ok: false, error: "No puzzle found for size" });
     }
     const puzzle = rows[0];
+    const puzzleForClient = {
+      id: puzzle.id,
+      width: puzzle.width,
+      height: puzzle.height,
+      row_hints: puzzle.row_hints,
+      col_hints: puzzle.col_hints,
+      is_unique: puzzle.is_unique,
+    };
     room.puzzleId = puzzle.id;
+    room.solutionBits = Buffer.from(puzzle.solution_bits);
+    room.totalAnswerCells = popcountBuffer(Buffer.from(puzzle.solution_bits));
     room.state = "lobby";
     room.countdownStartAt = null;
     room.gameStartAt = null;
@@ -464,10 +513,9 @@ app.post("/race/rematch", async (req, res) => {
       p.isReady = false;
       p.finishedAt = null;
       p.elapsedSec = null;
-      p.rowsDone = 0;
-      p.colsDone = 0;
+      p.correctAnswerCells = 0;
     }
-    return res.json({ ok: true, puzzle, room: roomPublicState(room) });
+    return res.json({ ok: true, puzzle: puzzleForClient, room: roomPublicState(room) });
   } catch (err) {
     return res.status(500).json({ ok: false, error: err.message });
   }
@@ -506,8 +554,7 @@ app.post("/race/finish", (req, res) => {
   if (!Number.isInteger(player.elapsedSec)) {
     player.elapsedSec = Math.max(0, Math.floor(elapsedSec));
     player.finishedAt = new Date().toISOString();
-    player.rowsDone = room.height;
-    player.colsDone = room.width;
+    player.correctAnswerCells = room.totalAnswerCells || player.correctAnswerCells || 0;
   }
   if (!room.winnerPlayerId) {
     room.winnerPlayerId = playerId;

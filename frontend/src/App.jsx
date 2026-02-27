@@ -511,15 +511,17 @@ function App() {
     }
   };
 
-  const submitRaceProgress = async (rowsDone, colsDone) => {
+  const submitRaceProgress = async () => {
     if (!raceRoomCode || !racePlayerId) return;
     if (raceProgressBusyRef.current) return;
     raceProgressBusyRef.current = true;
     try {
+      if (!puzzle) return;
+      const userBitsBase64 = toBase64Bits(cellValuesRef.current, puzzle.width, puzzle.height);
       await fetch(`${API_BASE}/race/progress`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ roomCode: raceRoomCode, playerId: racePlayerId, rowsDone, colsDone }),
+        body: JSON.stringify({ roomCode: raceRoomCode, playerId: racePlayerId, userBitsBase64 }),
       });
     } catch {
       // ignore transient progress errors
@@ -859,8 +861,8 @@ function App() {
     const now = Date.now();
     if (now - raceProgressLastSentRef.current < 600) return;
     raceProgressLastSentRef.current = now;
-    submitRaceProgress(solvedRows.size, solvedCols.size);
-  }, [isRacePlaying, raceRoomCode, racePlayerId, solvedRows, solvedCols]);
+    submitRaceProgress();
+  }, [isRacePlaying, raceRoomCode, racePlayerId, cells, puzzle]);
 
   useEffect(() => {
     if (!isInRaceRoom || (!isRaceCountdown && !isRacePlaying)) return undefined;
@@ -1052,10 +1054,7 @@ function App() {
                   {p.isReady ? " [ready]" : " [not ready]"}:
                   {Number.isInteger(p.elapsedSec)
                     ? ` ${p.elapsedSec}s`
-                    : ` 남은 줄 ${Math.max(
-                        0,
-                        (raceState?.height || 0) - (p.rowsDone || 0) + (raceState?.width || 0) - (p.colsDone || 0)
-                      )}`}
+                    : ` 남은 정답칸 ${Math.max(0, Number(p.remainingAnswerCells || 0))}`}
                 </span>
               ))}
             </div>
