@@ -217,6 +217,10 @@
   border-radius: 999px;
   padding: 0.2rem 0.55rem;
   position: relative;
+  display: inline-flex;
+  align-items: center;
+  white-space: nowrap;
+  gap: 0.1rem;
 }
 
 .nickBtn {
@@ -227,10 +231,19 @@
   font-weight: 800;
   color: #173659;
   cursor: pointer;
+  box-shadow: none;
+  min-height: 0;
+  min-width: 0;
 }
 
 .nickBtn:hover {
   text-decoration: underline;
+}
+
+.nickBtn:disabled {
+  cursor: default;
+  text-decoration: none;
+  opacity: 1;
 }
 
 .reactionMenu {
@@ -266,7 +279,7 @@
   top: 0;
   font-size: 1.45rem;
   transform: translate3d(-50%, -50%, 0) scale(var(--flight-scale, 1));
-  opacity: 0.72;
+  opacity: 1;
   text-shadow: 0 3px 10px rgba(0, 0, 0, 0.22);
   will-change: left, top, transform, opacity;
 }

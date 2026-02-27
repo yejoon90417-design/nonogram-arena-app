@@ -401,10 +401,7 @@ function App() {
     if (!soundOn) return;
     const ctx = ensureAudio();
     const master = masterGainRef.current;
-    if (!ctx || !master || !poopBufferRef.current) {
-      tone(170, 140, { type: "sawtooth", gain: 0.085, slideTo: 110 });
-      return;
-    }
+    if (!ctx || !master || !poopBufferRef.current) return;
     try {
       if (ctx.state === "suspended") ctx.resume().catch(() => {});
       const src = ctx.createBufferSource();
@@ -991,6 +988,7 @@ function App() {
 
   const sendReaction = async (targetPlayerId, emoji) => {
     if (!raceRoomCode || !racePlayerId || !targetPlayerId) return;
+    if (targetPlayerId === racePlayerId) return;
     try {
       const res = await fetch(`${API_BASE}/race/reaction`, {
         method: "POST",
@@ -1000,8 +998,6 @@ function App() {
       const data = await parseJsonSafe(res);
       if (!res.ok || !data.ok) throw new Error(data.error || "리액션 전송 실패");
       applyRaceRoomState(data.room);
-      setReactionMenuForPlayerId("");
-      playSfx("ui");
     } catch (err) {
       setStatus(err.message);
     }
@@ -1440,7 +1436,7 @@ function App() {
         y0: f.y,
         x: f.x,
         y: f.y,
-        opacity: 0.72,
+        opacity: 1,
         scale: 0.98,
         startTs: performance.now(),
         durationMs: 840,
@@ -1463,7 +1459,7 @@ function App() {
         const arc = Math.min(120, Math.max(42, Math.hypot(f.dx, f.dy) * 0.18));
         const x = f.x0 + f.dx * ease;
         const y = f.y0 + f.dy * ease - arc * (4 * t * (1 - t));
-        const opacity = 0.74 * (1 - t);
+        const opacity = 1;
         const scale = 0.94 + 0.16 * (1 - t);
         next.push({ ...f, x, y, opacity, scale });
       }
@@ -1489,6 +1485,18 @@ function App() {
     document.addEventListener("pointerdown", onDocPointerDown);
     return () => document.removeEventListener("pointerdown", onDocPointerDown);
   }, [showEmojiPicker]);
+
+  useEffect(() => {
+    if (!reactionMenuForPlayerId) return;
+    const onDocPointerDown = (event) => {
+      const target = event.target;
+      if (target?.closest?.(".reactionMenu")) return;
+      if (target?.closest?.(".nickBtn")) return;
+      setReactionMenuForPlayerId("");
+    };
+    document.addEventListener("pointerdown", onDocPointerDown);
+    return () => document.removeEventListener("pointerdown", onDocPointerDown);
+  }, [reactionMenuForPlayerId]);
 
   return (
     <main className="page">
@@ -1846,9 +1854,11 @@ function App() {
                 >
                   <button
                     className="nickBtn"
-                    onClick={() =>
-                      setReactionMenuForPlayerId((prev) => (prev === p.playerId ? "" : p.playerId))
-                    }
+                    onClick={() => {
+                      if (p.playerId === racePlayerId) return;
+                      setReactionMenuForPlayerId((prev) => (prev === p.playerId ? "" : p.playerId));
+                    }}
+                    disabled={p.playerId === racePlayerId}
                   >
                     {p.nickname}
                   </button>

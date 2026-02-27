@@ -986,6 +986,9 @@ app.post("/race/reaction", requireAuth, (req, res) => {
   if (!sender || !target) {
     return res.status(404).json({ ok: false, error: "Player not found in room" });
   }
+  if (sender.playerId === target.playerId) {
+    return res.status(400).json({ ok: false, error: "Cannot react to yourself" });
+  }
   if (sender.userId !== req.authUser.id) {
     return res.status(403).json({ ok: false, error: "Forbidden player" });
   }
