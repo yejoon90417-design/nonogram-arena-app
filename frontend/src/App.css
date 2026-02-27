@@ -1,155 +1,243 @@
+:root {
+  --ink: #12202f;
+  --muted: #4a5562;
+  --line: #9fb2c7;
+  --panel: #f9fbfd;
+  --panel-soft: #eef3f8;
+  --accent: #087c84;
+  --accent-ink: #ffffff;
+  --gold: #f4a216;
+}
+
 .page {
   min-height: 100vh;
   padding: 1.2rem;
   display: grid;
   place-items: center;
+  background:
+    radial-gradient(1200px 500px at 10% -20%, #d7ecff 0%, transparent 70%),
+    radial-gradient(900px 460px at 120% 110%, #f9e6cb 0%, transparent 72%),
+    #eaf0f6;
 }
 
 .panel {
-  width: min(1180px, 100%);
-  border: 1px solid #7d95c6;
-  border-radius: 0;
-  background: #dcdcdc;
-  padding: 1rem;
-  box-shadow: none;
+  width: min(1200px, 100%);
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: linear-gradient(180deg, #ffffff 0%, var(--panel) 100%);
+  padding: 1.05rem;
+  box-shadow: 0 16px 38px rgba(24, 42, 61, 0.14);
+  position: relative;
+  overflow: hidden;
+}
+
+.panel::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  right: 0;
+  height: 5px;
+  background: linear-gradient(90deg, #18c4ba 0%, #4bb3ff 45%, #f4a216 100%);
 }
 
 h1 {
   margin: 0 0 0.2rem;
-  font-size: 1.35rem;
-  color: #111;
+  font-size: 1.55rem;
+  color: var(--ink);
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  text-shadow: 0 1px 0 #fff;
 }
 
 p {
-  margin: 0 0 0.75rem;
-  color: #222;
-  font-size: 0.92rem;
+  margin: 0 0 0.85rem;
+  color: var(--muted);
+  font-size: 0.94rem;
 }
 
-.controls {
+.controls,
+.racePanel {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.4rem;
+  gap: 0.45rem;
 }
 
 .racePanel {
-  margin-top: 0.55rem;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.4rem;
+  margin-top: 0.6rem;
 }
 
 .raceStateBox {
-  margin-top: 0.55rem;
-  border: 1px solid #6f6f6f;
-  background: #efefef;
-  padding: 0.4rem 0.55rem;
-  font-size: 0.9rem;
-  color: #111;
+  margin-top: 0.65rem;
+  border: 1px solid #c7d5e4;
+  background: var(--panel-soft);
+  border-radius: 12px;
+  padding: 0.55rem 0.7rem;
+  font-size: 0.91rem;
+  color: var(--ink);
   display: grid;
-  gap: 0.25rem;
+  gap: 0.3rem;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6);
 }
 
 .racePlayers {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.5rem;
+  gap: 0.55rem;
+}
+
+.racePlayers span {
+  border: 1px solid #bdd0e2;
+  background: #ffffff;
+  border-radius: 999px;
+  padding: 0.2rem 0.55rem;
 }
 
 .raceActions {
   display: flex;
-  gap: 0.4rem;
+  gap: 0.45rem;
   flex-wrap: wrap;
 }
 
 .raceResult {
-  font-weight: 800;
+  font-weight: 900;
+  color: #0a5f46;
 }
 
 .modalBackdrop {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.45);
+  background: rgba(10, 16, 24, 0.52);
   display: grid;
   place-items: center;
   z-index: 20;
+  backdrop-filter: blur(2px);
 }
 
 .modalCard {
-  width: min(420px, calc(100vw - 24px));
-  background: #efefef;
-  border: 1px solid #444;
-  padding: 0.9rem;
+  width: min(430px, calc(100vw - 24px));
+  background: #ffffff;
+  border: 1px solid #c8d8e8;
+  border-radius: 14px;
+  padding: 0.95rem;
   display: grid;
-  gap: 0.55rem;
+  gap: 0.6rem;
+  box-shadow: 0 18px 45px rgba(17, 30, 45, 0.22);
 }
 
 .modalCard h2 {
   margin: 0;
-  font-size: 1.12rem;
+  font-size: 1.18rem;
+  color: var(--ink);
 }
 
 .modalCard label {
   display: grid;
-  gap: 0.2rem;
+  gap: 0.22rem;
   font-size: 0.9rem;
+  color: #2c3947;
 }
 
 .modalActions {
   display: flex;
   justify-content: flex-end;
-  gap: 0.4rem;
+  gap: 0.45rem;
 }
 
 input,
 select,
 button {
-  border-radius: 0;
-  border: 1px solid #5c5c5c;
-  background: #f2f2f2;
-  color: #111;
-  padding: 0.4rem 0.65rem;
+  border-radius: 10px;
+  border: 1px solid #b9c9da;
+  background: #ffffff;
+  color: #15212d;
+  padding: 0.42rem 0.7rem;
   font-size: 0.92rem;
+  transition: border-color 140ms ease, box-shadow 140ms ease, transform 80ms ease;
+}
+
+input:focus,
+select:focus,
+button:focus-visible {
+  outline: none;
+  border-color: #67a7dc;
+  box-shadow: 0 0 0 3px rgba(102, 166, 222, 0.25);
 }
 
 input {
-  width: 180px;
+  width: 190px;
 }
 
 button {
   cursor: pointer;
+  font-weight: 700;
+  background: linear-gradient(180deg, #ffffff 0%, #eaf1f7 100%);
+  box-shadow: 0 1px 0 #fff;
+}
+
+button:hover:enabled {
+  border-color: #9ab3cc;
+}
+
+button:active:enabled {
+  transform: translateY(1px);
 }
 
 button:disabled {
-  opacity: 0.55;
+  opacity: 0.5;
   cursor: not-allowed;
 }
 
+.raceActions button:last-child,
+.modalActions button:last-child {
+  background: linear-gradient(180deg, #11a5af 0%, var(--accent) 100%);
+  color: var(--accent-ink);
+  border-color: #0b6168;
+}
+
 .meta {
-  margin-top: 0.6rem;
+  margin-top: 0.7rem;
   display: flex;
-  gap: 0.55rem;
+  gap: 0.58rem;
   flex-wrap: wrap;
-  color: #222;
+  color: var(--muted);
   font-size: 0.9rem;
 }
 
+.meta span {
+  border: 1px solid #ccdaea;
+  background: #ffffff;
+  border-radius: 999px;
+  padding: 0.18rem 0.55rem;
+}
+
 .status {
-  margin-top: 0.6rem;
-  padding: 0.35rem 0.5rem;
-  border: 1px solid #6d6d6d;
-  background: #efefef;
-  color: #111;
-  border-radius: 0;
+  margin-top: 0.65rem;
+  padding: 0.42rem 0.55rem;
+  border: 1px solid #bfd0e1;
+  background: #f2f7fc;
+  color: #1b2a3a;
+  border-radius: 10px;
+  font-weight: 700;
+  animation: statusPulse 1.4s ease;
 }
 
 .boardWrap {
   --board-cursor: crosshair;
-  margin-top: 0.75rem;
+  margin-top: 0.8rem;
   overflow: auto;
-  border: 1px solid #8e8e8e;
-  background: #dcdcdc;
-  padding: 0.7rem;
+  border: 1px solid #b9cadb;
+  border-radius: 12px;
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.5), rgba(220, 232, 244, 0.6)),
+    repeating-linear-gradient(
+      -45deg,
+      rgba(129, 156, 185, 0.08) 0,
+      rgba(129, 156, 185, 0.08) 8px,
+      rgba(255, 255, 255, 0) 8px,
+      rgba(255, 255, 255, 0) 16px
+    );
+  padding: 0.75rem;
   user-select: none;
 }
 
@@ -167,17 +255,17 @@ button:disabled {
 }
 
 .corner {
-  border: 1px solid #111;
-  background: #dfdfdf;
+  border: 1px solid #0e1f30;
+  background: #e8edf2;
 }
 
 .colHints {
   display: grid;
   gap: var(--grid-gap);
   align-items: stretch;
-  border-top: 1px solid #111;
-  border-left: 1px solid #111;
-  border-right: 1px solid #111;
+  border-top: 1px solid #0e1f30;
+  border-left: 1px solid #0e1f30;
+  border-right: 1px solid #0e1f30;
 }
 
 .colHintCol {
@@ -189,9 +277,9 @@ button:disabled {
   display: grid;
   gap: var(--grid-gap);
   align-items: stretch;
-  border-left: 1px solid #111;
-  border-top: 1px solid #111;
-  border-bottom: 1px solid #111;
+  border-left: 1px solid #0e1f30;
+  border-top: 1px solid #0e1f30;
+  border-bottom: 1px solid #0e1f30;
 }
 
 .rowHintRow {
@@ -205,20 +293,20 @@ button:disabled {
   width: var(--cell-size);
   height: var(--cell-size);
   padding: 0;
-  background: #e4e4e4;
-  color: #111;
-  border: 1px solid #444;
+  background: #ecf2f8;
+  color: #162331;
+  border: 1px solid #4b5f75;
   border-radius: 0;
-  font-size: calc(var(--cell-size) * 0.54);
+  font-size: calc(var(--cell-size) * 0.52);
   line-height: 1;
-  font-weight: 800;
+  font-weight: 900;
   overflow: hidden;
   text-align: center;
 }
 
 .hintNum.active {
-  background: #bcbcbc;
-  color: #000;
+  background: linear-gradient(180deg, #ffdf9d 0%, #f6c777 100%);
+  color: #5b3500;
 }
 
 .board {
@@ -226,8 +314,9 @@ button:disabled {
   cursor: var(--board-cursor);
   position: relative;
   border: none;
-  box-shadow: inset 0 0 0 1px #111;
+  box-shadow: inset 0 0 0 1px #0e1f30;
   overflow: hidden;
+  background: #dfe6ee;
 }
 
 .boardCanvas {
@@ -242,11 +331,13 @@ button:disabled {
   inset: 0;
   display: grid;
   place-items: center;
-  font-size: 72px;
+  font-size: 82px;
   font-weight: 900;
-  color: #111;
-  background: rgba(240, 240, 240, 0.72);
+  color: #10253b;
+  background: rgba(237, 245, 252, 0.75);
   pointer-events: none;
+  text-shadow: 0 3px 16px rgba(255, 255, 255, 0.6);
+  animation: countdownBeat 0.9s ease-in-out infinite;
 }
 
 .countdownOverlay.wait {
@@ -255,11 +346,35 @@ button:disabled {
 
 .countdownOverlay.result {
   font-size: 34px;
+  color: #084a35;
+  animation: none;
+}
+
+@keyframes countdownBeat {
+  0% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.06);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+@keyframes statusPulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(73, 155, 228, 0.35);
+  }
+  100% {
+    box-shadow: 0 0 0 14px rgba(73, 155, 228, 0);
+  }
 }
 
 @media (max-width: 680px) {
   .panel {
-    padding: 0.65rem;
+    padding: 0.68rem;
+    border-radius: 14px;
   }
 
   .nonogram {
@@ -267,7 +382,14 @@ button:disabled {
   }
 
   .hintNum {
-    font-size: calc(var(--cell-size) * 0.54);
+    font-size: calc(var(--cell-size) * 0.52);
   }
 
+  input {
+    width: 160px;
+  }
+
+  .countdownOverlay {
+    font-size: 58px;
+  }
 }

@@ -1,5 +1,5 @@
 :root {
-  font-family: "Malgun Gothic", "Segoe UI", sans-serif;
+  font-family: "SUIT Variable", "Pretendard Variable", "Noto Sans KR", "Segoe UI", sans-serif;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
@@ -13,5 +13,6 @@
 body {
   margin: 0;
   min-width: 320px;
-  background: #d6d6d6;
+  color: #17222e;
+  background: #eaf0f6;
 }

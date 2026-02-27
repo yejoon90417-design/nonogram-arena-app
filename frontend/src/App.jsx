@@ -933,8 +933,8 @@ function App() {
   return (
     <main className="page">
       <section className="panel">
-        <h1>Nonogram Verifier</h1>
-        <p>Left drag: fill, Right drag: mark X, click hints to toggle highlight.</p>
+        <h1>Nonogram Arena</h1>
+        <p>Left drag fill, right drag X mark. Beat your opponent in time attack.</p>
 
         <div className="controls">
           {!isInRaceRoom && (
