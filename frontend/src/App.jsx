@@ -105,9 +105,11 @@ function App() {
   const [showSignupModal, setShowSignupModal] = useState(false);
   const [loginUsername, setLoginUsername] = useState("");
   const [loginPassword, setLoginPassword] = useState("");
+  const [loginError, setLoginError] = useState("");
   const [signupUsername, setSignupUsername] = useState("");
   const [signupNickname, setSignupNickname] = useState("");
   const [signupPassword, setSignupPassword] = useState("");
+  const [signupError, setSignupError] = useState("");
   const [nowMs, setNowMs] = useState(Date.now());
   const [soundOn, setSoundOn] = useState(true);
   const boardRef = useRef(null);
@@ -512,9 +514,10 @@ function App() {
     const nickname = signupNickname.trim();
     const password = signupPassword;
     if (!username || !nickname || !password) {
-      setStatus("아이디, 닉네임, 비밀번호를 모두 입력해줘.");
+      setSignupError("아이디, 닉네임, 비밀번호를 모두 입력해줘.");
       return;
     }
+    setSignupError("");
     setIsLoading(true);
     try {
       const res = await fetch(`${API_BASE}/auth/signup`, {
@@ -531,7 +534,7 @@ function App() {
       setSignupPassword("");
       setStatus(`환영합니다, ${data.user.nickname}!`);
     } catch (err) {
-      setStatus(err.message);
+      setSignupError(err.message);
     } finally {
       setIsLoading(false);
     }
@@ -541,9 +544,10 @@ function App() {
     const username = loginUsername.trim().toLowerCase();
     const password = loginPassword;
     if (!username || !password) {
-      setStatus("아이디와 비밀번호를 입력해줘.");
+      setLoginError("아이디와 비밀번호를 입력해줘.");
       return;
     }
+    setLoginError("");
     setIsLoading(true);
     try {
       const res = await fetch(`${API_BASE}/auth/login`, {
@@ -559,7 +563,7 @@ function App() {
       setLoginPassword("");
       setStatus(`로그인 완료: ${data.user.nickname}`);
     } catch (err) {
-      setStatus(err.message);
+      setLoginError(err.message);
     } finally {
       setIsLoading(false);
     }
@@ -1246,21 +1250,23 @@ function App() {
 
   return (
     <main className="page">
-      <section className="panel">
-        <h1>Nonogram Arena</h1>
-        <p>Left drag fill, right drag X mark. Beat your opponent in time attack.</p>
+      <section className={`panel ${isModeMenu ? "panelMenu" : ""}`}>
+        <h1 className="title">Nonogram Arena</h1>
+        <p className="lead">드래그로 그리는 타임어택 픽셀 전투. 싱글 연습 후 멀티에서 경쟁하세요.</p>
 
         {isModeMenu && (
           <>
             <div className="modeChooser">
-              <button className="modeBtn" onClick={goSingleMode}>
-                싱글플레이
+              <button className="modeBtn modeSingle" onClick={goSingleMode}>
+                <span className="modeName">싱글플레이</span>
+                <span className="modeDesc">랜덤 퍼즐 연습 모드</span>
               </button>
-              <button className="modeBtn" onClick={goMultiMode}>
-                멀티플레이
+              <button className="modeBtn modeMulti" onClick={goMultiMode}>
+                <span className="modeName">멀티플레이</span>
+                <span className="modeDesc">방 생성/참가 실시간 대결</span>
               </button>
             </div>
-            <div className="authBar">
+            <div className="authBar authPanel">
               {isLoggedIn ? (
                 <>
                   <span>
@@ -1271,8 +1277,22 @@ function App() {
               ) : (
                 <>
                   <span>멀티플레이는 로그인 필요</span>
-                  <button onClick={() => setShowLoginModal(true)}>로그인</button>
-                  <button onClick={() => setShowSignupModal(true)}>회원가입</button>
+                  <button
+                    onClick={() => {
+                      setLoginError("");
+                      setShowLoginModal(true);
+                    }}
+                  >
+                    로그인
+                  </button>
+                  <button
+                    onClick={() => {
+                      setSignupError("");
+                      setShowSignupModal(true);
+                    }}
+                  >
+                    회원가입
+                  </button>
                 </>
               )}
             </div>
@@ -1316,8 +1336,22 @@ function App() {
                 <button onClick={logout}>로그아웃</button>
               ) : (
                 <>
-                  <button onClick={() => setShowLoginModal(true)}>로그인</button>
-                  <button onClick={() => setShowSignupModal(true)}>회원가입</button>
+                  <button
+                    onClick={() => {
+                      setLoginError("");
+                      setShowLoginModal(true);
+                    }}
+                  >
+                    로그인
+                  </button>
+                  <button
+                    onClick={() => {
+                      setSignupError("");
+                      setShowSignupModal(true);
+                    }}
+                  >
+                    회원가입
+                  </button>
                 </>
               )}
             </div>
@@ -1610,7 +1644,13 @@ function App() {
         )}
 
         {showLoginModal && (
-          <div className="modalBackdrop" onClick={() => setShowLoginModal(false)}>
+          <div
+            className="modalBackdrop"
+            onClick={() => {
+              setShowLoginModal(false);
+              setLoginError("");
+            }}
+          >
             <div className="modalCard" onClick={(e) => e.stopPropagation()}>
               <h2>로그인</h2>
               <label>
@@ -1618,7 +1658,10 @@ function App() {
                 <input
                   type="text"
                   value={loginUsername}
-                  onChange={(e) => setLoginUsername(e.target.value)}
+                  onChange={(e) => {
+                    setLoginUsername(e.target.value);
+                    if (loginError) setLoginError("");
+                  }}
                   placeholder="아이디"
                 />
               </label>
@@ -1627,12 +1670,23 @@ function App() {
                 <input
                   type="password"
                   value={loginPassword}
-                  onChange={(e) => setLoginPassword(e.target.value)}
+                  onChange={(e) => {
+                    setLoginPassword(e.target.value);
+                    if (loginError) setLoginError("");
+                  }}
                   placeholder="비밀번호"
                 />
               </label>
+              {loginError && <div className="modalError">{loginError}</div>}
               <div className="modalActions">
-                <button onClick={() => setShowLoginModal(false)}>취소</button>
+                <button
+                  onClick={() => {
+                    setShowLoginModal(false);
+                    setLoginError("");
+                  }}
+                >
+                  취소
+                </button>
                 <button onClick={login} disabled={isLoading || !loginUsername.trim() || !loginPassword}>
                   {isLoading ? "로그인 중..." : "로그인"}
                 </button>
@@ -1642,7 +1696,13 @@ function App() {
         )}
 
         {showSignupModal && (
-          <div className="modalBackdrop" onClick={() => setShowSignupModal(false)}>
+          <div
+            className="modalBackdrop"
+            onClick={() => {
+              setShowSignupModal(false);
+              setSignupError("");
+            }}
+          >
             <div className="modalCard" onClick={(e) => e.stopPropagation()}>
               <h2>회원가입</h2>
               <label>
@@ -1650,7 +1710,10 @@ function App() {
                 <input
                   type="text"
                   value={signupUsername}
-                  onChange={(e) => setSignupUsername(e.target.value)}
+                  onChange={(e) => {
+                    setSignupUsername(e.target.value);
+                    if (signupError) setSignupError("");
+                  }}
                   placeholder="영문/숫자/_ 3~24자"
                 />
               </label>
@@ -1659,7 +1722,10 @@ function App() {
                 <input
                   type="text"
                   value={signupNickname}
-                  onChange={(e) => setSignupNickname(e.target.value)}
+                  onChange={(e) => {
+                    setSignupNickname(e.target.value);
+                    if (signupError) setSignupError("");
+                  }}
                   placeholder="닉네임"
                 />
               </label>
@@ -1668,12 +1734,23 @@ function App() {
                 <input
                   type="password"
                   value={signupPassword}
-                  onChange={(e) => setSignupPassword(e.target.value)}
+                  onChange={(e) => {
+                    setSignupPassword(e.target.value);
+                    if (signupError) setSignupError("");
+                  }}
                   placeholder="4자 이상"
                 />
               </label>
+              {signupError && <div className="modalError">{signupError}</div>}
               <div className="modalActions">
-                <button onClick={() => setShowSignupModal(false)}>취소</button>
+                <button
+                  onClick={() => {
+                    setShowSignupModal(false);
+                    setSignupError("");
+                  }}
+                >
+                  취소
+                </button>
                 <button
                   onClick={signup}
                   disabled={isLoading || !signupUsername.trim() || !signupNickname.trim() || !signupPassword}
