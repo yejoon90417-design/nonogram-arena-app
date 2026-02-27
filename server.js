@@ -360,7 +360,7 @@ app.get("/puzzles/random", getRandomPuzzleBySize);
 app.get("/race-rooms", (_req, res) => {
   const rooms = Array.from(raceRooms.values())
     .map(roomListItem)
-    .filter((room) => room.visibility === "public" && room.state === "lobby" && room.currentPlayers < room.maxPlayers)
+    .filter((room) => room.state === "lobby" && room.currentPlayers < room.maxPlayers)
     .sort((a, b) => b.createdAt - a.createdAt);
   return res.json({ ok: true, rooms });
 });

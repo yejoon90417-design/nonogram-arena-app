@@ -52,6 +52,7 @@ async function parseJsonSafe(res) {
 }
 
 function App() {
+  const [playMode, setPlayMode] = useState("menu"); // menu | single | multi
   const [selectedSize, setSelectedSize] = useState("25x25");
   const [puzzle, setPuzzle] = useState(null);
   const [cells, setCells] = useState([]); // 0 empty, 1 filled, 2 marked(X)
@@ -77,6 +78,7 @@ function App() {
   const [joinNickname, setJoinNickname] = useState("");
   const [joinRoomCode, setJoinRoomCode] = useState("");
   const [joinPassword, setJoinPassword] = useState("");
+  const [joinRoomType, setJoinRoomType] = useState("unknown"); // unknown | public | private
   const [publicRooms, setPublicRooms] = useState([]);
   const [roomsLoading, setRoomsLoading] = useState(false);
   const [isRematchLoading, setIsRematchLoading] = useState(false);
@@ -183,6 +185,9 @@ function App() {
     if (!puzzle) return false;
     return solvedRows.size === puzzle.height && solvedCols.size === puzzle.width;
   }, [puzzle, solvedRows, solvedCols]);
+  const isModeMenu = playMode === "menu";
+  const isModeSingle = playMode === "single";
+  const isModeMulti = playMode === "multi";
   const isInRaceRoom = Boolean(raceRoomCode);
   const racePhase = raceState?.state || "idle";
   const isRaceLobby = isInRaceRoom && racePhase === "lobby";
@@ -410,6 +415,25 @@ function App() {
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const goSingleMode = () => {
+    setPlayMode("single");
+    setStatus("");
+  };
+
+  const goMultiMode = () => {
+    setPlayMode("multi");
+    setStatus("");
+  };
+
+  const backToMenu = async () => {
+    if (isInRaceRoom) {
+      setStatus("멀티 방에서는 먼저 Leave Room을 눌러줘.");
+      return;
+    }
+    setPlayMode("menu");
+    setStatus("");
   };
 
   const fetchPublicRooms = async () => {
@@ -1076,78 +1100,110 @@ function App() {
         <h1>Nonogram Arena</h1>
         <p>Left drag fill, right drag X mark. Beat your opponent in time attack.</p>
 
-        <div className="controls">
-          {!isInRaceRoom && (
-            <>
-              <select value={selectedSize} onChange={(e) => setSelectedSize(e.target.value)}>
-                <option value="5x5">5x5</option>
-                <option value="10x10">10x10</option>
-                <option value="15x15">15x15</option>
-                <option value="25x25">25x25</option>
-              </select>
-              <button onClick={loadRandomBySize} disabled={isLoading}>
-                {isLoading ? "Loading..." : "Load Random Size"}
-              </button>
-            </>
-          )}
-          <button onClick={handleToggleSfx}>
-            {soundOn ? "SFX ON" : "SFX OFF"}
-          </button>
-        </div>
+        {isModeMenu && (
+          <div className="modeChooser">
+            <button className="modeBtn" onClick={goSingleMode}>
+              싱글플레이
+            </button>
+            <button className="modeBtn" onClick={goMultiMode}>
+              멀티플레이
+            </button>
+          </div>
+        )}
 
-        <div className="racePanel">
-          {!isInRaceRoom && (
-            <>
-              <button
-                onClick={() => {
-                  setCreateRoomTitle("");
-                  setCreateSize(selectedSize);
-                  setCreateMaxPlayers("2");
-                  setCreateVisibility("public");
-                  setCreatePassword("");
-                  setShowCreateModal(true);
-                }}
-                disabled={isLoading}
-              >
-                방 만들기
-              </button>
-              <button
-                onClick={() => {
-                  setJoinPassword("");
-                  setShowJoinModal(true);
-                }}
-                disabled={isLoading}
-              >
-                Join Room
-              </button>
-              <button onClick={fetchPublicRooms} disabled={roomsLoading}>
-                {roomsLoading ? "목록 불러오는 중..." : "오픈방 새로고침"}
-              </button>
-            </>
-          )}
-          <button onClick={leaveRace} disabled={!raceRoomCode}>
-            Leave Room
-          </button>
-        </div>
+        {isModeSingle && (
+          <div className="controls">
+            {!isInRaceRoom && (
+              <>
+                <select value={selectedSize} onChange={(e) => setSelectedSize(e.target.value)}>
+                  <option value="5x5">5x5</option>
+                  <option value="10x10">10x10</option>
+                  <option value="15x15">15x15</option>
+                  <option value="25x25">25x25</option>
+                </select>
+                <button onClick={loadRandomBySize} disabled={isLoading}>
+                  {isLoading ? "Loading..." : "Load Random Size"}
+                </button>
+              </>
+            )}
+            <button onClick={handleToggleSfx}>
+              {soundOn ? "SFX ON" : "SFX OFF"}
+            </button>
+            <button onClick={backToMenu} disabled={isInRaceRoom}>
+              메인으로
+            </button>
+          </div>
+        )}
 
-        {!isInRaceRoom && (
-          <div className="raceStateBox">
-            <div>
-              <b>오픈방 리스트</b>
+        {isModeMulti && (
+          <>
+            <div className="controls">
+              <button onClick={handleToggleSfx}>
+                {soundOn ? "SFX ON" : "SFX OFF"}
+              </button>
+              <button onClick={backToMenu} disabled={isInRaceRoom}>
+                메인으로
+              </button>
             </div>
+
+            <div className="racePanel">
+              {!isInRaceRoom && (
+                <>
+                  <button
+                    onClick={() => {
+                      setCreateRoomTitle("");
+                      setCreateSize(selectedSize);
+                      setCreateMaxPlayers("2");
+                      setCreateVisibility("public");
+                      setCreatePassword("");
+                      setShowCreateModal(true);
+                    }}
+                    disabled={isLoading}
+                  >
+                    방 만들기
+                  </button>
+                  <button
+                    onClick={() => {
+                      setJoinRoomType("unknown");
+                      setJoinPassword("");
+                      setShowJoinModal(true);
+                    }}
+                    disabled={isLoading}
+                  >
+                    Join Room
+                  </button>
+                  <button onClick={fetchPublicRooms} disabled={roomsLoading}>
+                    {roomsLoading ? "목록 불러오는 중..." : "오픈방 새로고침"}
+                  </button>
+                </>
+              )}
+              <button onClick={leaveRace} disabled={!raceRoomCode}>
+                Leave Room
+              </button>
+            </div>
+          </>
+        )}
+
+        {isModeMulti && !isInRaceRoom && (
+          <div className="raceStateBox">
+            <div><b>방 리스트</b></div>
             {publicRooms.length === 0 ? (
-              <div>입장 가능한 오픈방이 없습니다.</div>
+              <div>입장 가능한 방이 없습니다.</div>
             ) : (
               <div className="roomList">
                 {publicRooms.map((room) => (
                   <div className="roomRow" key={room.roomCode}>
                     <span>
+                      <span className={`roomBadge ${room.isPrivate ? "private" : "public"}`}>
+                        {room.isPrivate ? "LOCK" : "OPEN"}
+                      </span>{" "}
                       [{room.roomCode}] {room.roomTitle} ({room.width}x{room.height}) {room.currentPlayers}/
                       {room.maxPlayers}
                     </span>
                     <button
                       onClick={() => {
                         setJoinRoomCode(room.roomCode);
+                        setJoinRoomType(room.isPrivate ? "private" : "public");
                         setJoinPassword("");
                         setShowJoinModal(true);
                       }}
@@ -1161,7 +1217,7 @@ function App() {
           </div>
         )}
 
-        {raceRoomCode && (
+        {isModeMulti && raceRoomCode && (
           <div className="raceStateBox">
             <div>
               Room: <b>{raceRoomCode}</b>
@@ -1235,8 +1291,8 @@ function App() {
           </div>
         )}
 
-        {puzzle && <div className="timerBar">TIME {formattedTime}</div>}
-        {puzzle && (
+        {puzzle && !isModeMenu && <div className="timerBar">TIME {formattedTime}</div>}
+        {puzzle && !isModeMenu && (
           <div className="gameTools" role="toolbar" aria-label="Board tools">
             <button
               className="iconBtn"
@@ -1355,19 +1411,26 @@ function App() {
                 <input
                   type="text"
                   value={joinRoomCode}
-                  onChange={(e) => setJoinRoomCode(e.target.value.toUpperCase())}
+                  onChange={(e) => {
+                    const code = e.target.value.toUpperCase();
+                    setJoinRoomCode(code);
+                    const matched = publicRooms.find((r) => r.roomCode === code);
+                    setJoinRoomType(matched ? (matched.isPrivate ? "private" : "public") : "unknown");
+                  }}
                   placeholder="예: AB12CD"
                 />
               </label>
-              <label>
-                비밀번호(비밀방만)
-                <input
-                  type="password"
-                  value={joinPassword}
-                  onChange={(e) => setJoinPassword(e.target.value)}
-                  placeholder="비밀방 비밀번호"
-                />
-              </label>
+              {joinRoomType !== "public" && (
+                <label>
+                  비밀번호(비밀방만)
+                  <input
+                    type="password"
+                    value={joinPassword}
+                    onChange={(e) => setJoinPassword(e.target.value)}
+                    placeholder="비밀방 비밀번호"
+                  />
+                </label>
+              )}
               <div className="modalActions">
                 <button onClick={() => setShowJoinModal(false)}>취소</button>
                 <button onClick={joinRaceRoom} disabled={isLoading || !joinNickname.trim() || !joinRoomCode.trim()}>

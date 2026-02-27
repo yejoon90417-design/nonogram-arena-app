@@ -65,6 +65,19 @@ p {
   align-items: center;
 }
 
+.modeChooser {
+  display: flex;
+  gap: 0.7rem;
+  margin-top: 0.5rem;
+}
+
+.modeBtn {
+  min-width: 150px;
+  min-height: 48px;
+  font-size: 1rem;
+  font-weight: 900;
+}
+
 .racePanel {
   margin-top: 0.6rem;
 }
@@ -169,6 +182,30 @@ p {
 
 .roomRow span {
   font-size: 0.88rem;
+}
+
+.roomBadge {
+  display: inline-block;
+  font-size: 0.7rem;
+  font-weight: 900;
+  letter-spacing: 0.04em;
+  border-radius: 999px;
+  padding: 0.08rem 0.4rem;
+  border: 1px solid #b8c8d8;
+  background: #eff4fa;
+  color: #1f3447;
+}
+
+.roomBadge.private {
+  border-color: #cba6ae;
+  background: #fff1f3;
+  color: #7a1f2f;
+}
+
+.roomBadge.public {
+  border-color: #a7c8bf;
+  background: #ecfaf4;
+  color: #0d5e48;
 }
 
 .modalBackdrop {
