@@ -1,4 +1,4 @@
-import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
+﻿import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import "./App.css";
 
 const API_BASE = (import.meta.env.VITE_API_BASE_URL || "").replace(/\/$/, "");
@@ -74,6 +74,7 @@ function App() {
   const [createSize, setCreateSize] = useState("10x10");
   const [isRematchLoading, setIsRematchLoading] = useState(false);
   const [nowMs, setNowMs] = useState(Date.now());
+  const [soundOn, setSoundOn] = useState(true);
   const boardRef = useRef(null);
   const canvasRef = useRef(null);
   const dragRef = useRef(null); // { button: 'left'|'right', paintValue }
@@ -91,6 +92,11 @@ function App() {
   const raceResultShownRef = useRef(false);
   const raceProgressLastSentRef = useRef(0);
   const raceProgressBusyRef = useRef(false);
+  const audioCtxRef = useRef(null);
+  const masterGainRef = useRef(null);
+  const countdownCueRef = useRef(-1);
+  const prevRacePhaseRef = useRef("idle");
+  const lastPaintSfxAtRef = useRef(0);
   const deferredCells = useDeferredValue(cells);
 
   useEffect(() => {
@@ -101,7 +107,17 @@ function App() {
     return () => {
       if (frameRef.current) cancelAnimationFrame(frameRef.current);
       if (racePollRef.current) clearInterval(racePollRef.current);
+      if (audioCtxRef.current) audioCtxRef.current.close();
     };
+  }, []);
+
+  useEffect(() => {
+    const unlock = () => {
+      const ctx = ensureAudio();
+      if (ctx && ctx.state === "suspended") ctx.resume();
+    };
+    window.addEventListener("pointerdown", unlock, { passive: true });
+    return () => window.removeEventListener("pointerdown", unlock);
   }, []);
 
   const rowHints = useMemo(() => {
@@ -176,9 +192,9 @@ function App() {
   const raceResultText = useMemo(() => {
     if (!raceState?.winner) return "";
     if (raceState.winner.playerId === racePlayerId) {
-      return `승리하였습니다 (${raceState.winner.elapsedSec}s)`;
+      return `?밸━?섏??듬땲??(${raceState.winner.elapsedSec}s)`;
     }
-    return `패배하였습니다 (승자: ${raceState.winner.nickname}, ${raceState.winner.elapsedSec}s)`;
+    return `?⑤같?섏??듬땲??(?뱀옄: ${raceState.winner.nickname}, ${raceState.winner.elapsedSec}s)`;
   }, [raceState, racePlayerId]);
   const roomTitleText = raceState?.roomTitle || "";
 
@@ -187,6 +203,89 @@ function App() {
     const ms = new Date(raceState.gameStartAt).getTime() - nowMs;
     return Math.max(0, Math.ceil(ms / 1000));
   }, [isRaceCountdown, raceState, nowMs]);
+
+  const ensureAudio = () => {
+    if (audioCtxRef.current) return audioCtxRef.current;
+    const Ctx = window.AudioContext || window.webkitAudioContext;
+    if (!Ctx) return null;
+    const ctx = new Ctx();
+    const master = ctx.createGain();
+    master.gain.value = 0.06;
+    master.connect(ctx.destination);
+    audioCtxRef.current = ctx;
+    masterGainRef.current = master;
+    return ctx;
+  };
+
+  const tone = (freq, durMs, { type = "square", gain = 0.1, slideTo = null } = {}) => {
+    if (!soundOn) return;
+    const ctx = ensureAudio();
+    const master = masterGainRef.current;
+    if (!ctx || !master) return;
+    if (ctx.state === "suspended") ctx.resume();
+
+    const osc = ctx.createOscillator();
+    const g = ctx.createGain();
+    osc.type = type;
+    osc.frequency.setValueAtTime(freq, ctx.currentTime);
+    if (slideTo) osc.frequency.linearRampToValueAtTime(slideTo, ctx.currentTime + durMs / 1000);
+    g.gain.setValueAtTime(0.0001, ctx.currentTime);
+    g.gain.exponentialRampToValueAtTime(gain, ctx.currentTime + 0.01);
+    g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + durMs / 1000);
+
+    osc.connect(g);
+    g.connect(master);
+    osc.start();
+    osc.stop(ctx.currentTime + durMs / 1000 + 0.02);
+  };
+
+  const playSfx = (kind) => {
+    if (!soundOn) return;
+    if (kind === "ui") {
+      tone(620, 50, { type: "triangle", gain: 0.05 });
+      return;
+    }
+    if (kind === "paint-fill") {
+      tone(360, 35, { type: "square", gain: 0.04 });
+      return;
+    }
+    if (kind === "paint-x") {
+      tone(220, 40, { type: "sawtooth", gain: 0.035, slideTo: 170 });
+      return;
+    }
+    if (kind === "ready") {
+      tone(520, 55, { type: "square", gain: 0.06 });
+      setTimeout(() => tone(700, 55, { type: "square", gain: 0.05 }), 65);
+      return;
+    }
+    if (kind === "countdown") {
+      tone(780, 90, { type: "square", gain: 0.08 });
+      return;
+    }
+    if (kind === "go") {
+      tone(560, 70, { type: "square", gain: 0.07 });
+      setTimeout(() => tone(780, 80, { type: "square", gain: 0.07 }), 70);
+      setTimeout(() => tone(980, 95, { type: "square", gain: 0.075 }), 140);
+      return;
+    }
+    if (kind === "win") {
+      tone(700, 120, { type: "triangle", gain: 0.08 });
+      setTimeout(() => tone(930, 140, { type: "triangle", gain: 0.08 }), 110);
+      setTimeout(() => tone(1240, 180, { type: "triangle", gain: 0.09 }), 230);
+      return;
+    }
+    if (kind === "lose") {
+      tone(500, 120, { type: "sawtooth", gain: 0.05, slideTo: 430 });
+      setTimeout(() => tone(410, 130, { type: "sawtooth", gain: 0.05, slideTo: 340 }), 120);
+      setTimeout(() => tone(330, 150, { type: "sawtooth", gain: 0.045, slideTo: 250 }), 240);
+      return;
+    }
+    if (kind === "clear") {
+      tone(280, 80, { type: "triangle", gain: 0.05, slideTo: 200 });
+      return;
+    }
+    tone(500, 60, { type: "triangle", gain: 0.05 });
+  };
 
   const resetHistory = () => {
     undoStackRef.current = [];
@@ -215,6 +314,7 @@ function App() {
     applySnapshot(prev.slice());
     setCanUndo(undoStackRef.current.length > 0);
     setCanRedo(true);
+    playSfx("ui");
   };
 
   const redo = () => {
@@ -224,6 +324,7 @@ function App() {
     applySnapshot(next.slice());
     setCanUndo(true);
     setCanRedo(redoStackRef.current.length > 0);
+    playSfx("ui");
   };
 
   const initializePuzzle = (p, { resume = true, message = "", startTimer = true } = {}) => {
@@ -283,6 +384,7 @@ function App() {
         resume: true,
         message: `Puzzle ${data.puzzle.id} (${data.puzzle.width}x${data.puzzle.height}) loaded.`,
       });
+      playSfx("ui");
     } catch (err) {
       setStatus(err.message);
     } finally {
@@ -303,6 +405,7 @@ function App() {
     raceResultShownRef.current = false;
     raceProgressLastSentRef.current = 0;
     setTimerRunning(true);
+    playSfx("ui");
   };
 
   const applyRaceRoomState = (room, playerIdOverride = racePlayerId) => {
@@ -337,7 +440,7 @@ function App() {
     const name = createNickname.trim();
     const roomTitle = createRoomTitle.trim();
     if (!name) {
-      setStatus("닉네임을 입력해줘.");
+      setStatus("?됰꽕?꾩쓣 ?낅젰?댁쨾.");
       return;
     }
     const [wStr, hStr] = createSize.split("x");
@@ -369,6 +472,7 @@ function App() {
         message: `Room ${data.roomCode} created. Wait for ready.`,
       });
       startRacePolling(data.roomCode);
+      playSfx("ui");
     } catch (err) {
       setStatus(err.message);
     } finally {
@@ -405,6 +509,7 @@ function App() {
         message: `Joined room ${data.roomCode}. Press ready.`,
       });
       startRacePolling(data.roomCode);
+      playSfx("ui");
     } catch (err) {
       setStatus(err.message);
     } finally {
@@ -423,6 +528,7 @@ function App() {
       const data = await parseJsonSafe(res);
       if (!res.ok || !data.ok) throw new Error(data.error || "Failed to update ready.");
       applyRaceRoomState(data.room);
+      playSfx("ready");
     } catch (err) {
       setStatus(err.message);
     }
@@ -439,7 +545,8 @@ function App() {
       const data = await parseJsonSafe(res);
       if (!res.ok || !data.ok) throw new Error(data.error || "Failed to start race.");
       applyRaceRoomState(data.room);
-      setStatus("5초 후 시작합니다.");
+      playSfx("ui");
+      setStatus("5珥????쒖옉?⑸땲??");
     } catch (err) {
       setStatus(err.message);
     }
@@ -461,8 +568,9 @@ function App() {
         initializePuzzle(data.puzzle, {
           resume: false,
           startTimer: false,
-          message: "새 게임 준비 완료. 다시 Ready를 눌러 시작해.",
+          message: "??寃뚯엫 以鍮??꾨즺. ?ㅼ떆 Ready瑜??뚮윭 ?쒖옉??",
         });
+        playSfx("ui");
       }
     } catch (err) {
       setStatus(err.message);
@@ -603,6 +711,11 @@ function App() {
     dragRef.current = { button: buttonType, paintValue };
     lastPaintIndexRef.current = index;
     queueCellPaint(index, paintValue);
+    const now = Date.now();
+    if (now - lastPaintSfxAtRef.current > 30) {
+      playSfx(paintValue === 2 ? "paint-x" : "paint-fill");
+      lastPaintSfxAtRef.current = now;
+    }
   };
 
   const onCellPointerDown = (event, index) => {
@@ -760,6 +873,7 @@ function App() {
     setElapsedSec(0);
     setTimerRunning(true);
     setStatus("Grid cleared.");
+    playSfx("clear");
   };
 
   const toggleHint = (hintId) => {
@@ -833,11 +947,32 @@ function App() {
     raceResultShownRef.current = true;
     if (raceState.winnerPlayerId === racePlayerId) {
       setStatus("승리하였습니다.");
+      playSfx("win");
     } else {
       setStatus("패배하였습니다.");
       setTimerRunning(false);
+      playSfx("lose");
     }
   }, [isInRaceRoom, raceState, racePlayerId]);
+
+  useEffect(() => {
+    if (!isRaceCountdown || countdownLeft == null) {
+      countdownCueRef.current = -1;
+      return;
+    }
+    if (countdownLeft !== countdownCueRef.current) {
+      countdownCueRef.current = countdownLeft;
+      playSfx("countdown");
+    }
+  }, [isRaceCountdown, countdownLeft]);
+
+  useEffect(() => {
+    const prev = prevRacePhaseRef.current;
+    if (prev === "countdown" && racePhase === "playing") {
+      playSfx("go");
+    }
+    prevRacePhaseRef.current = racePhase;
+  }, [racePhase]);
 
   useEffect(() => {
     if (!isInRaceRoom || !raceState?.puzzleId) return;
@@ -851,7 +986,7 @@ function App() {
         initializePuzzle(data.puzzle, {
           resume: false,
           startTimer: false,
-          message: `방 퍼즐이 변경됨: ${data.puzzle.id}`,
+          message: `諛??쇱쫹??蹂寃쎈맖: ${data.puzzle.id}`,
         });
       } catch {
         // ignore transient sync errors
@@ -895,6 +1030,14 @@ function App() {
               </button>
             </>
           )}
+          <button
+            onClick={() => {
+              setSoundOn((prev) => !prev);
+              playSfx("ui");
+            }}
+          >
+            {soundOn ? "SFX ON" : "SFX OFF"}
+          </button>
         </div>
 
         <div className="racePanel">
@@ -921,8 +1064,7 @@ function App() {
                 }}
                 disabled={isLoading}
               >
-                방 만들기
-              </button>
+                諛?留뚮뱾湲?              </button>
               <button onClick={joinRaceRoom} disabled={isLoading || !nickname.trim() || !roomCodeInput.trim()}>
                 Join Room
               </button>
@@ -1133,3 +1275,5 @@ function App() {
 }
 
 export default App;
+
+
