@@ -189,6 +189,9 @@ function App() {
   const isModeSingle = playMode === "single";
   const isModeMulti = playMode === "multi";
   const isInRaceRoom = Boolean(raceRoomCode);
+  const shouldShowPuzzleBoard = Boolean(
+    puzzle && ((isModeSingle && !isInRaceRoom) || (isModeMulti && isInRaceRoom))
+  );
   const racePhase = raceState?.state || "idle";
   const isRaceLobby = isInRaceRoom && racePhase === "lobby";
   const isRaceCountdown = isInRaceRoom && racePhase === "countdown";
@@ -1291,8 +1294,8 @@ function App() {
           </div>
         )}
 
-        {puzzle && !isModeMenu && <div className="timerBar">TIME {formattedTime}</div>}
-        {puzzle && !isModeMenu && (
+        {shouldShowPuzzleBoard && <div className="timerBar">TIME {formattedTime}</div>}
+        {shouldShowPuzzleBoard && (
           <div className="gameTools" role="toolbar" aria-label="Board tools">
             <button
               className="iconBtn"
@@ -1441,7 +1444,7 @@ function App() {
           </div>
         )}
 
-        {puzzle && (
+        {shouldShowPuzzleBoard && (
           <div className="boardWrap" onContextMenu={(e) => e.preventDefault()}>
             <div
               className="nonogram"
