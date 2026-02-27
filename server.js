@@ -178,8 +178,9 @@ function syncRoomState(room) {
 }
 
 function canStartRoom(room) {
-  if (room.players.size < 2) return false;
-  return Array.from(room.players.values()).every((p) => p.isReady === true);
+  const activePlayers = Array.from(room.players.values()).filter((p) => !p.disconnectedAt);
+  if (activePlayers.length < 2) return false;
+  return activePlayers.every((p) => p.isReady === true);
 }
 
 function getFinishedPlayers(room) {
@@ -754,9 +755,29 @@ app.post("/race/leave", (req, res) => {
   if (!player) {
     return res.status(404).json({ ok: false, error: "Player not found in room" });
   }
+
+  if (room.state === "lobby") {
+    const wasHost = room.hostPlayerId === playerId;
+    room.players.delete(playerId);
+
+    if (room.players.size === 0) {
+      raceRooms.delete(roomCode);
+      return res.json({ ok: true, roomDeleted: true });
+    }
+
+    if (wasHost) {
+      const nextHost = Array.from(room.players.values()).sort((a, b) =>
+        a.joinedAt > b.joinedAt ? 1 : -1
+      )[0];
+      room.hostPlayerId = nextHost.playerId;
+    }
+    return res.json({ ok: true, room: roomPublicState(room) });
+  }
+
   if (!player.disconnectedAt) {
     player.disconnectedAt = new Date().toISOString();
   }
+  player.isReady = false;
 
   const finished = getFinishedPlayers(room);
   if (!room.winnerPlayerId && finished.length > 0) {

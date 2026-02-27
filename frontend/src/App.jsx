@@ -1298,11 +1298,13 @@ function App() {
                 <span key={p.playerId}>
                   {p.nickname}
                   {raceState?.hostPlayerId === p.playerId ? " [host]" : ""}
-                  {p.isReady ? " [ready]" : " [not ready]"}:
+                  {p.disconnectedAt ? " [left]" : p.isReady ? " [ready]" : " [not ready]"}:
                   {p.playerId === racePlayerId
                     ? Number.isInteger(p.elapsedSec)
                       ? " 완료 (대기중)"
                       : " 플레이 중"
+                    : p.disconnectedAt
+                      ? " 중도 이탈"
                     : Number.isInteger(p.elapsedSec)
                       ? ` ${p.elapsedSec}s`
                       : ` 남은 정답칸 ${Math.max(0, Number(p.remainingAnswerCells || 0))}`}
