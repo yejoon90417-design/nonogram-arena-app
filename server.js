@@ -120,6 +120,8 @@ function roomPublicState(room) {
       finishedAt: p.finishedAt,
       elapsedSec: p.elapsedSec,
       isReady: p.isReady,
+      rowsDone: p.rowsDone ?? 0,
+      colsDone: p.colsDone ?? 0,
     }))
     .sort((a, b) => (a.joinedAt > b.joinedAt ? 1 : -1));
   const winner = room.winnerPlayerId
@@ -267,6 +269,8 @@ app.post("/race/create", async (req, res) => {
       finishedAt: null,
       elapsedSec: null,
       isReady: false,
+      rowsDone: 0,
+      colsDone: 0,
     });
     raceRooms.set(roomCode, room);
 
@@ -319,6 +323,8 @@ app.post("/race/join", async (req, res) => {
       finishedAt: null,
       elapsedSec: null,
       isReady: false,
+      rowsDone: 0,
+      colsDone: 0,
     });
 
     return res.json({
@@ -385,8 +391,37 @@ app.post("/race/start", (req, res) => {
   for (const p of room.players.values()) {
     p.finishedAt = null;
     p.elapsedSec = null;
+    p.rowsDone = 0;
+    p.colsDone = 0;
   }
 
+  return res.json({ ok: true, room: roomPublicState(room) });
+});
+
+app.post("/race/progress", (req, res) => {
+  const roomCode = String(req.body?.roomCode || "").trim().toUpperCase();
+  const playerId = String(req.body?.playerId || "").trim();
+  const rowsDone = Number(req.body?.rowsDone);
+  const colsDone = Number(req.body?.colsDone);
+  if (!roomCode || !playerId || !Number.isFinite(rowsDone) || !Number.isFinite(colsDone)) {
+    return res.status(400).json({ ok: false, error: "roomCode/playerId/rowsDone/colsDone are required" });
+  }
+
+  const room = raceRooms.get(roomCode);
+  if (!room) {
+    return res.status(404).json({ ok: false, error: "Room not found" });
+  }
+  syncRoomState(room);
+  const player = room.players.get(playerId);
+  if (!player) {
+    return res.status(404).json({ ok: false, error: "Player not found in room" });
+  }
+  if (room.state !== "playing" && room.state !== "finished") {
+    return res.status(400).json({ ok: false, error: "Race has not started yet" });
+  }
+
+  player.rowsDone = Math.max(0, Math.min(room.height, Math.floor(rowsDone)));
+  player.colsDone = Math.max(0, Math.min(room.width, Math.floor(colsDone)));
   return res.json({ ok: true, room: roomPublicState(room) });
 });
 
@@ -429,6 +464,8 @@ app.post("/race/rematch", async (req, res) => {
       p.isReady = false;
       p.finishedAt = null;
       p.elapsedSec = null;
+      p.rowsDone = 0;
+      p.colsDone = 0;
     }
     return res.json({ ok: true, puzzle, room: roomPublicState(room) });
   } catch (err) {
@@ -469,6 +506,8 @@ app.post("/race/finish", (req, res) => {
   if (!Number.isInteger(player.elapsedSec)) {
     player.elapsedSec = Math.max(0, Math.floor(elapsedSec));
     player.finishedAt = new Date().toISOString();
+    player.rowsDone = room.height;
+    player.colsDone = room.width;
   }
   if (!room.winnerPlayerId) {
     room.winnerPlayerId = playerId;

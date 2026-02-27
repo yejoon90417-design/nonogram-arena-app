@@ -91,6 +91,8 @@ function App() {
   const racePollRef = useRef(0);
   const raceFinishedSentRef = useRef(false);
   const raceResultShownRef = useRef(false);
+  const raceProgressLastSentRef = useRef(0);
+  const raceProgressBusyRef = useRef(false);
   const deferredCells = useDeferredValue(cells);
 
   useEffect(() => {
@@ -257,6 +259,7 @@ function App() {
     autoSolvedShownRef.current = false;
     raceFinishedSentRef.current = false;
     raceResultShownRef.current = false;
+    raceProgressLastSentRef.current = 0;
     setElapsedSec(0);
     setTimerRunning(startTimer);
     setStatus(message || `Puzzle ${p.id} loaded.`);
@@ -338,6 +341,7 @@ function App() {
     setRaceSubmitting(false);
     raceFinishedSentRef.current = false;
     raceResultShownRef.current = false;
+    raceProgressLastSentRef.current = 0;
     setTimerRunning(true);
   };
 
@@ -504,6 +508,23 @@ function App() {
       setStatus(err.message);
     } finally {
       setIsRematchLoading(false);
+    }
+  };
+
+  const submitRaceProgress = async (rowsDone, colsDone) => {
+    if (!raceRoomCode || !racePlayerId) return;
+    if (raceProgressBusyRef.current) return;
+    raceProgressBusyRef.current = true;
+    try {
+      await fetch(`${API_BASE}/race/progress`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ roomCode: raceRoomCode, playerId: racePlayerId, rowsDone, colsDone }),
+      });
+    } catch {
+      // ignore transient progress errors
+    } finally {
+      raceProgressBusyRef.current = false;
     }
   };
 
@@ -834,6 +855,14 @@ function App() {
   }, [puzzle, timerRunning, isInRaceRoom]);
 
   useEffect(() => {
+    if (!isRacePlaying || !raceRoomCode || !racePlayerId) return;
+    const now = Date.now();
+    if (now - raceProgressLastSentRef.current < 600) return;
+    raceProgressLastSentRef.current = now;
+    submitRaceProgress(solvedRows.size, solvedCols.size);
+  }, [isRacePlaying, raceRoomCode, racePlayerId, solvedRows, solvedCols]);
+
+  useEffect(() => {
     if (!isInRaceRoom || (!isRaceCountdown && !isRacePlaying)) return undefined;
     const id = setInterval(() => setNowMs(Date.now()), 200);
     return () => clearInterval(id);
@@ -1021,7 +1050,12 @@ function App() {
                   {p.nickname}
                   {raceState?.hostPlayerId === p.playerId ? " [host]" : ""}
                   {p.isReady ? " [ready]" : " [not ready]"}:
-                  {Number.isInteger(p.elapsedSec) ? ` ${p.elapsedSec}s` : " playing"}
+                  {Number.isInteger(p.elapsedSec)
+                    ? ` ${p.elapsedSec}s`
+                    : ` 남은 줄 ${Math.max(
+                        0,
+                        (raceState?.height || 0) - (p.rowsDone || 0) + (raceState?.width || 0) - (p.colsDone || 0)
+                      )}`}
                 </span>
               ))}
             </div>
