@@ -1725,6 +1725,7 @@ function App() {
                   <option value="5x5">5x5</option>
                   <option value="10x10">10x10</option>
                   <option value="15x15">15x15</option>
+                  <option value="20x20">20x20</option>
                   <option value="25x25">25x25</option>
                 </select>
                 <button onClick={loadRandomBySize} disabled={isLoading}>
@@ -2050,6 +2051,7 @@ function App() {
                   <option value="5x5">5x5</option>
                   <option value="10x10">10x10</option>
                   <option value="15x15">15x15</option>
+                  <option value="20x20">20x20</option>
                   <option value="25x25">25x25</option>
                 </select>
               </label>
