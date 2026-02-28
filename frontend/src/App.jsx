@@ -4,7 +4,7 @@ import { motion } from "framer-motion";
 import { Eraser, LogIn, Redo2, Undo2, UserPlus, Volume2, VolumeX } from "lucide-react";
 import "./App.css";
 
-const API_BASE = (import.meta.env.VITE_API_BASE_URL || "").replace(/\/$/, "");
+const API_BASE = (import.meta.env.VITE_API_BASE_URL || "https://nonogram-api.onrender.com").replace(/\/$/, "");
 const MAX_HISTORY = 200;
 const AUTH_TOKEN_KEY = "nonogram-auth-token";
 const AUTH_USER_KEY = "nonogram-auth-user";
