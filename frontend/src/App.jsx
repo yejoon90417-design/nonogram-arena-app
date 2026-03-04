@@ -1,7 +1,7 @@
 ﻿import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import EmojiPicker from "emoji-picker-react";
 import { motion } from "framer-motion";
-import { ChevronDown, Eraser, LogIn, Redo2, Undo2, User, UserPlus, Volume2, VolumeX } from "lucide-react";
+import { ChevronDown, Eraser, Home, Lock, LogIn, Redo2, Undo2, User, UserPlus, Volume2, VolumeX } from "lucide-react";
 import "./App.css";
 
 const API_BASE = (import.meta.env.VITE_API_BASE_URL || "https://nonogram-api.onrender.com").replace(/\/$/, "");
@@ -285,6 +285,7 @@ function App() {
   const isModeSingle = playMode === "single";
   const isModeMulti = playMode === "multi";
   const isModeAuth = playMode === "auth";
+  const isSingleSoloMode = isModeSingle && !isInRaceRoom;
   const isLoggedIn = Boolean(authToken && authUser);
   const isInRaceRoom = Boolean(raceRoomCode);
   const shouldShowPuzzleBoard = Boolean(
@@ -1730,7 +1731,7 @@ function App() {
         )}
 
         {isModeSingle && (
-          <div className="controls">
+          <div className="controls singleTopControls">
             {!isInRaceRoom && (
               <>
                 <select value={selectedSize} onChange={(e) => setSelectedSize(e.target.value)}>
@@ -1740,32 +1741,76 @@ function App() {
                   <option value="20x20">20x20</option>
                   <option value="25x25">25x25</option>
                 </select>
-                <button onClick={loadRandomBySize} disabled={isLoading}>
-                  {isLoading ? "Loading..." : "Load Random Size"}
+                <button className="singleActionBtn" onClick={loadRandomBySize} disabled={isLoading}>
+                  {isLoading ? "LOADING..." : "RANDOM LOAD"}
                 </button>
               </>
             )}
-            <button onClick={handleToggleSfx}>
-              {soundOn ? <Volume2 size={16} /> : <VolumeX size={16} />}
-              {soundOn ? "SFX ON" : "SFX OFF"}
+            <button className="singleSfxBtn" onClick={handleToggleSfx}>
+              {soundOn ? <Volume2 size={16} /> : <VolumeX size={16} />} SOUND {soundOn ? "ON" : "OFF"}
             </button>
-            <button onClick={backToMenu} disabled={isInRaceRoom}>
-              메인으로
+            <button className="singleHomeBtn" onClick={backToMenu} disabled={isInRaceRoom}>
+              HOME
             </button>
           </div>
         )}
 
         {isModeMulti && (
           <>
-            <div className="controls">
-              <button onClick={handleToggleSfx}>
-                {soundOn ? <Volume2 size={16} /> : <VolumeX size={16} />}
-                {soundOn ? "SFX ON" : "SFX OFF"}
-              </button>
-              <button onClick={backToMenu} disabled={isInRaceRoom}>
-                메인으로
-              </button>
-            </div>
+            {!isInRaceRoom && (
+              <div className="multiLobbyShell">
+                <div className="lobbyQuick">
+                  <button className="lobbyQuickBtn" onClick={handleToggleSfx}>
+                    {soundOn ? <Volume2 size={18} /> : <VolumeX size={18} />} SOUND ON/OFF
+                  </button>
+                  <button className="lobbyQuickBtn" onClick={backToMenu}>
+                    <Home size={18} /> HOME
+                  </button>
+                </div>
+                <div className="lobbyActions">
+                  <button
+                    className="lobbyCardBtn create"
+                    onClick={() => {
+                      setCreateRoomTitle("");
+                      setCreateSize(selectedSize);
+                      setCreateMaxPlayers("2");
+                      setCreateVisibility("public");
+                      setCreatePassword("");
+                      setShowCreateModal(true);
+                    }}
+                    disabled={isLoading}
+                  >
+                    CREATE ROOM
+                  </button>
+
+                  <div className="lobbyCardBtn join">
+                    <div className="lobbyJoinTitle">JOIN ROOM</div>
+                    <div className="lobbyJoinRow">
+                      <input
+                        type="text"
+                        value={joinRoomCode}
+                        onChange={(e) => setJoinRoomCode(e.target.value.toUpperCase())}
+                        placeholder="Enter room code"
+                      />
+                      <button
+                        onClick={() => {
+                          setJoinRoomType("unknown");
+                          setJoinPassword("");
+                          setShowJoinModal(true);
+                        }}
+                        disabled={!joinRoomCode.trim()}
+                      >
+                        JOIN
+                      </button>
+                    </div>
+                  </div>
+
+                  <button className="lobbyCardBtn refresh" onClick={fetchPublicRooms} disabled={roomsLoading}>
+                    {roomsLoading ? "REFRESHING..." : "REFRESH LIST"}
+                  </button>
+                </div>
+              </div>
+            )}
 
             {!isLoggedIn && (
               <div className="raceStateBox">
@@ -1773,38 +1818,8 @@ function App() {
               </div>
             )}
 
-            {isLoggedIn && (
+            {isLoggedIn && isInRaceRoom && (
               <div className="racePanel">
-                {!isInRaceRoom && (
-                  <>
-                    <button
-                      onClick={() => {
-                        setCreateRoomTitle("");
-                        setCreateSize(selectedSize);
-                        setCreateMaxPlayers("2");
-                        setCreateVisibility("public");
-                        setCreatePassword("");
-                        setShowCreateModal(true);
-                      }}
-                      disabled={isLoading}
-                    >
-                      방 만들기
-                    </button>
-                    <button
-                      onClick={() => {
-                        setJoinRoomType("unknown");
-                        setJoinPassword("");
-                        setShowJoinModal(true);
-                      }}
-                      disabled={isLoading}
-                    >
-                      Join Room
-                    </button>
-                    <button onClick={fetchPublicRooms} disabled={roomsLoading}>
-                      {roomsLoading ? "목록 불러오는 중..." : "오픈방 새로고침"}
-                    </button>
-                  </>
-                )}
                 <button onClick={leaveRace} disabled={!raceRoomCode}>
                   Leave Room
                 </button>
@@ -1814,212 +1829,263 @@ function App() {
         )}
 
         {isModeMulti && isLoggedIn && !isInRaceRoom && (
-          <div className="raceStateBox">
-            <div><b>방 리스트</b></div>
+          <div className="lobbyTableWrap">
+            <div className="lobbyTableTitle">ROOM LIST</div>
             {publicRooms.length === 0 ? (
-              <div>입장 가능한 방이 없습니다.</div>
+              <div className="lobbyEmpty">입장 가능한 방이 없습니다.</div>
             ) : (
-              <div className="roomList">
-                {publicRooms.map((room) => (
-                  <div className="roomRow" key={room.roomCode}>
-                    <span>
-                      <span className={`roomBadge ${room.isPrivate ? "private" : "public"}`}>
-                        {room.isPrivate ? "LOCK" : "OPEN"}
-                      </span>{" "}
-                      [{room.roomCode}] {room.roomTitle} ({room.width}x{room.height}) {room.currentPlayers}/
-                      {room.maxPlayers}
-                    </span>
-                    <button
-                      onClick={() => {
-                        setJoinRoomCode(room.roomCode);
-                        setJoinRoomType(room.isPrivate ? "private" : "public");
-                        setJoinPassword("");
-                        setShowJoinModal(true);
-                      }}
-                    >
-                      참가
-                    </button>
-                  </div>
-                ))}
-              </div>
+              <table className="lobbyTable">
+                <thead>
+                  <tr>
+                    <th>Room Code</th>
+                    <th>Title</th>
+                    <th>Size</th>
+                    <th>Players</th>
+                    <th>Status</th>
+                    <th>Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {publicRooms.map((room) => (
+                    <tr key={room.roomCode}>
+                      <td>{room.roomCode}</td>
+                      <td>{room.roomTitle}</td>
+                      <td>
+                        {room.width}x{room.height}
+                      </td>
+                      <td>
+                        {room.currentPlayers}/{room.maxPlayers}
+                      </td>
+                      <td className={room.isPrivate ? "private" : "open"}>
+                        {room.isPrivate ? (
+                          <span>
+                            Private <Lock size={14} />
+                          </span>
+                        ) : (
+                          "Open"
+                        )}
+                      </td>
+                      <td>
+                        <button
+                          className="joinActionBtn"
+                          onClick={() => {
+                            setJoinRoomCode(room.roomCode);
+                            setJoinRoomType(room.isPrivate ? "private" : "public");
+                            setJoinPassword("");
+                            setShowJoinModal(true);
+                          }}
+                        >
+                          Join
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             )}
           </div>
         )}
 
-        {isModeMulti && isLoggedIn && raceRoomCode && (
-          <div className="raceStateBox">
-            <div>
-              Room: <b>{raceRoomCode}</b>
-            </div>
-            {roomTitleText && (
-              <div>
-                Title: <b>{roomTitleText}</b>
+        {isModeMulti && isLoggedIn && raceRoomCode && shouldShowPuzzleBoard && (
+          <section className="raceMatchLayout">
+            <aside className="raceInfoPane">
+              <div className="raceInfoTitle">경기 상태: {isRacePlaying ? "진행 중" : racePhase}</div>
+              <div>Room: <b>{roomTitleText || raceRoomCode}</b></div>
+              <div>Code: <b>{raceRoomCode}</b></div>
+              <div>Players: {(raceState?.players || []).length}/{raceState?.maxPlayers || 2}</div>
+              <div className="raceInfoProgress">
+                PROGRESS:{" "}
+                {raceState?.totalAnswerCells
+                  ? `${Math.round(((myRacePlayer?.correctAnswerCells || 0) / raceState.totalAnswerCells) * 100)}%`
+                  : "0%"}
               </div>
-            )}
-            <div>
-              Players: {(raceState?.players || []).length}/{raceState?.maxPlayers || 2}
-            </div>
-            <div>State: {racePhase}</div>
-            <div>Submit: {raceSubmitting ? "Sending..." : "Idle"}</div>
-            {myRacePlayer && <div>Me: {myRacePlayer.nickname}</div>}
-            {isRaceLobby && (
+              {myRacePlayer && <div className="raceInfoMe">{myRacePlayer.nickname}</div>}
+              <div className="timerBar">TIME {formattedTime}</div>
               <div className="raceActions">
-                <button
-                  onClick={() => setReady(!(myRacePlayer?.isReady === true))}
-                  disabled={!myRacePlayer}
-                >
-                  {myRacePlayer?.isReady ? "Unready" : "Ready"}
-                </button>
-                <button
-                  onClick={startRace}
-                  disabled={raceState?.hostPlayerId !== racePlayerId || !raceState?.canStart}
-                >
-                  Start (Host)
-                </button>
-              </div>
-            )}
-            {isRaceFinished && raceResultText && <div className="raceResult">{raceResultText}</div>}
-            {isRaceFinished && (
-              <div className="raceActions">
-                <button onClick={requestRematch} disabled={isRematchLoading}>
-                  {isRematchLoading ? "준비중..." : "한판 더?"}
-                </button>
-              </div>
-            )}
-            {isRaceFinished && Array.isArray(raceState?.rankings) && raceState.rankings.length > 0 && (
-              <div className="rankings">
-                <b>최종 순위</b>
-                {raceState.rankings.map((r) => (
-                  <div key={r.playerId}>
-                    {r.rank ? `${r.rank}등` : "-"} {r.nickname}
-                    {Number.isInteger(r.elapsedSec)
-                      ? ` (${r.elapsedSec}s)`
-                      : r.status === "left"
-                        ? " (중도 이탈)"
-                        : " (미완주)"}
-                  </div>
-                ))}
-              </div>
-            )}
-            <div className="racePlayers">
-              {(raceState?.players || []).map((p) => (
-                <span
-                  key={p.playerId}
-                  className="playerBadge"
-                  ref={(el) => {
-                    if (el) playerBadgeRefs.current.set(p.playerId, el);
-                    else playerBadgeRefs.current.delete(p.playerId);
-                  }}
-                >
-                  <span className="nameWrap">
-                    <button
-                      className="nickBtn"
-                      onClick={() => {
-                        if (p.playerId === racePlayerId) return;
-                        setReactionMenuForPlayerId((prev) => (prev === p.playerId ? "" : p.playerId));
-                      }}
-                      disabled={p.playerId === racePlayerId}
-                    >
-                      {p.nickname}
+                {isRaceLobby && (
+                  <>
+                    <button onClick={() => setReady(!(myRacePlayer?.isReady === true))} disabled={!myRacePlayer}>
+                      {myRacePlayer?.isReady ? "Unready" : "Ready"}
                     </button>
-                    {reactionMenuForPlayerId === p.playerId && (
-                      <span className="reactionMenu">
-                        <button onClick={() => sendReaction(p.playerId, "💩")}>💩</button>
-                        <button onClick={() => sendReaction(p.playerId, "👍")}>👍</button>
-                        <button onClick={() => sendReaction(p.playerId, "❤️")}>❤️</button>
-                      </span>
-                    )}
-                  </span>
-                  <span className="playerStateText">
-                    {raceState?.hostPlayerId === p.playerId ? " [host]" : ""}
-                    {p.disconnectedAt ? " [left]" : p.isReady ? " [ready]" : " [not ready]"}:
-                    {p.playerId === racePlayerId
-                      ? Number.isInteger(p.elapsedSec)
-                        ? " 완료 (대기중)"
-                        : " 플레이 중"
-                      : p.disconnectedAt
-                        ? " 중도 이탈"
-                      : Number.isInteger(p.elapsedSec)
-                        ? ` ${p.elapsedSec}s`
-                        : ` 남은 정답칸 ${Math.max(0, Number(p.remainingAnswerCells || 0))}`}
-                  </span>
-                </span>
-              ))}
-            </div>
-            <div className="reactionLayer">
-              {reactionFlights.map((f) => (
-                <span
-                  key={f.id}
-                  className="reactionFlight"
-                  style={{
-                    left: `${f.x}px`,
-                    top: `${f.y}px`,
-                    opacity: f.opacity,
-                    "--flight-scale": f.scale,
-                  }}
-                >
-                  {f.emoji}
-                </span>
-              ))}
-            </div>
-            <div className="chatBox">
-              <div className="chatTitle">Room Chat</div>
-              <div className="chatBody" ref={chatBodyRef}>
-                {chatMessages.length === 0 ? (
-                  <div className="chatEmpty">아직 채팅이 없습니다.</div>
-                ) : (
-                  chatMessages.map((msg) => (
-                    <div className="chatMsg" key={msg.id}>
-                      <b>{msg.nickname}</b>: {msg.text}
-                    </div>
-                  ))
+                    <button onClick={startRace} disabled={raceState?.hostPlayerId !== racePlayerId || !raceState?.canStart}>
+                      Start (Host)
+                    </button>
+                  </>
+                )}
+                <button onClick={leaveRace} disabled={!raceRoomCode}>Leave</button>
+                {isRaceFinished && (
+                  <button onClick={requestRematch} disabled={isRematchLoading}>
+                    {isRematchLoading ? "준비중..." : "한판 더?"}
+                  </button>
                 )}
               </div>
-              <div className="chatInputRow">
-                <div className="emojiWrap" ref={emojiWrapRef}>
-                  <button
-                    type="button"
-                    onClick={() => setShowEmojiPicker((prev) => !prev)}
-                    title="이모지"
-                  >
-                    🙂
-                  </button>
-                  {showEmojiPicker && (
-                    <div className="emojiPopover">
-                      <EmojiPicker
-                        onEmojiClick={(emojiData) => {
-                          setChatInput((prev) => `${prev}${emojiData.emoji}`);
-                          setShowEmojiPicker(false);
-                        }}
-                        skinTonesDisabled
-                        width={300}
-                        height={340}
-                      />
-                    </div>
-                  )}
-                </div>
-                <input
-                  type="text"
-                  value={chatInput}
-                  onChange={(e) => setChatInput(e.target.value)}
-                  placeholder="메시지 입력..."
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") {
-                      e.preventDefault();
-                      sendRaceChat();
-                    }
+            </aside>
+
+            <div className="raceBoardPane">
+              <div className="boardWrap" onContextMenu={(e) => e.preventDefault()}>
+                <div
+                  className="nonogram"
+                  style={{
+                    "--cell-size": `${cellSize}px`,
+                    "--left-depth": maxRowHintDepth,
+                    "--top-depth": maxColHintDepth,
+                    "--board-w": puzzle.width,
+                    "--board-h": puzzle.height,
                   }}
-                />
-                <button onClick={sendRaceChat} disabled={chatSending || !chatInput.trim()}>
-                  {chatSending ? "..." : "전송"}
-                </button>
+                >
+                  <div className="corner" />
+                  <div className="colHints" style={{ gridTemplateColumns: `repeat(${puzzle.width}, var(--cell-size))` }}>
+                    {colHints.map((hint, colIdx) => (
+                      <div key={`col-${colIdx}`} className="colHintCol" style={{ gridTemplateRows: `repeat(${maxColHintDepth}, var(--cell-size))` }}>
+                        {Array.from({ length: maxColHintDepth }).map((_, depthIdx) => {
+                          const value = hint[hint.length - maxColHintDepth + depthIdx];
+                          const hintId = `c-${colIdx}-${depthIdx}`;
+                          return (
+                            <button key={hintId} type="button" className={`hintNum ${activeHints.has(hintId) ? "active" : ""}`} onClick={() => toggleHint(hintId)}>
+                              {value ?? ""}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    ))}
+                  </div>
+                  <div className="rowHints" style={{ gridTemplateRows: `repeat(${puzzle.height}, var(--cell-size))` }}>
+                    {rowHints.map((hint, rowIdx) => (
+                      <div key={`row-${rowIdx}`} className="rowHintRow" style={{ gridTemplateColumns: `repeat(${maxRowHintDepth}, var(--cell-size))` }}>
+                        {Array.from({ length: maxRowHintDepth }).map((_, depthIdx) => {
+                          const value = hint[hint.length - maxRowHintDepth + depthIdx];
+                          const hintId = `r-${rowIdx}-${depthIdx}`;
+                          return (
+                            <button key={hintId} type="button" className={`hintNum ${activeHints.has(hintId) ? "active" : ""}`} onClick={() => toggleHint(hintId)}>
+                              {value ?? ""}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    ))}
+                  </div>
+                  <div
+                    ref={boardRef}
+                    className="board"
+                    style={{
+                      width: `${puzzle.width * cellSize}px`,
+                      height: `${puzzle.height * cellSize}px`,
+                      cursor: canInteractBoard ? "crosshair" : "not-allowed",
+                    }}
+                    onPointerDown={onBoardPointerDown}
+                    onContextMenu={(e) => e.preventDefault()}
+                  >
+                    <canvas ref={canvasRef} className="boardCanvas" />
+                    {isRaceCountdown && <div className="countdownOverlay">{countdownLeft ?? 0}</div>}
+                    {isRaceLobby && <div className="countdownOverlay wait">READY 대기</div>}
+                    {isRaceFinished && <div className="countdownOverlay result">{raceResultText}</div>}
+                  </div>
+                </div>
+              </div>
+              <div className="singleTools">
+                <button className="toolBtn toolUndo" onClick={undo} disabled={!canUndo || !canInteractBoard}>UNDO</button>
+                <button className="toolBtn toolRedo" onClick={redo} disabled={!canRedo || !canInteractBoard}>REDO</button>
+                <button className="toolBtn toolClear" onClick={resetGrid} disabled={!canInteractBoard}>CLEAR</button>
               </div>
             </div>
-          </div>
+
+            <aside className="raceSidePane">
+              <div className="raceSidePlayers">
+                {(raceState?.players || []).map((p) => {
+                  const percent = raceState?.totalAnswerCells
+                    ? Math.round(((p.correctAnswerCells || 0) / raceState.totalAnswerCells) * 100)
+                    : 0;
+                  return (
+                    <div
+                      key={p.playerId}
+                      className="raceProgressRow"
+                      ref={(el) => {
+                        if (el) playerBadgeRefs.current.set(p.playerId, el);
+                        else playerBadgeRefs.current.delete(p.playerId);
+                      }}
+                    >
+                      <button
+                        className="nickBtn"
+                        onClick={() => {
+                          if (p.playerId === racePlayerId) return;
+                          setReactionMenuForPlayerId((prev) => (prev === p.playerId ? "" : p.playerId));
+                        }}
+                        disabled={p.playerId === racePlayerId}
+                      >
+                        {p.nickname}
+                      </button>
+                      <span>{percent}%</span>
+                      {reactionMenuForPlayerId === p.playerId && (
+                        <span className="reactionMenu">
+                          <button onClick={() => sendReaction(p.playerId, "💩")}>💩</button>
+                          <button onClick={() => sendReaction(p.playerId, "👍")}>👍</button>
+                          <button onClick={() => sendReaction(p.playerId, "❤️")}>❤️</button>
+                        </span>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+
+              <div className="reactionLayer">
+                {reactionFlights.map((f) => (
+                  <span key={f.id} className="reactionFlight" style={{ left: `${f.x}px`, top: `${f.y}px`, opacity: f.opacity, "--flight-scale": f.scale }}>
+                    {f.emoji}
+                  </span>
+                ))}
+              </div>
+
+              <div className="chatBox">
+                <div className="chatTitle">Room Chat</div>
+                <div className="chatBody" ref={chatBodyRef}>
+                  {chatMessages.length === 0 ? (
+                    <div className="chatEmpty">아직 채팅이 없습니다.</div>
+                  ) : (
+                    chatMessages.map((msg) => (
+                      <div className="chatMsg" key={msg.id}>
+                        <b>{msg.nickname}</b>: {msg.text}
+                      </div>
+                    ))
+                  )}
+                </div>
+                <div className="chatInputRow">
+                  <div className="emojiWrap" ref={emojiWrapRef}>
+                    <button type="button" onClick={() => setShowEmojiPicker((prev) => !prev)} title="이모지">🙂</button>
+                    {showEmojiPicker && (
+                      <div className="emojiPopover">
+                        <EmojiPicker
+                          onEmojiClick={(emojiData) => {
+                            setChatInput((prev) => `${prev}${emojiData.emoji}`);
+                            setShowEmojiPicker(false);
+                          }}
+                          skinTonesDisabled
+                          width={300}
+                          height={340}
+                        />
+                      </div>
+                    )}
+                  </div>
+                  <input
+                    type="text"
+                    value={chatInput}
+                    onChange={(e) => setChatInput(e.target.value)}
+                    placeholder="메시지 입력..."
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        sendRaceChat();
+                      }
+                    }}
+                  />
+                  <button onClick={sendRaceChat} disabled={chatSending || !chatInput.trim()}>{chatSending ? "..." : "전송"}</button>
+                </div>
+              </div>
+            </aside>
+          </section>
         )}
 
-        {shouldShowPuzzleBoard && <div className="timerBar">TIME {formattedTime}</div>}
-        {shouldShowPuzzleBoard && (
+        {shouldShowPuzzleBoard && !isSingleSoloMode && !isInRaceRoom && <div className="timerBar">TIME {formattedTime}</div>}
+        {shouldShowPuzzleBoard && !isSingleSoloMode && !isInRaceRoom && (
           <div className="gameTools" role="toolbar" aria-label="Board tools">
             <button
               className="iconBtn"
@@ -2048,6 +2114,22 @@ function App() {
             >
               <Eraser size={16} />
             </button>
+          </div>
+        )}
+        {shouldShowPuzzleBoard && isSingleSoloMode && (
+          <div className="singleBottomBar">
+            <div className="singleTimer">TIMER: {formattedTime}</div>
+            <div className="singleTools">
+              <button className="toolBtn toolUndo" onClick={undo} disabled={!canUndo || !canInteractBoard}>
+                UNDO
+              </button>
+              <button className="toolBtn toolRedo" onClick={redo} disabled={!canRedo || !canInteractBoard}>
+                REDO
+              </button>
+              <button className="toolBtn toolClear" onClick={resetGrid} disabled={!canInteractBoard}>
+                CLEAR
+              </button>
+            </div>
           </div>
         )}
 
@@ -2171,7 +2253,7 @@ function App() {
           </div>
         )}
 
-        {shouldShowPuzzleBoard && (
+        {shouldShowPuzzleBoard && !isInRaceRoom && (
           <div className="boardWrap" onContextMenu={(e) => e.preventDefault()}>
             <div
               className="nonogram"

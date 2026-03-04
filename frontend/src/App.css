@@ -148,6 +148,293 @@
   margin-top: 0.55rem;
 }
 
+.multiLobbyShell {
+  margin-top: 0.85rem;
+  display: grid;
+  gap: 0.75rem;
+}
+
+.lobbyQuick {
+  display: flex;
+  justify-content: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.lobbyQuickBtn {
+  min-height: 42px;
+  border: none;
+  background: transparent;
+  font-size: 1.55rem;
+  font-weight: 900;
+  color: #1c2b45;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.38rem;
+}
+
+.lobbyQuickBtn:hover:enabled {
+  color: #18487a;
+  border: none;
+}
+
+.lobbyActions {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(220px, 1fr));
+  gap: 1rem;
+}
+
+.lobbyCardBtn {
+  min-height: 150px;
+  border: 6px solid #183258;
+  border-radius: 2px;
+  box-shadow: 8px 8px 0 rgba(24, 50, 88, 0.23);
+  font-size: 2.05rem;
+  font-weight: 900;
+  letter-spacing: 0.02em;
+}
+
+.lobbyCardBtn.create {
+  background: linear-gradient(130deg, #1b8bd2 0%, #5ac2ff 100%);
+  color: #fff;
+}
+
+.lobbyCardBtn.refresh {
+  background: linear-gradient(180deg, #f8fdff 0%, #e8f2fb 100%);
+  color: #183258;
+}
+
+.lobbyCardBtn.join {
+  background: linear-gradient(130deg, #d7388f 0%, #ff5b86 100%);
+  color: #fff;
+  padding: 0.6rem 0.9rem;
+  display: grid;
+  align-content: center;
+  gap: 0.4rem;
+}
+
+.lobbyJoinTitle {
+  text-align: center;
+  font-size: 2.05rem;
+  font-weight: 900;
+}
+
+.lobbyJoinRow {
+  display: flex;
+  gap: 0.4rem;
+}
+
+.lobbyJoinRow input {
+  min-height: 52px;
+  border-radius: 12px;
+  border: 2px solid #d3dde8;
+  font-size: 1.65rem;
+  font-weight: 700;
+}
+
+.lobbyJoinRow button {
+  min-width: 108px;
+  border-radius: 10px;
+  font-size: 1.2rem;
+  font-weight: 900;
+}
+
+.lobbyTableWrap {
+  margin-top: 1rem;
+  border: 5px solid #183258;
+  border-radius: 4px;
+  background: #fff;
+  overflow: hidden;
+}
+
+.lobbyTableTitle {
+  text-align: center;
+  padding: 0.8rem 0.5rem;
+  font-size: 3rem;
+  font-weight: 900;
+  color: #182a48;
+  border-bottom: 1px solid #cad9ea;
+  background: linear-gradient(180deg, #f5fbff 0%, #e8f2fb 100%);
+}
+
+.lobbyTable {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.lobbyTable th,
+.lobbyTable td {
+  border-bottom: 1px solid #cad9ea;
+  padding: 0.72rem 0.8rem;
+  font-size: 1.35rem;
+  text-align: left;
+}
+
+.lobbyTable thead th {
+  font-size: 1.2rem;
+  font-weight: 900;
+  color: #1d2f4a;
+  background: #f8fbff;
+}
+
+.lobbyTable td.open {
+  color: #23844e;
+  font-weight: 800;
+}
+
+.lobbyTable td.private {
+  color: #1d2f4a;
+  font-weight: 800;
+}
+
+.lobbyTable td.private span {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.joinActionBtn {
+  min-width: 96px;
+  min-height: 42px;
+  border: 3px solid #183258;
+  border-radius: 6px;
+  background: linear-gradient(130deg, #1b8bd2 0%, #5ac2ff 100%);
+  color: #fff;
+  font-size: 1.2rem;
+  font-weight: 900;
+}
+
+.lobbyEmpty {
+  padding: 1rem;
+  font-size: 1rem;
+}
+
+.raceMatchLayout {
+  margin-top: 0.9rem;
+  display: grid;
+  grid-template-columns: 300px 1fr 330px;
+  gap: 0.9rem;
+  align-items: start;
+}
+
+.raceInfoPane {
+  border: 1px solid #c4d5e8;
+  background: #f5faff;
+  border-radius: 8px;
+  padding: 0.8rem;
+  display: grid;
+  gap: 0.38rem;
+}
+
+.raceInfoTitle {
+  font-size: 1.15rem;
+  font-weight: 900;
+  color: #163055;
+}
+
+.raceInfoProgress {
+  margin-top: 0.55rem;
+  font-size: 2rem;
+  font-weight: 900;
+  color: #1b2b45;
+}
+
+.raceInfoMe {
+  font-size: 2.6rem;
+  font-weight: 900;
+  color: #13233b;
+  line-height: 1.1;
+}
+
+.raceBoardPane .boardWrap {
+  margin-top: 0;
+}
+
+.raceSidePane {
+  display: grid;
+  gap: 0.55rem;
+  align-content: start;
+}
+
+.raceSidePlayers {
+  border: 1px solid #c4d5e8;
+  background: #f7fbff;
+  border-radius: 8px;
+  padding: 0.45rem;
+  display: grid;
+  gap: 0.35rem;
+}
+
+.raceProgressRow {
+  position: relative;
+  border: 2px solid #183258;
+  border-radius: 6px;
+  background: linear-gradient(130deg, #1b8bd2 0%, #5ac2ff 100%);
+  color: #fff;
+  min-height: 46px;
+  padding: 0.25rem 0.55rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 1.05rem;
+  font-weight: 800;
+}
+
+.raceProgressRow .nickBtn {
+  color: #fff;
+  margin-right: 0.2rem;
+}
+
+.raceProgressRow .reactionMenu {
+  left: auto;
+  right: 0;
+  transform: none;
+}
+
+.singleTopControls {
+  margin: 0.75rem 0 0.55rem;
+  justify-content: center;
+  gap: 0.55rem;
+}
+
+.singleTopControls select {
+  min-width: 220px;
+  min-height: 52px;
+  border: 3px solid #2a7bb2;
+  border-radius: 14px;
+  background: #f7fcff;
+  font-size: 1.05rem;
+  font-weight: 900;
+}
+
+.singleActionBtn,
+.singleSfxBtn,
+.singleHomeBtn {
+  min-height: 52px;
+  border: 3px solid #2a7bb2;
+  border-radius: 14px;
+  font-size: 1.03rem;
+  font-weight: 900;
+}
+
+.singleActionBtn {
+  min-width: 220px;
+  background: linear-gradient(180deg, #3495d4 0%, #1d72af 100%);
+  color: #fff;
+}
+
+.singleSfxBtn {
+  min-width: 168px;
+  background: #f7fcff;
+  color: #264866;
+}
+
+.singleHomeBtn {
+  min-width: 138px;
+  background: linear-gradient(180deg, #3495d4 0%, #1d72af 100%);
+  color: #fff;
+}
+
 .modeChooser {
   display: flex;
   justify-content: center;
@@ -404,6 +691,53 @@
   font-weight: 900;
   letter-spacing: 0.05em;
   color: #0f3f74;
+}
+
+.singleBottomBar {
+  margin-top: 0.75rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.8rem;
+  flex-wrap: wrap;
+}
+
+.singleTimer {
+  font-size: 2rem;
+  font-weight: 900;
+  color: #1b2b45;
+  letter-spacing: 0.02em;
+}
+
+.singleTools {
+  display: flex;
+  gap: 0.55rem;
+  align-items: center;
+}
+
+.toolBtn {
+  min-width: 178px;
+  min-height: 64px;
+  border-radius: 10px;
+  border: 4px solid #183258;
+  box-shadow: 6px 6px 0 rgba(24, 50, 88, 0.2);
+  font-size: 2rem;
+  font-weight: 900;
+  color: #fff;
+  letter-spacing: 0.02em;
+}
+
+.toolUndo {
+  background: linear-gradient(135deg, #1f8fd7 0%, #58c2ff 100%);
+}
+
+.toolRedo {
+  background: linear-gradient(135deg, #f4f9ff 0%, #dbe9f7 100%);
+  color: #6f8195;
+}
+
+.toolClear {
+  background: linear-gradient(135deg, #de3d8f 0%, #ff6386 100%);
 }
 
 .gameTools {
@@ -868,6 +1202,116 @@ button:disabled {
     min-height: 44px;
     font-size: 0.95rem;
     border-width: 2px;
+  }
+
+  .lobbyActions {
+    grid-template-columns: 1fr;
+  }
+
+  .lobbyCardBtn {
+    min-height: 96px;
+    border-width: 3px;
+    box-shadow: 4px 4px 0 rgba(24, 50, 88, 0.18);
+    font-size: 1.35rem;
+  }
+
+  .lobbyJoinTitle {
+    font-size: 1.35rem;
+  }
+
+  .lobbyJoinRow input {
+    min-height: 40px;
+    font-size: 1.05rem;
+  }
+
+  .lobbyJoinRow button {
+    min-width: 74px;
+    font-size: 0.9rem;
+  }
+
+  .lobbyTableTitle {
+    font-size: 1.65rem;
+  }
+
+  .lobbyTable th,
+  .lobbyTable td {
+    font-size: 0.84rem;
+    padding: 0.42rem 0.35rem;
+  }
+
+  .joinActionBtn {
+    min-width: 64px;
+    min-height: 32px;
+    font-size: 0.82rem;
+    border-width: 2px;
+  }
+
+  .raceMatchLayout {
+    grid-template-columns: 1fr;
+  }
+
+  .raceInfoProgress {
+    font-size: 1.3rem;
+  }
+
+  .raceInfoMe {
+    font-size: 1.75rem;
+  }
+
+  .raceProgressRow {
+    min-height: 38px;
+    font-size: 0.9rem;
+  }
+
+  .singleTopControls {
+    justify-content: flex-start;
+  }
+
+  .singleTopControls select,
+  .singleActionBtn,
+  .singleSfxBtn,
+  .singleHomeBtn {
+    min-height: 44px;
+    border-width: 2px;
+    font-size: 0.92rem;
+  }
+
+  .singleTopControls select {
+    min-width: 150px;
+  }
+
+  .singleActionBtn {
+    min-width: 160px;
+  }
+
+  .singleSfxBtn {
+    min-width: 120px;
+  }
+
+  .singleHomeBtn {
+    min-width: 98px;
+  }
+
+  .singleBottomBar {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .singleTimer {
+    font-size: 1.4rem;
+  }
+
+  .singleTools {
+    width: 100%;
+  }
+
+  .toolBtn {
+    min-width: 0;
+    flex: 1;
+    min-height: 48px;
+    border-width: 2px;
+    box-shadow: 3px 3px 0 rgba(24, 50, 88, 0.18);
+    font-size: 1.22rem;
   }
 
   .nonogram {
