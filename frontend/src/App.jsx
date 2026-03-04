@@ -1175,6 +1175,10 @@ function App() {
         if (v === 1) {
           ctx.fillStyle = "#1d1d1d";
           ctx.fillRect(px, py, cellSize, cellSize);
+          // Keep visible borders between adjacent filled cells.
+          ctx.strokeStyle = "#7f8d9b";
+          ctx.lineWidth = 1;
+          ctx.strokeRect(px + 0.5, py + 0.5, cellSize - 1, cellSize - 1);
         } else if (v === 2) {
           ctx.strokeStyle = "#8f0000";
           ctx.lineWidth = 1.8;
