@@ -39,6 +39,10 @@ const PVP_SIZE_OPTIONS = [
   [20, 20],
   [25, 25],
 ];
+const ELO_DEFAULT_RATING = 1500;
+const ELO_PLACEMENT_GAMES = 20;
+const ELO_K_PLACEMENT = 40;
+const ELO_K_NORMAL = 24;
 const SESSION_TTL_MS = 1000 * 60 * 60 * 24 * 30;
 const POPCOUNT = new Uint8Array(256);
 for (let i = 0; i < 256; i += 1) {
@@ -249,11 +253,11 @@ async function getAuthUserFromReq(req) {
   if (!token) return null;
   const tokenHash = hashToken(token);
   const { rows } = await pool.query(
-    `SELECT u.id, u.username, u.nickname
+    `SELECT u.id, u.username, u.nickname, u.rating, u.rating_games, u.rating_wins, u.rating_losses
      FROM user_sessions s
      JOIN users u ON u.id = s.user_id
      WHERE s.token_hash = $1
-       AND s.expires_at > now()
+        AND s.expires_at > now()
      LIMIT 1`,
     [tokenHash]
   );
@@ -285,6 +289,16 @@ async function ensureAuthTables() {
     );
   `);
   await pool.query(`
+    ALTER TABLE users
+      ADD COLUMN IF NOT EXISTS rating INTEGER NOT NULL DEFAULT ${ELO_DEFAULT_RATING},
+      ADD COLUMN IF NOT EXISTS rating_games INTEGER NOT NULL DEFAULT 0,
+      ADD COLUMN IF NOT EXISTS rating_wins INTEGER NOT NULL DEFAULT 0,
+      ADD COLUMN IF NOT EXISTS rating_losses INTEGER NOT NULL DEFAULT 0;
+  `);
+  await pool.query(
+    `CREATE INDEX IF NOT EXISTS idx_users_rating_desc ON users (rating DESC, rating_games DESC, id ASC);`
+  );
+  await pool.query(`
     CREATE TABLE IF NOT EXISTS user_sessions (
       token_hash CHAR(64) PRIMARY KEY,
       user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -312,6 +326,20 @@ function randomPvpSize() {
 
 function pvpSizeKey(width, height) {
   return `${width}x${height}`;
+}
+
+function eloExpected(myRating, opponentRating) {
+  return 1 / (1 + 10 ** ((opponentRating - myRating) / 400));
+}
+
+function eloKFactor(games) {
+  const n = Number(games || 0);
+  return n < ELO_PLACEMENT_GAMES ? ELO_K_PLACEMENT : ELO_K_NORMAL;
+}
+
+function eloNextRating(currentRating, expected, score, k) {
+  const base = Number.isFinite(Number(currentRating)) ? Number(currentRating) : ELO_DEFAULT_RATING;
+  return Math.max(100, Math.min(4000, Math.round(base + k * (score - expected))));
 }
 
 function isUserInAnyRoom(userId) {
@@ -483,6 +511,7 @@ async function createPvpRoomForMatch(match) {
   const room = {
     roomCode,
     roomTitle: "PvP Match",
+    mode: "pvp_ranked",
     visibility: "public",
     passwordHash: null,
     puzzleId: puzzle.id,
@@ -498,6 +527,10 @@ async function createPvpRoomForMatch(match) {
     countdownStartAt: now,
     gameStartAt: now + COUNTDOWN_MS,
     winnerPlayerId: null,
+    ratedUserIds: match.players.map((p) => Number(p.userId)).filter((v) => Number.isInteger(v)),
+    ratedResultApplied: false,
+    ratedResultApplying: false,
+    ratedResult: null,
     chatMessages: [],
     reactionEvents: [],
     players: new Map(),
@@ -658,6 +691,7 @@ function removeStalePlayers(room, now = Date.now()) {
       room.winnerPlayerId = finished[0].playerId;
     }
     room.state = "finished";
+    void applyRatedResultIfNeeded(room);
     changed = true;
   }
 
@@ -714,9 +748,94 @@ function shouldFinishRace(room) {
   return finishedCount + activeCount < target;
 }
 
+async function applyRatedResultIfNeeded(room) {
+  if (!room || room.state !== "finished") return;
+  if (room.mode !== "pvp_ranked") return;
+  if (room.ratedResultApplied === true || room.ratedResultApplying === true) return;
+  if (!Array.isArray(room.ratedUserIds) || room.ratedUserIds.length !== 2) return;
+
+  const [userA, userB] = room.ratedUserIds.map((v) => Number(v)).filter((v) => Number.isInteger(v));
+  if (!Number.isInteger(userA) || !Number.isInteger(userB) || userA === userB) return;
+
+  const winnerPlayer =
+    (room.winnerPlayerId && room.players.get(room.winnerPlayerId)) || getFinishedPlayers(room)[0] || null;
+  if (!winnerPlayer || !Number.isInteger(Number(winnerPlayer.userId))) return;
+
+  const winnerUserId = Number(winnerPlayer.userId);
+  const loserUserId = winnerUserId === userA ? userB : winnerUserId === userB ? userA : null;
+  if (!loserUserId) return;
+
+  room.ratedResultApplying = true;
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const { rows } = await client.query(
+      `SELECT id, rating, rating_games, rating_wins, rating_losses
+       FROM users
+       WHERE id = ANY($1::bigint[])`,
+      [[winnerUserId, loserUserId]]
+    );
+    if (rows.length !== 2) {
+      await client.query("ROLLBACK");
+      return;
+    }
+    const byId = new Map(rows.map((r) => [Number(r.id), r]));
+    const winner = byId.get(winnerUserId);
+    const loser = byId.get(loserUserId);
+    if (!winner || !loser) {
+      await client.query("ROLLBACK");
+      return;
+    }
+
+    const expectedWinner = eloExpected(Number(winner.rating), Number(loser.rating));
+    const expectedLoser = eloExpected(Number(loser.rating), Number(winner.rating));
+    const winnerK = eloKFactor(Number(winner.rating_games));
+    const loserK = eloKFactor(Number(loser.rating_games));
+    const winnerNext = eloNextRating(Number(winner.rating), expectedWinner, 1, winnerK);
+    const loserNext = eloNextRating(Number(loser.rating), expectedLoser, 0, loserK);
+
+    await client.query(
+      `UPDATE users
+       SET rating = $2,
+           rating_games = rating_games + 1,
+           rating_wins = rating_wins + 1
+       WHERE id = $1`,
+      [winnerUserId, winnerNext]
+    );
+    await client.query(
+      `UPDATE users
+       SET rating = $2,
+           rating_games = rating_games + 1,
+           rating_losses = rating_losses + 1
+       WHERE id = $1`,
+      [loserUserId, loserNext]
+    );
+    await client.query("COMMIT");
+
+    room.ratedResultApplied = true;
+    room.ratedResult = {
+      winnerUserId,
+      loserUserId,
+      winnerDelta: winnerNext - Number(winner.rating),
+      loserDelta: loserNext - Number(loser.rating),
+      appliedAt: Date.now(),
+    };
+  } catch (err) {
+    try {
+      await client.query("ROLLBACK");
+    } catch {
+      // ignore rollback errors
+    }
+  } finally {
+    room.ratedResultApplying = false;
+    client.release();
+  }
+}
+
 function roomPublicState(room) {
   syncRoomState(room);
   removeStalePlayers(room, Date.now());
+  void applyRatedResultIfNeeded(room);
   const now = Date.now();
   if (!Array.isArray(room.reactionEvents)) {
     room.reactionEvents = [];
@@ -860,7 +979,7 @@ app.post("/auth/signup", async (req, res) => {
     const { rows } = await pool.query(
       `INSERT INTO users (username, nickname, password_hash)
        VALUES ($1, $2, $3)
-       RETURNING id, username, nickname`,
+       RETURNING id, username, nickname, rating, rating_games, rating_wins, rating_losses`,
       [username, nickname, passwordHash]
     );
     const user = rows[0];
@@ -885,7 +1004,7 @@ app.post("/auth/login", async (req, res) => {
   }
   try {
     const { rows } = await pool.query(
-      `SELECT id, username, nickname, password_hash
+      `SELECT id, username, nickname, password_hash, rating, rating_games, rating_wins, rating_losses
        FROM users
        WHERE username = $1
        LIMIT 1`,
@@ -902,7 +1021,15 @@ app.post("/auth/login", async (req, res) => {
     return res.json({
       ok: true,
       token,
-      user: { id: user.id, username: user.username, nickname: user.nickname },
+      user: {
+        id: user.id,
+        username: user.username,
+        nickname: user.nickname,
+        rating: user.rating,
+        rating_games: user.rating_games,
+        rating_wins: user.rating_wins,
+        rating_losses: user.rating_losses,
+      },
     });
   } catch (err) {
     return res.status(500).json({ ok: false, error: err.message });
@@ -916,6 +1043,10 @@ app.get("/auth/me", requireAuth, async (req, res) => {
       id: req.authUser.id,
       username: req.authUser.username,
       nickname: req.authUser.nickname,
+      rating: req.authUser.rating,
+      rating_games: req.authUser.rating_games,
+      rating_wins: req.authUser.rating_wins,
+      rating_losses: req.authUser.rating_losses,
     },
   });
 });
@@ -924,6 +1055,25 @@ app.post("/auth/logout", requireAuth, async (req, res) => {
   try {
     await pool.query(`DELETE FROM user_sessions WHERE token_hash = $1`, [req.authUser.tokenHash]);
     return res.json({ ok: true });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+app.get("/ratings/leaderboard", async (req, res) => {
+  const limitRaw = Number(req.query?.limit);
+  const offsetRaw = Number(req.query?.offset);
+  const limit = Number.isInteger(limitRaw) ? Math.max(1, Math.min(200, limitRaw)) : 100;
+  const offset = Number.isInteger(offsetRaw) ? Math.max(0, offsetRaw) : 0;
+  try {
+    const { rows } = await pool.query(
+      `SELECT id, username, nickname, rating, rating_games, rating_wins, rating_losses
+       FROM users
+       ORDER BY rating DESC, rating_wins DESC, rating_games DESC, id ASC
+       LIMIT $1 OFFSET $2`,
+      [limit, offset]
+    );
+    return res.json({ ok: true, users: rows });
   } catch (err) {
     return res.status(500).json({ ok: false, error: err.message });
   }
@@ -1841,11 +1991,12 @@ app.post("/race/finish", async (req, res) => {
   if (shouldFinishRace(room)) {
     room.state = "finished";
   }
+  await applyRatedResultIfNeeded(room);
 
   return res.json({ ok: true, room: roomPublicState(room) });
 });
 
-app.post("/race/leave", (req, res) => {
+app.post("/race/leave", async (req, res) => {
   const roomCode = String(req.body?.roomCode || "").trim().toUpperCase();
   const playerId = String(req.body?.playerId || "").trim();
   if (!roomCode || !playerId) {
@@ -1875,6 +2026,7 @@ app.post("/race/leave", (req, res) => {
       )[0];
       room.hostPlayerId = nextHost.playerId;
     }
+    await applyRatedResultIfNeeded(room);
     return res.json({ ok: true, room: roomPublicState(room) });
   }
 
@@ -1890,6 +2042,7 @@ app.post("/race/leave", (req, res) => {
   if (room.state === "playing" && shouldFinishRace(room)) {
     room.state = "finished";
   }
+  await applyRatedResultIfNeeded(room);
 
   return res.json({ ok: true, room: roomPublicState(room) });
 });

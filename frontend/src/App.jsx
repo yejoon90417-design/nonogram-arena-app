@@ -1,7 +1,7 @@
 ﻿import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import EmojiPicker from "emoji-picker-react";
 import { motion } from "framer-motion";
-import { ChevronDown, Eraser, Home, Lock, LogIn, Redo2, Sparkles, Undo2, User, UserPlus, Volume2, VolumeX } from "lucide-react";
+import { ChevronDown, Eraser, Home, Lock, LogIn, Redo2, Sparkles, Trophy, Undo2, User, UserPlus, Volume2, VolumeX } from "lucide-react";
 import "./App.css";
 
 const API_BASE = (import.meta.env.VITE_API_BASE_URL || "https://nonogram-api.onrender.com").replace(/\/$/, "");
@@ -134,7 +134,7 @@ function isRaceOnlyStatusMessage(message) {
 }
 
 function App() {
-  const [playMode, setPlayMode] = useState("menu"); // menu | single | multi | pvp | tutorial | auth
+  const [playMode, setPlayMode] = useState("menu"); // menu | single | multi | pvp | tutorial | auth | ranking
   const [selectedSize, setSelectedSize] = useState("25x25");
   const [puzzle, setPuzzle] = useState(null);
   const [cells, setCells] = useState([]); // 0 empty, 1 filled, 2 marked(X)
@@ -162,6 +162,8 @@ function App() {
   const [joinModalSource, setJoinModalSource] = useState("manual"); // manual | list
   const [publicRooms, setPublicRooms] = useState([]);
   const [roomsLoading, setRoomsLoading] = useState(false);
+  const [ratingUsers, setRatingUsers] = useState([]);
+  const [ratingLoading, setRatingLoading] = useState(false);
   const [isRematchLoading, setIsRematchLoading] = useState(false);
   const [authToken, setAuthToken] = useState(localStorage.getItem(AUTH_TOKEN_KEY) || "");
   const [authUser, setAuthUser] = useState(() => {
@@ -435,6 +437,7 @@ function App() {
   const isModePvp = playMode === "pvp";
   const isModeAuth = playMode === "auth";
   const isModeTutorial = playMode === "tutorial";
+  const isModeRanking = playMode === "ranking";
   const isLoggedIn = Boolean(authToken && authUser);
   const isInRaceRoom = Boolean(raceRoomCode);
   const isSingleSoloMode = (isModeSingle || isModeTutorial) && !isInRaceRoom;
@@ -849,6 +852,15 @@ function App() {
     setStatus("");
   };
 
+  const goRankingMode = () => {
+    if (pvpSearching && !isInRaceRoom) {
+      void cancelPvpQueue({ silent: true });
+    }
+    if (!isInRaceRoom) clearPuzzleViewState();
+    setPlayMode("ranking");
+    setStatus("");
+  };
+
   const backToMenu = async () => {
     if (isInRaceRoom) {
       setStatus("진행 중인 경기에서는 먼저 Leave를 눌러줘.");
@@ -992,6 +1004,20 @@ function App() {
       setStatus(err.message);
     } finally {
       setRoomsLoading(false);
+    }
+  };
+
+  const fetchRatingUsers = async () => {
+    setRatingLoading(true);
+    try {
+      const res = await fetch(`${API_BASE}/ratings/leaderboard?limit=200`);
+      const data = await parseJsonSafe(res);
+      if (!res.ok || !data.ok) throw new Error(data.error || "랭킹 조회 실패");
+      setRatingUsers(Array.isArray(data.users) ? data.users : []);
+    } catch (err) {
+      setStatus(err.message);
+    } finally {
+      setRatingLoading(false);
     }
   };
 
@@ -1885,6 +1911,26 @@ function App() {
   }, [isInRaceRoom, racePhase, raceState, racePlayerId]);
 
   useEffect(() => {
+    if (!isLoggedIn || !isModePvp || !isInRaceRoom || racePhase !== "finished") return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(`${API_BASE}/auth/me`, { headers: { ...authHeaders } });
+        const data = await parseJsonSafe(res);
+        if (!cancelled && res.ok && data.ok && data.user) {
+          setAuthUser(data.user);
+          localStorage.setItem(AUTH_USER_KEY, JSON.stringify(data.user));
+        }
+      } catch {
+        // ignore post-match auth refresh errors
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [isLoggedIn, isModePvp, isInRaceRoom, racePhase, authHeaders]);
+
+  useEffect(() => {
     if (!isRaceCountdown || countdownLeft == null) {
       countdownCueRef.current = -1;
       return;
@@ -1978,6 +2024,11 @@ function App() {
     if (isInRaceRoom || !isModeMulti) return;
     fetchPublicRooms();
   }, [isInRaceRoom, isModeMulti]);
+
+  useEffect(() => {
+    if (!isModeRanking || isInRaceRoom) return;
+    fetchRatingUsers();
+  }, [isModeRanking, isInRaceRoom]);
 
   useEffect(() => {
     if (isLoggedIn) return;
@@ -2130,7 +2181,7 @@ function App() {
               {isLoggedIn ? (
                 <>
                   <span className="userChip">
-                    {authUser.nickname} ({authUser.username})
+                    {authUser.nickname} ({authUser.username}) · R {Number(authUser.rating || 1500)}
                   </span>
                   <button onClick={logout}>로그아웃</button>
                 </>
@@ -2182,6 +2233,14 @@ function App() {
               >
                 {!isLoggedIn && <span className="modeTag">Login Required</span>}
                 <span className="modeName">PVP MATCH</span>
+              </motion.button>
+              <motion.button
+                whileHover={{ y: -3 }}
+                whileTap={{ scale: 0.98 }}
+                className="modeBtn modeRank"
+                onClick={goRankingMode}
+              >
+                <span className="modeName">RANKING</span>
               </motion.button>
             </div>
             <button className="menuTutorialBtn" onClick={startTutorialMode}>
@@ -2327,6 +2386,66 @@ function App() {
               </div>
             )}
           </div>
+        )}
+
+        {isModeRanking && (
+          <section className="rankingScreen">
+            <div className="rankingTopBar">
+              <div className="rankingTitle">
+                <Trophy size={18} /> 레이팅 랭킹
+              </div>
+              <div className="rankingActions">
+                <button className="singleActionBtn" onClick={fetchRatingUsers} disabled={ratingLoading}>
+                  {ratingLoading ? "LOADING..." : "REFRESH"}
+                </button>
+                <button className="singleHomeBtn" onClick={backToMenu}>
+                  HOME
+                </button>
+              </div>
+            </div>
+            <div className="rankingTableWrap">
+              <table className="rankingTable">
+                <thead>
+                  <tr>
+                    <th>#</th>
+                    <th>닉네임</th>
+                    <th>아이디</th>
+                    <th>레이팅</th>
+                    <th>전적</th>
+                    <th>승률</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {ratingUsers.length === 0 ? (
+                    <tr>
+                      <td colSpan={6} className="rankingEmpty">
+                        {ratingLoading ? "불러오는 중..." : "표시할 유저가 없습니다."}
+                      </td>
+                    </tr>
+                  ) : (
+                    ratingUsers.map((u, idx) => {
+                      const games = Number(u.rating_games || 0);
+                      const wins = Number(u.rating_wins || 0);
+                      const losses = Number(u.rating_losses || 0);
+                      const winRate = games > 0 ? Math.round((wins / games) * 100) : 0;
+                      return (
+                        <tr key={u.id}>
+                          <td>{idx + 1}</td>
+                          <td>{u.nickname}</td>
+                          <td>{u.username}</td>
+                          <td className="ratingScore">{Number(u.rating || 1500)}</td>
+                          <td>
+                            {wins}W {losses}L ({games})
+                          </td>
+                          <td>{winRate}%</td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </section>
         )}
 
         {isModeSingle && (

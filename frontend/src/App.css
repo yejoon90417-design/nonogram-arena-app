@@ -710,6 +710,11 @@
   color: #fff;
 }
 
+.modeRank {
+  background: linear-gradient(130deg, #5f45cc 0%, #8d72f1 100%);
+  color: #fff;
+}
+
 .modeName {
   font-size: clamp(2rem, 3.4vw, 3.5rem);
   font-weight: 900;
@@ -738,6 +743,83 @@
   height: 14px;
   background: #b7cadc;
   opacity: 0.48;
+}
+
+.rankingScreen {
+  margin-top: 1rem;
+  display: grid;
+  gap: 0.7rem;
+}
+
+.rankingTopBar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+}
+
+.rankingTitle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.42rem;
+  font-size: 1.7rem;
+  font-weight: 900;
+  color: #172f4a;
+}
+
+.rankingActions {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.rankingTableWrap {
+  border: 4px solid #173e62;
+  border-radius: 10px;
+  background: #fbfdff;
+  overflow-x: auto;
+}
+
+.rankingTable {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.rankingTable th,
+.rankingTable td {
+  border-bottom: 1px solid #cad9ea;
+  padding: 0.66rem 0.72rem;
+  text-align: left;
+  font-size: 1.02rem;
+}
+
+.rankingTable thead th {
+  background: #f2f8ff;
+  color: #1c3451;
+  font-weight: 900;
+}
+
+.rankingTable tbody tr:nth-child(1) .ratingScore {
+  color: #c67a00;
+}
+
+.rankingTable tbody tr:nth-child(2) .ratingScore {
+  color: #5f6774;
+}
+
+.rankingTable tbody tr:nth-child(3) .ratingScore {
+  color: #8f5a3c;
+}
+
+.ratingScore {
+  font-weight: 900;
+  color: #1c4469;
+}
+
+.rankingEmpty {
+  text-align: center;
+  color: #365575;
+  font-weight: 700;
 }
 
 .menuDustA {
@@ -1613,6 +1695,32 @@ button:disabled {
 
   .lobbyActions {
     grid-template-columns: 1fr;
+  }
+
+  .rankingTopBar {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .rankingActions {
+    width: 100%;
+  }
+
+  .rankingActions .singleActionBtn,
+  .rankingActions .singleHomeBtn {
+    min-width: 0;
+    flex: 1;
+  }
+
+  .rankingTitle {
+    font-size: 1.3rem;
+  }
+
+  .rankingTable th,
+  .rankingTable td {
+    font-size: 0.86rem;
+    padding: 0.44rem 0.38rem;
+    white-space: nowrap;
   }
 
   .lobbyCardBtn {
