@@ -2618,7 +2618,7 @@ function App() {
                     <h3>{L("1. 서비스 이용", "1. Service Use")}</h3>
                     <p>
                       {L(
-                        "본 서비스는 논노그램 게임 이용을 위한 서비스이며, 관련 법령과 운영 정책을 준수해야 합니다.",
+                        "본 서비스는 노노그램 게임 이용을 위한 서비스이며, 관련 법령과 운영 정책을 준수해야 합니다.",
                         "This service provides nonogram gameplay and must be used in compliance with laws and service rules."
                       )}
                     </p>
@@ -2642,8 +2642,8 @@ function App() {
                     <h3>{L("1. 수집 항목", "1. Data Collected")}</h3>
                     <p>
                       {L(
-                        "회원가입 시 아이디, 닉네임, 비밀번호(해시 처리)를 수집하며, 경기 기록과 채팅 데이터가 저장될 수 있습니다.",
-                        "At sign-up, username, nickname, and hashed password are collected. Match records and chat data may be stored."
+                        "회원가입 시 아이디, 닉네임, 비밀번호(해시 처리)를 수집하며, 경기 기록이 저장될 수 있습니다.",
+                        "At sign-up, username, nickname, and hashed password are collected. Match records may be stored."
                       )}
                     </p>
                     <h3>{L("2. 이용 목적", "2. Purpose of Use")}</h3>
