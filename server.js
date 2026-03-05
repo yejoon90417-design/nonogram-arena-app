@@ -308,8 +308,13 @@ function removeStalePlayers(room, now = Date.now()) {
   let changed = false;
 
   for (const [playerId, p] of room.players.entries()) {
-    const lastSeenAt = Number(p.lastSeenAt || 0);
-    if (!lastSeenAt || now - lastSeenAt <= PLAYER_STALE_MS) continue;
+    let lastSeenAt = Number(p.lastSeenAt || 0);
+    if (!lastSeenAt) {
+      const joinedAtMs = Date.parse(p.joinedAt || "") || room.createdAt || now;
+      lastSeenAt = joinedAtMs;
+      p.lastSeenAt = joinedAtMs;
+    }
+    if (now - lastSeenAt <= PLAYER_STALE_MS) continue;
 
     if (room.state === "lobby") {
       room.players.delete(playerId);
@@ -447,6 +452,8 @@ function roomPublicState(room) {
 
 function roomListItem(room) {
   syncRoomState(room);
+  removeStalePlayers(room, Date.now());
+  const activeCount = Array.from(room.players.values()).filter((p) => !p.disconnectedAt).length;
   return {
     roomCode: room.roomCode,
     roomTitle: room.roomTitle,
@@ -455,7 +462,7 @@ function roomListItem(room) {
     width: room.width,
     height: room.height,
     maxPlayers: room.maxPlayers,
-    currentPlayers: room.players.size,
+    currentPlayers: activeCount,
     state: room.state,
     createdAt: room.createdAt,
   };

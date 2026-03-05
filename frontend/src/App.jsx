@@ -142,6 +142,8 @@ function App() {
   const redoStackRef = useRef([]);
   const autoSolvedShownRef = useRef(false);
   const racePollRef = useRef(0);
+  const raceRoomCodeRef = useRef("");
+  const racePlayerIdRef = useRef("");
   const raceFinishedSentRef = useRef(false);
   const raceResultShownRef = useRef(false);
   const raceProgressLastSentRef = useRef(0);
@@ -161,10 +163,46 @@ function App() {
   }, [cells]);
 
   useEffect(() => {
+    raceRoomCodeRef.current = raceRoomCode;
+    racePlayerIdRef.current = racePlayerId;
+  }, [raceRoomCode, racePlayerId]);
+
+  useEffect(() => {
     return () => {
       if (frameRef.current) cancelAnimationFrame(frameRef.current);
       if (racePollRef.current) clearInterval(racePollRef.current);
       if (audioCtxRef.current) audioCtxRef.current.close();
+    };
+  }, []);
+
+  useEffect(() => {
+    const sendLeaveBeacon = () => {
+      const roomCode = raceRoomCodeRef.current;
+      const playerId = racePlayerIdRef.current;
+      if (!roomCode || !playerId) return;
+      const payload = JSON.stringify({ roomCode, playerId });
+      try {
+        if (navigator.sendBeacon) {
+          const blob = new Blob([payload], { type: "application/json" });
+          navigator.sendBeacon(`${API_BASE}/race/leave`, blob);
+          return;
+        }
+      } catch {
+        // fallback below
+      }
+      fetch(`${API_BASE}/race/leave`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: payload,
+        keepalive: true,
+      }).catch(() => {});
+    };
+
+    window.addEventListener("pagehide", sendLeaveBeacon);
+    window.addEventListener("beforeunload", sendLeaveBeacon);
+    return () => {
+      window.removeEventListener("pagehide", sendLeaveBeacon);
+      window.removeEventListener("beforeunload", sendLeaveBeacon);
     };
   }, []);
 
