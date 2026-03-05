@@ -1,6 +1,6 @@
 ﻿import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import EmojiPicker from "emoji-picker-react";
-import { AnimatePresence, motion } from "framer-motion";
+import { motion } from "framer-motion";
 import { ChevronDown, Eraser, Home, Lock, LogIn, Redo2, Sparkles, Undo2, User, UserPlus, Volume2, VolumeX } from "lucide-react";
 import "./App.css";
 
@@ -11,49 +11,40 @@ const AUTH_USER_KEY = "nonogram-auth-user";
 const TUTORIAL_SEEN_KEY = "nonogram-tutorial-seen-v1";
 const POOP_SFX_URL = `${import.meta.env.BASE_URL}sounds/poot.mp3`;
 
-const TUTORIAL_STEPS = [
-  {
-    title: "노노그램 목표",
-    body: "각 행/열 힌트를 보고 검은 칸 위치를 맞추면 퍼즐이 완성됩니다.",
-  },
-  {
-    title: "기본 조작",
-    body: "좌클릭은 칠하기, 우클릭은 X 표시입니다. 버튼을 누른 채 드래그하면 연속 입력됩니다.",
-  },
-  {
-    title: "힌트 읽는 법",
-    body: "숫자는 연속된 검은 칸 묶음 길이입니다. 예: 1 1은 한 칸, 띄고 한 칸을 뜻합니다.",
-  },
-  {
-    title: "도구 사용",
-    body: "UNDO/REDO/CLEAR로 실수를 복구할 수 있고, 힌트 숫자는 눌러 체크해 메모할 수 있습니다.",
-  },
-  {
-    title: "완료 조건",
-    body: "모든 행/열 힌트가 맞으면 자동으로 성공 처리됩니다. 이제 바로 시작해보세요.",
-  },
-];
+const TUTORIAL_PUZZLE = {
+  id: "tutorial-5x5",
+  width: 5,
+  height: 5,
+  row_hints: [[1, 1], [5], [5], [1, 1, 1], [3]],
+  col_hints: [[3], [3, 1], [4], [3, 1], [3]],
+};
 
-const TUTORIAL_SAMPLE_CELLS = [
-  [1, 1, 2, 2, 2],
-  [1, 2, 2, 1, 2],
-  [1, 1, 1, 2, 2],
-  [2, 2, 1, 2, 2],
-  [2, 1, 1, 2, 2],
-];
-const TUTORIAL_SAMPLE_ROW_HINTS = ["2", "1 1", "3", "1", "2"];
-const TUTORIAL_SAMPLE_COL_HINTS = ["3", "1 1 1", "3", "1", "0"];
-
-const TUTORIAL_PIXELS = [
-  { left: "8%", top: "18%", size: 8, delay: 0.1, duration: 3.6 },
-  { left: "16%", top: "68%", size: 12, delay: 0.4, duration: 4.1 },
-  { left: "28%", top: "32%", size: 10, delay: 0.9, duration: 3.5 },
-  { left: "37%", top: "78%", size: 7, delay: 0.2, duration: 3.9 },
-  { left: "52%", top: "22%", size: 11, delay: 0.6, duration: 4.4 },
-  { left: "66%", top: "62%", size: 9, delay: 0.5, duration: 3.8 },
-  { left: "74%", top: "28%", size: 12, delay: 0.8, duration: 4.2 },
-  { left: "81%", top: "74%", size: 8, delay: 0.3, duration: 3.7 },
-  { left: "88%", top: "14%", size: 9, delay: 0.7, duration: 4.3 },
+const TUTORIAL_TASKS = [
+  {
+    key: "leftFill",
+    title: "좌클릭으로 칸 1개 채우기",
+    detail: "퍼즐 칸을 한 번 클릭해서 검정 칸을 만들어보세요.",
+  },
+  {
+    key: "rightMark",
+    title: "우클릭으로 X 표시하기",
+    detail: "정답이 아닐 것 같은 칸에 X를 표시해보세요.",
+  },
+  {
+    key: "dragFill",
+    title: "누른 상태로 드래그하기",
+    detail: "클릭을 유지한 채 이동해서 여러 칸을 한 번에 칠해보세요.",
+  },
+  {
+    key: "undoUsed",
+    title: "UNDO로 되돌리기",
+    detail: "실수했다고 가정하고 한 번 되돌려보세요.",
+  },
+  {
+    key: "solved",
+    title: "5x5 퍼즐 완성하기",
+    detail: "힌트를 읽어 전체 퍼즐을 끝까지 맞춰보세요.",
+  },
 ];
 
 function toBase64Bits(cells, width, height) {
@@ -114,7 +105,7 @@ function isRaceOnlyStatusMessage(message) {
 }
 
 function App() {
-  const [playMode, setPlayMode] = useState("menu"); // menu | single | multi | auth
+  const [playMode, setPlayMode] = useState("menu"); // menu | single | multi | tutorial | auth
   const [selectedSize, setSelectedSize] = useState("25x25");
   const [puzzle, setPuzzle] = useState(null);
   const [cells, setCells] = useState([]); // 0 empty, 1 filled, 2 marked(X)
@@ -171,8 +162,12 @@ function App() {
   const [reactionFlights, setReactionFlights] = useState([]);
   const [nowMs, setNowMs] = useState(Date.now());
   const [soundOn, setSoundOn] = useState(true);
-  const [tutorialOpen, setTutorialOpen] = useState(false);
-  const [tutorialStep, setTutorialStep] = useState(0);
+  const [tutorialFlags, setTutorialFlags] = useState({
+    leftFill: false,
+    rightMark: false,
+    dragFill: false,
+    undoUsed: false,
+  });
   const boardRef = useRef(null);
   const canvasRef = useRef(null);
   const chatBodyRef = useRef(null);
@@ -205,7 +200,7 @@ function App() {
   const poopBufferRef = useRef(null);
   const poopLoadingRef = useRef(false);
   const poopAudioFallbackRef = useRef(null);
-  const tutorialBootedRef = useRef(false);
+  const tutorialCompleteShownRef = useRef(false);
   const deferredCells = useDeferredValue(cells);
 
   useEffect(() => {
@@ -373,19 +368,36 @@ function App() {
   const isModeSingle = playMode === "single";
   const isModeMulti = playMode === "multi";
   const isModeAuth = playMode === "auth";
+  const isModeTutorial = playMode === "tutorial";
   const isLoggedIn = Boolean(authToken && authUser);
   const isInRaceRoom = Boolean(raceRoomCode);
-  const isSingleSoloMode = isModeSingle && !isInRaceRoom;
+  const isSingleSoloMode = (isModeSingle || isModeTutorial) && !isInRaceRoom;
   const shouldShowPuzzleBoard = Boolean(
-    puzzle && ((isModeSingle && !isInRaceRoom) || (isModeMulti && isInRaceRoom))
+    puzzle && ((isSingleSoloMode && !isInRaceRoom) || (isModeMulti && isInRaceRoom))
   );
   const racePhase = raceState?.state || "idle";
   const isRaceLobby = isInRaceRoom && racePhase === "lobby";
   const isRaceCountdown = isInRaceRoom && racePhase === "countdown";
   const isRacePlaying = isInRaceRoom && racePhase === "playing";
   const isRaceFinished = isInRaceRoom && racePhase === "finished";
-  const tutorialCurrentStep = TUTORIAL_STEPS[tutorialStep] || TUTORIAL_STEPS[0];
-  const tutorialIsLastStep = tutorialStep >= TUTORIAL_STEPS.length - 1;
+  const tutorialSolved = isModeTutorial && isBoardCompleteByHints;
+  const tutorialProgress = useMemo(
+    () => ({
+      ...tutorialFlags,
+      solved: tutorialSolved,
+    }),
+    [tutorialFlags, tutorialSolved]
+  );
+  const tutorialCurrentTaskIndex = useMemo(() => {
+    if (!tutorialProgress.leftFill) return 0;
+    if (!tutorialProgress.rightMark) return 1;
+    if (!tutorialProgress.dragFill) return 2;
+    if (!tutorialProgress.undoUsed) return 3;
+    if (!tutorialProgress.solved) return 4;
+    return TUTORIAL_TASKS.length;
+  }, [tutorialProgress]);
+  const tutorialCurrentTask = TUTORIAL_TASKS[tutorialCurrentTaskIndex] || null;
+  const tutorialAllDone = tutorialCurrentTaskIndex >= TUTORIAL_TASKS.length;
 
   const myRacePlayer = useMemo(() => {
     if (!raceState || !racePlayerId) return null;
@@ -541,40 +553,47 @@ function App() {
     });
   };
 
-  const closeTutorial = (markAsSeen = true) => {
-    if (markAsSeen) {
-      try {
-        localStorage.setItem(TUTORIAL_SEEN_KEY, "1");
-      } catch {
-        // ignore localStorage errors
-      }
+  const markTutorialSeen = () => {
+    try {
+      localStorage.setItem(TUTORIAL_SEEN_KEY, "1");
+    } catch {
+      // ignore localStorage errors
     }
-    setTutorialOpen(false);
   };
 
-  const openTutorial = () => {
+  const startTutorialMode = () => {
     if (isInRaceRoom) {
       setStatus("방 대전 중에는 튜토리얼을 시작할 수 없습니다.");
       return;
     }
-    setTutorialStep(0);
-    setTutorialOpen(true);
+    clearPuzzleViewState();
+    setTutorialFlags({
+      leftFill: false,
+      rightMark: false,
+      dragFill: false,
+      undoUsed: false,
+    });
+    tutorialCompleteShownRef.current = false;
+    setSelectedSize("5x5");
+    setPlayMode("tutorial");
+    initializePuzzle(TUTORIAL_PUZZLE, {
+      resume: false,
+      startTimer: true,
+      message: "튜토리얼 시작: 좌클릭으로 칸을 칠해보세요.",
+    });
     playSfx("ui");
   };
 
-  const prevTutorialStep = () => {
-    setTutorialStep((prev) => Math.max(0, prev - 1));
-    playSfx("ui");
-  };
-
-  const nextTutorialStep = () => {
-    if (tutorialIsLastStep) {
-      closeTutorial(true);
-      setStatus("튜토리얼 완료! 이제 바로 플레이해보세요.");
-      playSfx("ui");
-      return;
-    }
-    setTutorialStep((prev) => Math.min(TUTORIAL_STEPS.length - 1, prev + 1));
+  const skipTutorial = async () => {
+    markTutorialSeen();
+    tutorialCompleteShownRef.current = false;
+    setTutorialFlags({
+      leftFill: false,
+      rightMark: false,
+      dragFill: false,
+      undoUsed: false,
+    });
+    await backToMenu();
     playSfx("ui");
   };
 
@@ -605,6 +624,9 @@ function App() {
     applySnapshot(prev.slice());
     setCanUndo(undoStackRef.current.length > 0);
     setCanRedo(true);
+    if (isModeTutorial) {
+      setTutorialFlags((prevFlags) => ({ ...prevFlags, undoUsed: true }));
+    }
     playSfx("ui");
   };
 
@@ -690,6 +712,13 @@ function App() {
     resetHistory();
     setElapsedSec(0);
     setTimerRunning(false);
+    setTutorialFlags({
+      leftFill: false,
+      rightMark: false,
+      dragFill: false,
+      undoUsed: false,
+    });
+    tutorialCompleteShownRef.current = false;
   };
 
   const goSingleMode = () => {
@@ -1199,6 +1228,9 @@ function App() {
 
   const paintLine = (fromIndex, toIndex, value) => {
     if (!puzzle) return;
+    if (isModeTutorial && value === 1 && fromIndex !== toIndex) {
+      setTutorialFlags((prevFlags) => ({ ...prevFlags, dragFill: true }));
+    }
     const width = puzzle.width;
     const x0 = fromIndex % width;
     const y0 = Math.floor(fromIndex / width);
@@ -1254,6 +1286,14 @@ function App() {
     if (!dragRef.current) {
       strokeBaseRef.current = cellValuesRef.current.slice();
       strokeChangedRef.current = false;
+    }
+    if (isModeTutorial) {
+      if (buttonType === "left" && paintValue === 1) {
+        setTutorialFlags((prevFlags) => ({ ...prevFlags, leftFill: true }));
+      }
+      if (buttonType === "right" && paintValue === 2) {
+        setTutorialFlags((prevFlags) => ({ ...prevFlags, rightMark: true }));
+      }
     }
     dragRef.current = { button: buttonType, paintValue };
     lastPaintIndexRef.current = index;
@@ -1485,7 +1525,9 @@ function App() {
     if (isBoardCompleteByHints && !autoSolvedShownRef.current) {
       autoSolvedShownRef.current = true;
       setTimerRunning(false);
-      if (isInRaceRoom && isRacePlaying) {
+      if (isModeTutorial) {
+        // Tutorial completion status is handled by tutorial progress effect.
+      } else if (isInRaceRoom && isRacePlaying) {
         setStatus("완주! 다른 플레이어 결과 대기중...");
       } else {
         setStatus("Success! Puzzle solved.");
@@ -1495,7 +1537,7 @@ function App() {
     if (!isBoardCompleteByHints) {
       autoSolvedShownRef.current = false;
     }
-  }, [isBoardCompleteByHints, puzzle, isInRaceRoom, isRacePlaying]);
+  }, [isBoardCompleteByHints, puzzle, isInRaceRoom, isRacePlaying, isModeTutorial]);
 
   useEffect(() => {
     if (!isInRaceRoom || racePhase !== "finished" || !raceState?.winnerPlayerId || raceResultShownRef.current) return;
@@ -1565,36 +1607,20 @@ function App() {
   }, [isInRaceRoom, status]);
 
   useEffect(() => {
-    if (tutorialBootedRef.current) return;
-    tutorialBootedRef.current = true;
-    try {
-      if (localStorage.getItem(TUTORIAL_SEEN_KEY) === "1") return;
-    } catch {
-      // ignore localStorage errors
+    if (!isModeTutorial) return;
+    if (tutorialAllDone) {
+      if (!tutorialCompleteShownRef.current) {
+        tutorialCompleteShownRef.current = true;
+        markTutorialSeen();
+        setStatus("튜토리얼 완료! 이제 싱글/멀티에서 바로 플레이해보세요.");
+        playSfx("win");
+      }
+      return;
     }
-    const timer = window.setTimeout(() => {
-      if (!raceRoomCodeRef.current) {
-        setTutorialStep(0);
-        setTutorialOpen(true);
-      }
-    }, 700);
-    return () => window.clearTimeout(timer);
-  }, []);
-
-  useEffect(() => {
-    if (!tutorialOpen) return;
-    const onKeyDown = (event) => {
-      if (event.key === "Escape") {
-        closeTutorial(true);
-      } else if (event.key === "ArrowRight" || event.key === "Enter") {
-        nextTutorialStep();
-      } else if (event.key === "ArrowLeft") {
-        prevTutorialStep();
-      }
-    };
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [tutorialOpen, tutorialStep, tutorialIsLastStep, nextTutorialStep]);
+    if (tutorialCurrentTask) {
+      setStatus(`튜토리얼 미션: ${tutorialCurrentTask.title}`);
+    }
+  }, [isModeTutorial, tutorialAllDone, tutorialCurrentTask]);
 
   useEffect(() => {
     const el = chatBodyRef.current;
@@ -1718,8 +1744,8 @@ function App() {
           </div>
           {!isModeAuth && (
             <div className="topAuth">
-              <button className="ghostBtn tutorialTriggerBtn" onClick={openTutorial}>
-                <Sparkles size={15} /> Tutorial
+              <button className="ghostBtn tutorialTriggerBtn" onClick={startTutorialMode}>
+                <Sparkles size={15} /> {isModeTutorial ? "Restart Tutorial" : "Tutorial"}
               </button>
               {isLoggedIn ? (
                 <>
@@ -1769,6 +1795,9 @@ function App() {
                 <span className="modeName">MULTI PLAYER</span>
               </motion.button>
             </div>
+            <button className="menuTutorialBtn" onClick={startTutorialMode}>
+              HOW TO PLAY
+            </button>
             <div className="menuDust menuDustA" />
             <div className="menuDust menuDustB" />
             <div className="menuDust menuDustC" />
@@ -1934,6 +1963,52 @@ function App() {
               HOME
             </button>
           </div>
+        )}
+
+        {isModeTutorial && (
+          <section className="tutorialStage">
+            <div className="tutorialStageHead">
+              <div>
+                <h2>Interactive Tutorial</h2>
+                <p>직접 조작하면서 규칙을 익히는 5x5 연습 모드입니다.</p>
+              </div>
+              <div className="tutorialStageActions">
+                <button onClick={startTutorialMode}>다시 시작</button>
+                <button onClick={skipTutorial}>건너뛰기</button>
+                <button onClick={backToMenu}>종료</button>
+              </div>
+            </div>
+            <div className="tutorialMissionCard">
+              <div className="tutorialMissionTop">
+                <strong>
+                  {tutorialAllDone
+                    ? "모든 튜토리얼 미션 완료"
+                    : `현재 미션 ${tutorialCurrentTaskIndex + 1}/${TUTORIAL_TASKS.length}`}
+                </strong>
+                <span className={`tutorialMissionBadge ${tutorialAllDone ? "done" : ""}`}>
+                  {tutorialAllDone ? "CLEAR" : "IN PROGRESS"}
+                </span>
+              </div>
+              {!tutorialAllDone && tutorialCurrentTask && (
+                <p className="tutorialMissionLead">{tutorialCurrentTask.detail}</p>
+              )}
+              <div className="tutorialChecklist">
+                {TUTORIAL_TASKS.map((task, idx) => {
+                  const done = Boolean(tutorialProgress[task.key]);
+                  const active = !tutorialAllDone && idx === tutorialCurrentTaskIndex;
+                  return (
+                    <div key={task.key} className={`tutorialChecklistItem ${done ? "done" : ""} ${active ? "active" : ""}`}>
+                      <span className="tutorialChecklistMark">{done ? "✓" : "○"}</span>
+                      <div>
+                        <b>{task.title}</b>
+                        <small>{task.detail}</small>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </section>
         )}
 
         {isModeMulti && (
@@ -2543,94 +2618,6 @@ function App() {
           </div>
         )}
 
-        <AnimatePresence>
-          {tutorialOpen && !isModeAuth && (
-            <motion.div
-              className="tutorialOverlay"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.2 }}
-            >
-              <div className="tutorialBackdrop" />
-              <div className="tutorialPixelField" aria-hidden="true">
-                {TUTORIAL_PIXELS.map((pixel, idx) => (
-                  <span
-                    key={`tutorial-pixel-${idx}`}
-                    className="tutorialPixel"
-                    style={{
-                      left: pixel.left,
-                      top: pixel.top,
-                      width: `${pixel.size}px`,
-                      height: `${pixel.size}px`,
-                      animationDelay: `${pixel.delay}s`,
-                      animationDuration: `${pixel.duration}s`,
-                    }}
-                  />
-                ))}
-              </div>
-
-              <motion.aside
-                className="tutorialCard"
-                initial={{ y: 26, opacity: 0 }}
-                animate={{ y: 0, opacity: 1 }}
-                exit={{ y: 16, opacity: 0 }}
-                transition={{ duration: 0.22, ease: "easeOut" }}
-              >
-                <div className="tutorialCardHead">
-                  <span className="tutorialBadge">
-                    STEP {tutorialStep + 1}/{TUTORIAL_STEPS.length}
-                  </span>
-                  <button className="tutorialSkipBtn" onClick={() => closeTutorial(true)}>
-                    Skip
-                  </button>
-                </div>
-                <h3>{tutorialCurrentStep.title}</h3>
-                <p>{tutorialCurrentStep.body}</p>
-
-                <div className="tutorialSampleWrap">
-                  <div className="tutorialSampleTitle">5x5 예시 보드</div>
-                  <div className="tutorialSampleBoard">
-                    <div className="tutorialSampleColHints">
-                      {TUTORIAL_SAMPLE_COL_HINTS.map((hint, colIdx) => (
-                        <span key={`tutorial-col-hint-${colIdx}`}>{hint}</span>
-                      ))}
-                    </div>
-                    <div className="tutorialSampleMain">
-                      <div className="tutorialSampleRowHints">
-                        {TUTORIAL_SAMPLE_ROW_HINTS.map((hint, rowIdx) => (
-                          <span key={`tutorial-row-hint-${rowIdx}`}>{hint}</span>
-                        ))}
-                      </div>
-                      <div className="tutorialSampleGrid">
-                        {TUTORIAL_SAMPLE_CELLS.flatMap((row, y) =>
-                          row.map((cell, x) => (
-                            <span
-                              key={`tutorial-cell-${y}-${x}`}
-                              className={`tutorialCell ${
-                                cell === 1 ? "fill" : cell === 2 ? "mark" : "empty"
-                              }`}
-                            >
-                              {cell === 2 ? "×" : ""}
-                            </span>
-                          ))
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-                <div className="tutorialActions">
-                  <button onClick={prevTutorialStep} disabled={tutorialStep === 0}>
-                    Back
-                  </button>
-                  <button className="tutorialNextBtn" onClick={nextTutorialStep}>
-                    {tutorialIsLastStep ? "Finish" : "Next"}
-                  </button>
-                </div>
-              </motion.aside>
-            </motion.div>
-          )}
-        </AnimatePresence>
       </motion.section>
     </main>
   );

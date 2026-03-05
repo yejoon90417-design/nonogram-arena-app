@@ -539,6 +539,20 @@
   left: 33%;
 }
 
+.menuTutorialBtn {
+  margin-top: 1.3rem;
+  min-height: 56px;
+  min-width: min(290px, 84vw);
+  border: 3px solid #1f5a8f;
+  border-radius: 12px;
+  background: linear-gradient(130deg, #f4fbff 0%, #dfefff 100%);
+  color: #163f69;
+  font-size: 1.2rem;
+  font-weight: 900;
+  letter-spacing: 0.04em;
+  z-index: 2;
+}
+
 .authBar {
   margin-top: 0.6rem;
   display: flex;
@@ -1171,230 +1185,148 @@ button:disabled {
   }
 }
 
-.tutorialOverlay {
-  position: fixed;
-  inset: 0;
-  z-index: 70;
-  pointer-events: none;
-}
-
-.tutorialBackdrop {
-  position: absolute;
-  inset: 0;
-  background:
-    radial-gradient(circle at 50% 40%, rgba(105, 183, 255, 0.14), rgba(105, 183, 255, 0) 56%),
-    rgba(7, 14, 25, 0.66);
-}
-
-.tutorialPixelField {
-  position: absolute;
-  inset: 0;
-  overflow: hidden;
-}
-
-.tutorialPixel {
-  position: absolute;
-  display: block;
-  background: linear-gradient(180deg, #7bcfff 0%, #368ed3 100%);
-  box-shadow: 0 0 0 1px rgba(22, 47, 83, 0.55), 0 8px 14px rgba(7, 18, 34, 0.36);
-  opacity: 0.72;
-  animation-name: tutorialPixelFloat;
-  animation-timing-function: ease-in-out;
-  animation-iteration-count: infinite;
-}
-
-@keyframes tutorialPixelFloat {
-  0%,
-  100% {
-    transform: translate3d(0, 0, 0) scale(1);
-    opacity: 0.45;
-  }
-  50% {
-    transform: translate3d(0, -13px, 0) scale(1.08);
-    opacity: 0.95;
-  }
-}
-
-.tutorialCard {
-  pointer-events: auto;
-  position: fixed;
-  left: 50%;
-  bottom: 22px;
-  transform: translateX(-50%);
-  width: min(540px, calc(100vw - 24px));
-  border: 2px solid #235589;
-  border-radius: 16px;
-  background:
-    linear-gradient(135deg, rgba(249, 253, 255, 0.98), rgba(230, 243, 255, 0.98)),
-    #f5fbff;
-  box-shadow: 0 20px 46px rgba(8, 24, 43, 0.35);
-  padding: 0.92rem 1rem;
+.tutorialStage {
+  margin-top: 0.85rem;
   display: grid;
-  gap: 0.52rem;
+  gap: 0.72rem;
 }
 
-.tutorialCardHead {
+.tutorialStageHead {
+  border: 2px solid #1d4f84;
+  border-radius: 14px;
+  background: linear-gradient(135deg, #f6fcff 0%, #dcebfb 100%);
+  padding: 0.8rem 0.9rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.8rem;
+  flex-wrap: wrap;
+}
+
+.tutorialStageHead h2 {
+  margin: 0;
+  color: #132f50;
+  font-size: 1.45rem;
+}
+
+.tutorialStageHead p {
+  margin: 0.18rem 0 0;
+  color: #2f4a67;
+  font-size: 0.94rem;
+}
+
+.tutorialStageActions {
+  display: flex;
+  gap: 0.45rem;
+  flex-wrap: wrap;
+}
+
+.tutorialStageActions button {
+  min-height: 40px;
+  border: 2px solid #1f5f96;
+  border-radius: 10px;
+  background: #f4faff;
+  color: #1d4f7f;
+  font-weight: 900;
+}
+
+.tutorialMissionCard {
+  border: 2px solid #1f5d93;
+  border-radius: 14px;
+  background:
+    linear-gradient(180deg, rgba(238, 248, 255, 0.96), rgba(225, 239, 252, 0.96)),
+    #eef6ff;
+  padding: 0.72rem 0.82rem;
+  display: grid;
+  gap: 0.55rem;
+}
+
+.tutorialMissionTop {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 0.5rem;
 }
 
-.tutorialBadge {
+.tutorialMissionTop strong {
+  color: #123659;
+  font-size: 1rem;
+}
+
+.tutorialMissionBadge {
   display: inline-flex;
   align-items: center;
-  border: 1px solid #7db2de;
+  border: 1px solid #8fb3d8;
   border-radius: 999px;
-  padding: 0.14rem 0.56rem;
-  background: #e6f2ff;
-  color: #114275;
-  font-size: 0.79rem;
+  padding: 0.16rem 0.56rem;
+  background: #f2f8ff;
+  color: #315679;
+  font-size: 0.77rem;
   font-weight: 900;
   letter-spacing: 0.04em;
 }
 
-.tutorialSkipBtn {
-  min-height: 34px;
-  border-radius: 999px;
-  border: 1px solid #9eb8d4;
-  background: #f5f9ff;
-  color: #305073;
-  font-size: 0.84rem;
-  font-weight: 800;
+.tutorialMissionBadge.done {
+  border-color: #5ea97f;
+  background: #ebfbf2;
+  color: #1f7948;
 }
 
-.tutorialCard h3 {
+.tutorialMissionLead {
   margin: 0;
-  color: #102544;
-  font-size: clamp(1.02rem, 2.2vw, 1.32rem);
+  color: #274666;
+  font-size: 0.9rem;
 }
 
-.tutorialCard p {
-  margin: 0;
-  color: #2d435f;
-  font-size: 0.96rem;
-  line-height: 1.45;
-}
-
-.tutorialSampleWrap {
-  border: 1px solid #9fc0e1;
-  border-radius: 12px;
-  background: linear-gradient(180deg, #edf6ff 0%, #e3effb 100%);
-  padding: 0.5rem 0.6rem;
+.tutorialChecklist {
   display: grid;
-  gap: 0.35rem;
+  gap: 0.38rem;
 }
 
-.tutorialSampleTitle {
-  color: #163c68;
-  font-size: 0.86rem;
-  font-weight: 900;
-}
-
-.tutorialSampleBoard {
+.tutorialChecklistItem {
+  border: 1px solid #a5c2de;
+  border-radius: 10px;
+  background: #f8fcff;
+  padding: 0.36rem 0.48rem;
   display: grid;
-  gap: 0.18rem;
-}
-
-.tutorialSampleColHints {
-  padding-left: 68px;
-  display: grid;
-  grid-template-columns: repeat(5, 1fr);
-  gap: 2px;
-}
-
-.tutorialSampleColHints span {
-  min-height: 18px;
-  display: grid;
-  place-items: center;
-  font-size: 0.66rem;
-  font-weight: 900;
-  color: #1d3454;
-}
-
-.tutorialSampleMain {
-  display: grid;
-  grid-template-columns: 64px auto;
-  gap: 4px;
+  grid-template-columns: 24px 1fr;
+  gap: 0.45rem;
   align-items: start;
 }
 
-.tutorialSampleRowHints {
-  display: grid;
-  grid-template-rows: repeat(5, 1fr);
-  gap: 2px;
+.tutorialChecklistItem.active {
+  border-color: #2f79b7;
+  box-shadow: 0 0 0 2px rgba(63, 142, 204, 0.2);
 }
 
-.tutorialSampleRowHints span {
-  min-height: 18px;
-  display: grid;
-  place-items: center end;
-  padding-right: 3px;
-  font-size: 0.66rem;
+.tutorialChecklistItem.done {
+  border-color: #68a987;
+  background: #f0fbf5;
+}
+
+.tutorialChecklistMark {
+  color: #2b5987;
+  font-size: 1rem;
   font-weight: 900;
-  color: #1d3454;
+  line-height: 1.3;
 }
 
-.tutorialSampleGrid {
-  width: max-content;
-  display: grid;
-  grid-template-columns: repeat(5, 20px);
-  grid-template-rows: repeat(5, 20px);
-  border: 2px solid #143053;
+.tutorialChecklistItem.done .tutorialChecklistMark {
+  color: #1e8a53;
 }
 
-.tutorialCell {
-  display: grid;
-  place-items: center;
-  border-right: 1px solid #4a6583;
-  border-bottom: 1px solid #4a6583;
-  font-size: 14px;
-  line-height: 1;
-  font-weight: 900;
-}
-
-.tutorialCell:nth-child(5n) {
-  border-right: 0;
-}
-
-.tutorialCell:nth-last-child(-n + 5) {
-  border-bottom: 0;
-}
-
-.tutorialCell.fill {
-  background: #1a1a1a;
-}
-
-.tutorialCell.mark {
-  background: #f8fcff;
-  color: #8f0000;
-}
-
-.tutorialCell.empty {
-  background: #f8fcff;
-}
-
-.tutorialActions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 0.48rem;
-}
-
-.tutorialActions button {
-  min-height: 40px;
-  min-width: 108px;
-  border-radius: 10px;
-  border: 1px solid #9ab8d8;
-  background: #f5f9ff;
-  color: #28486c;
+.tutorialChecklistItem b {
+  display: block;
+  color: #173d65;
   font-size: 0.9rem;
   font-weight: 900;
 }
 
-.tutorialActions .tutorialNextBtn {
-  border-color: #1b5d8d;
-  background: linear-gradient(130deg, #1b8bd2 0%, #5ac2ff 100%);
-  color: #fff;
+.tutorialChecklistItem small {
+  display: block;
+  color: #4a6280;
+  font-size: 0.8rem;
+  margin-top: 0.08rem;
 }
 
 @media (max-width: 760px) {
@@ -1417,6 +1349,13 @@ button:disabled {
     min-height: 128px;
     border-width: 5px;
     box-shadow: 6px 6px 0 rgba(24, 50, 88, 0.24);
+  }
+
+  .menuTutorialBtn {
+    min-height: 46px;
+    min-width: min(220px, 78vw);
+    font-size: 1rem;
+    border-width: 2px;
   }
 
   .modeName {
@@ -1573,34 +1512,39 @@ button:disabled {
     font-size: 58px;
   }
 
-  .tutorialCard {
-    bottom: 10px;
-    width: calc(100vw - 14px);
-    padding: 0.78rem 0.8rem;
-    border-radius: 12px;
+  .tutorialStageHead {
+    padding: 0.62rem 0.64rem;
+    border-radius: 10px;
   }
 
-  .tutorialActions button {
-    min-width: 86px;
-    min-height: 36px;
+  .tutorialStageHead h2 {
+    font-size: 1.1rem;
+  }
+
+  .tutorialStageHead p {
+    font-size: 0.82rem;
+  }
+
+  .tutorialStageActions button {
+    min-height: 34px;
+    border-width: 1px;
+    font-size: 0.8rem;
+  }
+
+  .tutorialMissionTop strong {
+    font-size: 0.9rem;
+  }
+
+  .tutorialChecklistItem {
+    grid-template-columns: 20px 1fr;
+    padding: 0.28rem 0.34rem;
+  }
+
+  .tutorialChecklistItem b {
     font-size: 0.84rem;
   }
 
-  .tutorialSampleColHints {
-    padding-left: 56px;
-  }
-
-  .tutorialSampleMain {
-    grid-template-columns: 52px auto;
-  }
-
-  .tutorialSampleGrid {
-    grid-template-columns: repeat(5, 17px);
-    grid-template-rows: repeat(5, 17px);
-  }
-
-  .tutorialSampleRowHints span,
-  .tutorialSampleColHints span {
-    font-size: 0.58rem;
+  .tutorialChecklistItem small {
+    font-size: 0.76rem;
   }
 }
