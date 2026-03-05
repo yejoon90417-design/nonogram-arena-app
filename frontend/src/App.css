@@ -1215,16 +1215,6 @@ button:disabled {
   }
 }
 
-.tutorialSpotlight {
-  position: fixed;
-  border-radius: 12px;
-  border: 2px solid #9fdfff;
-  box-shadow:
-    0 0 0 200vmax rgba(7, 14, 25, 0.64),
-    0 0 0 4px rgba(82, 177, 242, 0.34),
-    0 18px 44px rgba(8, 20, 38, 0.56);
-}
-
 .tutorialCard {
   pointer-events: auto;
   position: fixed;
@@ -1286,14 +1276,102 @@ button:disabled {
   line-height: 1.45;
 }
 
-.tutorialHint {
-  border: 1px dashed #93b5d6;
-  border-radius: 10px;
-  background: rgba(224, 239, 255, 0.78);
-  color: #23466d;
-  font-size: 0.84rem;
-  font-weight: 700;
-  padding: 0.4rem 0.52rem;
+.tutorialSampleWrap {
+  border: 1px solid #9fc0e1;
+  border-radius: 12px;
+  background: linear-gradient(180deg, #edf6ff 0%, #e3effb 100%);
+  padding: 0.5rem 0.6rem;
+  display: grid;
+  gap: 0.35rem;
+}
+
+.tutorialSampleTitle {
+  color: #163c68;
+  font-size: 0.86rem;
+  font-weight: 900;
+}
+
+.tutorialSampleBoard {
+  display: grid;
+  gap: 0.18rem;
+}
+
+.tutorialSampleColHints {
+  padding-left: 68px;
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 2px;
+}
+
+.tutorialSampleColHints span {
+  min-height: 18px;
+  display: grid;
+  place-items: center;
+  font-size: 0.66rem;
+  font-weight: 900;
+  color: #1d3454;
+}
+
+.tutorialSampleMain {
+  display: grid;
+  grid-template-columns: 64px auto;
+  gap: 4px;
+  align-items: start;
+}
+
+.tutorialSampleRowHints {
+  display: grid;
+  grid-template-rows: repeat(5, 1fr);
+  gap: 2px;
+}
+
+.tutorialSampleRowHints span {
+  min-height: 18px;
+  display: grid;
+  place-items: center end;
+  padding-right: 3px;
+  font-size: 0.66rem;
+  font-weight: 900;
+  color: #1d3454;
+}
+
+.tutorialSampleGrid {
+  width: max-content;
+  display: grid;
+  grid-template-columns: repeat(5, 20px);
+  grid-template-rows: repeat(5, 20px);
+  border: 2px solid #143053;
+}
+
+.tutorialCell {
+  display: grid;
+  place-items: center;
+  border-right: 1px solid #4a6583;
+  border-bottom: 1px solid #4a6583;
+  font-size: 14px;
+  line-height: 1;
+  font-weight: 900;
+}
+
+.tutorialCell:nth-child(5n) {
+  border-right: 0;
+}
+
+.tutorialCell:nth-last-child(-n + 5) {
+  border-bottom: 0;
+}
+
+.tutorialCell.fill {
+  background: #1a1a1a;
+}
+
+.tutorialCell.mark {
+  background: #f8fcff;
+  color: #8f0000;
+}
+
+.tutorialCell.empty {
+  background: #f8fcff;
 }
 
 .tutorialActions {
@@ -1506,5 +1584,23 @@ button:disabled {
     min-width: 86px;
     min-height: 36px;
     font-size: 0.84rem;
+  }
+
+  .tutorialSampleColHints {
+    padding-left: 56px;
+  }
+
+  .tutorialSampleMain {
+    grid-template-columns: 52px auto;
+  }
+
+  .tutorialSampleGrid {
+    grid-template-columns: repeat(5, 17px);
+    grid-template-rows: repeat(5, 17px);
+  }
+
+  .tutorialSampleRowHints span,
+  .tutorialSampleColHints span {
+    font-size: 0.58rem;
   }
 }

@@ -13,58 +13,36 @@ const POOP_SFX_URL = `${import.meta.env.BASE_URL}sounds/poot.mp3`;
 
 const TUTORIAL_STEPS = [
   {
-    title: "Welcome, Nonogram Arena",
-    body: "이 튜토리얼은 게임 핵심 흐름을 빠르게 익히게 해줍니다.",
-    ensureMode: "menu",
+    title: "노노그램 목표",
+    body: "각 행/열 힌트를 보고 검은 칸 위치를 맞추면 퍼즐이 완성됩니다.",
   },
   {
-    title: "싱글 플레이 시작",
-    body: "먼저 SINGLE PLAYER 버튼으로 퍼즐 기본 조작을 배웁니다.",
-    ensureMode: "menu",
-    target: '[data-tutorial="menu-single"]',
+    title: "기본 조작",
+    body: "좌클릭은 칠하기, 우클릭은 X 표시입니다. 버튼을 누른 채 드래그하면 연속 입력됩니다.",
   },
   {
-    title: "랜덤 퍼즐 로드",
-    body: "사이즈를 고르고 RANDOM LOAD를 누르면 새 퍼즐이 열립니다.",
-    ensureMode: "single",
-    target: '[data-tutorial="single-controls"]',
+    title: "힌트 읽는 법",
+    body: "숫자는 연속된 검은 칸 묶음 길이입니다. 예: 1 1은 한 칸, 띄고 한 칸을 뜻합니다.",
   },
   {
-    title: "핵심 조작",
-    body: "좌클릭=검정 칠하기, 우클릭=X, 클릭 드래그로 연속 입력이 됩니다.",
-    ensureMode: "single",
-    target: '[data-tutorial="single-board"]',
+    title: "도구 사용",
+    body: "UNDO/REDO/CLEAR로 실수를 복구할 수 있고, 힌트 숫자는 눌러 체크해 메모할 수 있습니다.",
   },
   {
-    title: "복구 도구",
-    body: "하단 UNDO / REDO / CLEAR로 실수 복구가 가능합니다.",
-    ensureMode: "single",
-    target: '[data-tutorial="single-tools"]',
-  },
-  {
-    title: "멀티 진입",
-    body: "이제 MULTI PLAYER로 방 대전 모드로 이동합니다.",
-    ensureMode: "menu",
-    target: '[data-tutorial="menu-multi"]',
-  },
-  {
-    title: "로비 액션",
-    body: "방 만들기, 코드 참가, 목록 갱신으로 상대를 찾습니다.",
-    ensureMode: "multi",
-    target: '[data-tutorial="lobby-actions"]',
-  },
-  {
-    title: "방 리스트 규칙",
-    body: "오픈방은 즉시 입장, 비밀방은 비밀번호만 입력해서 입장합니다.",
-    ensureMode: "multi",
-    target: '[data-tutorial="lobby-table"]',
-  },
-  {
-    title: "튜토리얼 완료",
-    body: "준비 완료. 즐거운 기록 경쟁을 시작하세요!",
-    ensureMode: "menu",
+    title: "완료 조건",
+    body: "모든 행/열 힌트가 맞으면 자동으로 성공 처리됩니다. 이제 바로 시작해보세요.",
   },
 ];
+
+const TUTORIAL_SAMPLE_CELLS = [
+  [1, 1, 2, 2, 2],
+  [1, 2, 2, 1, 2],
+  [1, 1, 1, 2, 2],
+  [2, 2, 1, 2, 2],
+  [2, 1, 1, 2, 2],
+];
+const TUTORIAL_SAMPLE_ROW_HINTS = ["2", "1 1", "3", "1", "2"];
+const TUTORIAL_SAMPLE_COL_HINTS = ["3", "1 1 1", "3", "1", "0"];
 
 const TUTORIAL_PIXELS = [
   { left: "8%", top: "18%", size: 8, delay: 0.1, duration: 3.6 },
@@ -195,7 +173,6 @@ function App() {
   const [soundOn, setSoundOn] = useState(true);
   const [tutorialOpen, setTutorialOpen] = useState(false);
   const [tutorialStep, setTutorialStep] = useState(0);
-  const [tutorialRect, setTutorialRect] = useState(null);
   const boardRef = useRef(null);
   const canvasRef = useRef(null);
   const chatBodyRef = useRef(null);
@@ -229,8 +206,6 @@ function App() {
   const poopLoadingRef = useRef(false);
   const poopAudioFallbackRef = useRef(null);
   const tutorialBootedRef = useRef(false);
-  const tutorialPromptedLoginRef = useRef(false);
-  const tutorialAutoLoadStepRef = useRef(-1);
   const deferredCells = useDeferredValue(cells);
 
   useEffect(() => {
@@ -411,7 +386,6 @@ function App() {
   const isRaceFinished = isInRaceRoom && racePhase === "finished";
   const tutorialCurrentStep = TUTORIAL_STEPS[tutorialStep] || TUTORIAL_STEPS[0];
   const tutorialIsLastStep = tutorialStep >= TUTORIAL_STEPS.length - 1;
-  const tutorialMissingTarget = Boolean(tutorialOpen && tutorialCurrentStep?.target && !tutorialRect);
 
   const myRacePlayer = useMemo(() => {
     if (!raceState || !racePlayerId) return null;
@@ -576,9 +550,6 @@ function App() {
       }
     }
     setTutorialOpen(false);
-    setTutorialRect(null);
-    tutorialPromptedLoginRef.current = false;
-    tutorialAutoLoadStepRef.current = -1;
   };
 
   const openTutorial = () => {
@@ -587,10 +558,7 @@ function App() {
       return;
     }
     setTutorialStep(0);
-    setTutorialRect(null);
     setTutorialOpen(true);
-    tutorialPromptedLoginRef.current = false;
-    tutorialAutoLoadStepRef.current = -1;
     playSfx("ui");
   };
 
@@ -1615,101 +1583,6 @@ function App() {
 
   useEffect(() => {
     if (!tutorialOpen) return;
-    const step = TUTORIAL_STEPS[tutorialStep];
-    if (!step) return;
-    if (playMode === "auth") {
-      setPlayMode("menu");
-      return;
-    }
-    if (isInRaceRoom) return;
-
-    if (step.ensureMode === "multi" && !isLoggedIn) {
-      if (!tutorialPromptedLoginRef.current) {
-        tutorialPromptedLoginRef.current = true;
-        setShowNeedLoginPopup(true);
-      }
-      setPlayMode("menu");
-      return;
-    }
-
-    if (step.ensureMode === "menu" && playMode !== "menu") {
-      setPlayMode("menu");
-      return;
-    }
-    if (step.ensureMode === "single" && playMode !== "single") {
-      setPlayMode("single");
-      return;
-    }
-    if (step.ensureMode === "multi" && playMode !== "multi") {
-      setPlayMode("multi");
-    }
-  }, [tutorialOpen, tutorialStep, playMode, isInRaceRoom, isLoggedIn]);
-
-  useEffect(() => {
-    if (!tutorialOpen) return;
-    if (!tutorialCurrentStep || tutorialCurrentStep.ensureMode !== "single") return;
-    if (playMode !== "single" || isInRaceRoom || puzzle || isLoading) return;
-    if (tutorialAutoLoadStepRef.current === tutorialStep) return;
-    tutorialAutoLoadStepRef.current = tutorialStep;
-    loadRandomBySize();
-  }, [tutorialOpen, tutorialCurrentStep, tutorialStep, playMode, isInRaceRoom, puzzle, isLoading, selectedSize]);
-
-  useEffect(() => {
-    if (!tutorialOpen) {
-      setTutorialRect(null);
-      return;
-    }
-    const targetSelector = tutorialCurrentStep?.target;
-    if (!targetSelector) {
-      setTutorialRect(null);
-      return;
-    }
-
-    let rafId = 0;
-    const updateRect = () => {
-      const target = document.querySelector(targetSelector);
-      if (!target) {
-        setTutorialRect(null);
-        return;
-      }
-      const rect = target.getBoundingClientRect();
-      const pad = 10;
-      setTutorialRect({
-        left: Math.max(8, rect.left - pad),
-        top: Math.max(8, rect.top - pad),
-        width: rect.width + pad * 2,
-        height: rect.height + pad * 2,
-      });
-    };
-    const schedule = () => {
-      if (rafId) cancelAnimationFrame(rafId);
-      rafId = requestAnimationFrame(updateRect);
-    };
-
-    schedule();
-    const intervalId = window.setInterval(schedule, 180);
-    window.addEventListener("resize", schedule);
-    window.addEventListener("scroll", schedule, true);
-    return () => {
-      window.clearInterval(intervalId);
-      if (rafId) cancelAnimationFrame(rafId);
-      window.removeEventListener("resize", schedule);
-      window.removeEventListener("scroll", schedule, true);
-    };
-  }, [
-    tutorialOpen,
-    tutorialCurrentStep,
-    playMode,
-    isLoggedIn,
-    puzzle?.id,
-    publicRooms.length,
-    showCreateModal,
-    showJoinModal,
-    showNeedLoginPopup,
-  ]);
-
-  useEffect(() => {
-    if (!tutorialOpen) return;
     const onKeyDown = (event) => {
       if (event.key === "Escape") {
         closeTutorial(true);
@@ -2679,7 +2552,7 @@ function App() {
               exit={{ opacity: 0 }}
               transition={{ duration: 0.2 }}
             >
-              {!tutorialRect && <div className="tutorialBackdrop" />}
+              <div className="tutorialBackdrop" />
               <div className="tutorialPixelField" aria-hidden="true">
                 {TUTORIAL_PIXELS.map((pixel, idx) => (
                   <span
@@ -2696,20 +2569,6 @@ function App() {
                   />
                 ))}
               </div>
-
-              {tutorialRect && (
-                <motion.div
-                  className="tutorialSpotlight"
-                  initial={false}
-                  animate={{
-                    left: tutorialRect.left,
-                    top: tutorialRect.top,
-                    width: tutorialRect.width,
-                    height: tutorialRect.height,
-                  }}
-                  transition={{ type: "spring", stiffness: 260, damping: 28, mass: 0.5 }}
-                />
-              )}
 
               <motion.aside
                 className="tutorialCard"
@@ -2728,9 +2587,38 @@ function App() {
                 </div>
                 <h3>{tutorialCurrentStep.title}</h3>
                 <p>{tutorialCurrentStep.body}</p>
-                {tutorialMissingTarget && (
-                  <div className="tutorialHint">해당 화면 요소를 준비중입니다. Next로 계속 진행할 수 있습니다.</div>
-                )}
+
+                <div className="tutorialSampleWrap">
+                  <div className="tutorialSampleTitle">5x5 예시 보드</div>
+                  <div className="tutorialSampleBoard">
+                    <div className="tutorialSampleColHints">
+                      {TUTORIAL_SAMPLE_COL_HINTS.map((hint, colIdx) => (
+                        <span key={`tutorial-col-hint-${colIdx}`}>{hint}</span>
+                      ))}
+                    </div>
+                    <div className="tutorialSampleMain">
+                      <div className="tutorialSampleRowHints">
+                        {TUTORIAL_SAMPLE_ROW_HINTS.map((hint, rowIdx) => (
+                          <span key={`tutorial-row-hint-${rowIdx}`}>{hint}</span>
+                        ))}
+                      </div>
+                      <div className="tutorialSampleGrid">
+                        {TUTORIAL_SAMPLE_CELLS.flatMap((row, y) =>
+                          row.map((cell, x) => (
+                            <span
+                              key={`tutorial-cell-${y}-${x}`}
+                              className={`tutorialCell ${
+                                cell === 1 ? "fill" : cell === 2 ? "mark" : "empty"
+                              }`}
+                            >
+                              {cell === 2 ? "×" : ""}
+                            </span>
+                          ))
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
                 <div className="tutorialActions">
                   <button onClick={prevTutorialStep} disabled={tutorialStep === 0}>
                     Back
