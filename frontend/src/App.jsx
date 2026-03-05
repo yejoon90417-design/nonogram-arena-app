@@ -8,6 +8,7 @@ const API_BASE = (import.meta.env.VITE_API_BASE_URL || "https://nonogram-api.onr
 const MAX_HISTORY = 200;
 const AUTH_TOKEN_KEY = "nonogram-auth-token";
 const AUTH_USER_KEY = "nonogram-auth-user";
+const LANG_KEY = "nonogram-ui-lang";
 const TUTORIAL_SEEN_KEY = "nonogram-tutorial-seen-v1";
 const POOP_SFX_URL = `${import.meta.env.BASE_URL}sounds/poot.mp3`;
 const PVP_SIZE_KEYS = ["5x5", "10x10", "15x15", "20x20", "25x25"];
@@ -26,6 +27,7 @@ const TUTORIAL_GUIDE_STEPS = [
     key: "row2full",
     title: "2번째 줄 힌트 5",
     prompt: "힌트가 5라서 이 줄은 빈칸 없이 꽉 찹니다. 2번째 줄을 모두 채우세요.",
+    promptEn: "Hint 5 means the entire row is filled. Paint all cells in row 2.",
     rowHighlights: [1],
     fill: [5, 6, 7, 8, 9],
   },
@@ -33,6 +35,7 @@ const TUTORIAL_GUIDE_STEPS = [
     key: "row3full",
     title: "3번째 줄 힌트 5",
     prompt: "위쪽이 이미 확정돼 경계가 잡혔어요. 3번째 줄도 전부 채우면 됩니다.",
+    promptEn: "The boundary is already fixed from above, so row 3 is also fully filled.",
     rowHighlights: [2],
     fill: [10, 11, 12, 13, 14],
   },
@@ -40,6 +43,7 @@ const TUTORIAL_GUIDE_STEPS = [
     key: "row4gaps",
     title: "4번째 줄 힌트 1 1 1",
     prompt: "힌트 1-1-1은 각 칸이 떨어져야 하니, 사이칸(2칸·4칸)을 X로 막아주세요.",
+    promptEn: "For clue 1-1-1, each filled cell must be separated. Mark gaps (2nd, 4th) with X.",
     rowHighlights: [3],
     mark: [16, 18],
     cellHighlights: [16, 18],
@@ -48,6 +52,7 @@ const TUTORIAL_GUIDE_STEPS = [
     key: "row4fills",
     title: "4번째 줄 채우기",
     prompt: "막힌 칸 사이로 가능한 자리가 확정됐습니다. 1·3·5칸을 채우세요.",
+    promptEn: "Now only the valid slots remain between blocked cells. Fill 1st, 3rd, and 5th.",
     rowHighlights: [3],
     fill: [15, 17, 19],
     cellHighlights: [15, 17, 19],
@@ -56,6 +61,7 @@ const TUTORIAL_GUIDE_STEPS = [
     key: "row1pair",
     title: "1번째 줄 힌트 1 1",
     prompt: "아래 줄이 이미 막고 있어서 더 내려갈 수 없어요. 1번째 줄은 가운데 두 칸만 채우면 1,1이 맞습니다.",
+    promptEn: "The row below blocks further expansion, so only the two center cells fit clue 1,1.",
     rowHighlights: [0],
     fill: [1, 3],
     cellHighlights: [1, 3],
@@ -64,6 +70,7 @@ const TUTORIAL_GUIDE_STEPS = [
     key: "row5three",
     title: "5번째 줄 힌트 3",
     prompt: "세로 힌트와 맞춰보면 마지막 줄은 중앙 3칸만 가능합니다. 가운데 3칸을 채우세요.",
+    promptEn: "Cross-checking column clues, only the middle three cells are possible in the last row.",
     rowHighlights: [4],
     fill: [21, 22, 23],
     cellHighlights: [21, 22, 23],
@@ -72,6 +79,7 @@ const TUTORIAL_GUIDE_STEPS = [
     key: "finish",
     title: "완성",
     prompt: "좋아요. 논리대로 모두 맞췄고 퍼즐이 완성됐습니다.",
+    promptEn: "Great. You solved the puzzle logically and completed it.",
     requireSolved: true,
   },
 ];
@@ -129,7 +137,11 @@ function isRaceOnlyStatusMessage(message) {
     message === "승리하였습니다." ||
     message === "패배하였습니다." ||
     message === "완주! 다른 플레이어 결과 대기중..." ||
-    message === "5초 후 시작합니다."
+    message === "5초 후 시작합니다." ||
+    message === "Victory." ||
+    message === "Defeat." ||
+    message === "Finished! Waiting for other players..." ||
+    message === "Starting in 5 seconds."
   );
 }
 
@@ -165,6 +177,10 @@ function App() {
   const [ratingUsers, setRatingUsers] = useState([]);
   const [ratingLoading, setRatingLoading] = useState(false);
   const [isRematchLoading, setIsRematchLoading] = useState(false);
+  const [lang, setLang] = useState(() => {
+    const saved = localStorage.getItem(LANG_KEY);
+    return saved === "en" ? "en" : "ko";
+  });
   const [authToken, setAuthToken] = useState(localStorage.getItem(AUTH_TOKEN_KEY) || "");
   const [authUser, setAuthUser] = useState(() => {
     try {
@@ -246,6 +262,11 @@ function App() {
   const poopAudioFallbackRef = useRef(null);
   const tutorialCompleteShownRef = useRef(false);
   const deferredCells = useDeferredValue(cells);
+  const L = (ko, en) => (lang === "ko" ? ko : en);
+
+  useEffect(() => {
+    localStorage.setItem(LANG_KEY, lang);
+  }, [lang]);
 
   useEffect(() => {
     cellValuesRef.current = cells;
@@ -455,6 +476,13 @@ function App() {
   const isRaceCountdown = isInRaceRoom && racePhase === "countdown";
   const isRacePlaying = isInRaceRoom && racePhase === "playing";
   const isRaceFinished = isInRaceRoom && racePhase === "finished";
+  const racePhaseLabel = useMemo(() => {
+    if (racePhase === "lobby") return L("로비", "Lobby");
+    if (racePhase === "countdown") return L("카운트다운", "Countdown");
+    if (racePhase === "playing") return L("진행 중", "Playing");
+    if (racePhase === "finished") return L("경기 종료", "Finished");
+    return L("대기 중", "Idle");
+  }, [racePhase, lang]);
   const tutorialSolved = isModeTutorial && isBoardCompleteByHints;
   const tutorialStepDone = (step) => {
     if (!step) return false;
@@ -471,6 +499,11 @@ function App() {
   }, [isModeTutorial, cells, tutorialSolved]);
   const tutorialCurrentTask = TUTORIAL_GUIDE_STEPS[tutorialCurrentTaskIndex] || null;
   const tutorialAllDone = tutorialCurrentTaskIndex >= TUTORIAL_GUIDE_STEPS.length;
+  const tutorialCurrentPrompt = tutorialAllDone
+    ? L("완성!", "Complete!")
+    : lang === "ko"
+      ? tutorialCurrentTask?.prompt
+      : tutorialCurrentTask?.promptEn || tutorialCurrentTask?.prompt;
   const tutorialHighlightRows = isModeTutorial && tutorialCurrentTask?.rowHighlights ? tutorialCurrentTask.rowHighlights : [];
   const tutorialHighlightCells =
     isModeTutorial && tutorialCurrentTask?.cellHighlights ? tutorialCurrentTask.cellHighlights : [];
@@ -485,10 +518,10 @@ function App() {
   const raceResultText = useMemo(() => {
     if (!raceState?.winner) return "";
     if (raceState.winner.playerId === racePlayerId) {
-      return "승리하였습니다";
+      return L("승리하였습니다", "Victory");
     }
-    return "패배하였습니다";
-  }, [raceState, racePlayerId]);
+    return L("패배하였습니다", "Defeat");
+  }, [raceState, racePlayerId, lang]);
   const roomTitleText = raceState?.roomTitle || "";
   const chatMessages = Array.isArray(raceState?.chatMessages) ? raceState.chatMessages : [];
   const reactionEvents = Array.isArray(raceState?.reactionEvents) ? raceState.reactionEvents : [];
@@ -684,7 +717,7 @@ function App() {
 
   const startTutorialMode = () => {
     if (isInRaceRoom) {
-      setStatus("방 대전 중에는 튜토리얼을 시작할 수 없습니다.");
+      setStatus(L("방 대전 중에는 튜토리얼을 시작할 수 없습니다.", "Tutorial is unavailable during a live match."));
       return;
     }
     setStatus("");
@@ -881,7 +914,7 @@ function App() {
 
   const backToMenu = async () => {
     if (isInRaceRoom) {
-      setStatus("진행 중인 경기에서는 먼저 Leave를 눌러줘.");
+      setStatus(L("진행 중인 경기에서는 먼저 Leave를 눌러줘.", "Leave the current match first."));
       return;
     }
     if (pvpSearching) {
@@ -912,15 +945,15 @@ function App() {
     const password = signupPassword;
     const fieldErrors = { username: "", nickname: "", password: "" };
     if (!username || !nickname || !password) {
-      setSignupError("아이디, 닉네임, 비밀번호를 모두 입력해줘.");
-      if (!username) fieldErrors.username = "아이디를 입력해줘.";
-      if (!nickname) fieldErrors.nickname = "닉네임을 입력해줘.";
-      if (!password) fieldErrors.password = "비밀번호를 입력해줘.";
+      setSignupError(L("아이디, 닉네임, 비밀번호를 모두 입력해줘.", "Please fill in username, nickname, and password."));
+      if (!username) fieldErrors.username = L("아이디를 입력해줘.", "Enter your username.");
+      if (!nickname) fieldErrors.nickname = L("닉네임을 입력해줘.", "Enter your nickname.");
+      if (!password) fieldErrors.password = L("비밀번호를 입력해줘.", "Enter your password.");
       setSignupFieldErrors(fieldErrors);
       return;
     }
     if (!/[A-Za-z]/.test(password) || !/\d/.test(password) || password.length < 8) {
-      fieldErrors.password = "영문+숫자 포함 8자 이상";
+      fieldErrors.password = L("영문+숫자 포함 8자 이상", "At least 8 chars with letters and numbers");
       setSignupFieldErrors(fieldErrors);
       return;
     }
@@ -934,19 +967,19 @@ function App() {
         body: JSON.stringify({ username, nickname, password }),
       });
       const data = await parseJsonSafe(res);
-      if (!res.ok || !data.ok) throw new Error(data.error || "회원가입 실패");
+      if (!res.ok || !data.ok) throw new Error(data.error || L("회원가입 실패", "Sign-up failed"));
       storeAuth(data.token, data.user);
       setSignupUsername("");
       setSignupNickname("");
       setSignupPassword("");
-      setStatus(`환영합니다, ${data.user.nickname}!`);
+      setStatus(L(`환영합니다, ${data.user.nickname}!`, `Welcome, ${data.user.nickname}!`));
       setPlayMode(authReturnMode === "multi" || authReturnMode === "pvp" ? authReturnMode : "menu");
     } catch (err) {
       const msg = String(err.message || "");
       if (msg.includes("password must be 8+ chars")) {
-        setSignupFieldErrors((prev) => ({ ...prev, password: "영문+숫자 포함 8자 이상" }));
+        setSignupFieldErrors((prev) => ({ ...prev, password: L("영문+숫자 포함 8자 이상", "At least 8 chars with letters and numbers") }));
       } else if (msg.includes("username must be 3-24 chars")) {
-        setSignupFieldErrors((prev) => ({ ...prev, username: "아이디는 3~24자" }));
+        setSignupFieldErrors((prev) => ({ ...prev, username: L("아이디는 3~24자", "Username must be 3-24 chars") }));
       } else {
         setSignupError(msg);
       }
@@ -960,9 +993,9 @@ function App() {
     const password = loginPassword;
     const fieldErrors = { username: "", password: "" };
     if (!username || !password) {
-      setLoginError("아이디와 비밀번호를 입력해줘.");
-      if (!username) fieldErrors.username = "아이디를 입력해줘.";
-      if (!password) fieldErrors.password = "비밀번호를 입력해줘.";
+      setLoginError(L("아이디와 비밀번호를 입력해줘.", "Please enter username and password."));
+      if (!username) fieldErrors.username = L("아이디를 입력해줘.", "Enter your username.");
+      if (!password) fieldErrors.password = L("비밀번호를 입력해줘.", "Enter your password.");
       setLoginFieldErrors(fieldErrors);
       return;
     }
@@ -976,16 +1009,16 @@ function App() {
         body: JSON.stringify({ username, password }),
       });
       const data = await parseJsonSafe(res);
-      if (!res.ok || !data.ok) throw new Error(data.error || "로그인 실패");
+      if (!res.ok || !data.ok) throw new Error(data.error || L("로그인 실패", "Login failed"));
       storeAuth(data.token, data.user);
       setLoginUsername("");
       setLoginPassword("");
-      setStatus(`로그인 완료: ${data.user.nickname}`);
+      setStatus(L(`로그인 완료: ${data.user.nickname}`, `Logged in: ${data.user.nickname}`));
       setPlayMode(authReturnMode === "multi" || authReturnMode === "pvp" ? authReturnMode : "menu");
     } catch (err) {
       const msg = String(err.message || "");
       if (msg.includes("Invalid credentials")) {
-        setLoginError("아이디 또는 비밀번호가 올바르지 않습니다.");
+        setLoginError(L("아이디 또는 비밀번호가 올바르지 않습니다.", "Invalid username or password."));
       } else {
         setLoginError(msg);
       }
@@ -1007,7 +1040,7 @@ function App() {
     }
     await leaveRace();
     clearAuth();
-    setStatus("로그아웃 되었습니다.");
+    setStatus(L("로그아웃 되었습니다.", "Logged out."));
   };
 
   const fetchPublicRooms = async () => {
@@ -1030,7 +1063,7 @@ function App() {
     try {
       const res = await fetch(`${API_BASE}/ratings/leaderboard?limit=200`);
       const data = await parseJsonSafe(res);
-      if (!res.ok || !data.ok) throw new Error(data.error || "랭킹 조회 실패");
+      if (!res.ok || !data.ok) throw new Error(data.error || L("랭킹 조회 실패", "Failed to load ranking"));
       setRatingUsers(Array.isArray(data.users) ? data.users : []);
     } catch (err) {
       setStatus(err.message);
@@ -1108,12 +1141,12 @@ function App() {
   };
 
   const pvpCancelReasonText = (reason) => {
-    if (reason === "accept_timeout") return "매칭 수락 시간이 지나 자동 취소되었습니다.";
-    if (reason === "cancelled_by_user") return "상대가 수락을 취소해 매칭이 종료되었습니다.";
-    if (reason === "no_puzzle_for_selected_size") return "선택 가능한 퍼즐이 없어 매칭이 취소되었습니다.";
-    if (reason === "puzzle_solution_missing") return "퍼즐 데이터 오류로 매칭이 취소되었습니다.";
-    if (reason === "invalid_selected_size") return "매칭 설정 오류로 매칭이 취소되었습니다.";
-    return "매칭이 취소되었습니다.";
+    if (reason === "accept_timeout") return L("매칭 수락 시간이 지나 자동 취소되었습니다.", "Match cancelled: accept timeout.");
+    if (reason === "cancelled_by_user") return L("상대가 수락을 취소해 매칭이 종료되었습니다.", "Match cancelled: opponent declined.");
+    if (reason === "no_puzzle_for_selected_size") return L("선택 가능한 퍼즐이 없어 매칭이 취소되었습니다.", "Match cancelled: no puzzle available.");
+    if (reason === "puzzle_solution_missing") return L("퍼즐 데이터 오류로 매칭이 취소되었습니다.", "Match cancelled: puzzle data error.");
+    if (reason === "invalid_selected_size") return L("매칭 설정 오류로 매칭이 취소되었습니다.", "Match cancelled: invalid match settings.");
+    return L("매칭이 취소되었습니다.", "Match cancelled.");
   };
 
   const resetPvpQueueState = () => {
@@ -1158,7 +1191,7 @@ function App() {
     initializePuzzle(data.puzzle, {
       resume: false,
       startTimer: false,
-      message: "매칭 성공! 5초 카운트다운 후 시작됩니다.",
+      message: L("매칭 성공! 5초 카운트다운 후 시작됩니다.", "Match found! Starting after a 5-second countdown."),
     });
     setPlayMode("pvp");
     startRacePolling(data.roomCode, data.playerId);
@@ -1229,7 +1262,7 @@ function App() {
       return;
     }
     if (isInRaceRoom) {
-      setStatus("이미 경기 방에 참여 중입니다.");
+      setStatus(L("이미 경기 방에 참여 중입니다.", "You are already in a match room."));
       return;
     }
     if (pvpSearching) return;
@@ -1241,12 +1274,16 @@ function App() {
         body: JSON.stringify({}),
       });
       const data = await parseJsonSafe(res);
-      if (!res.ok || !data.ok) throw new Error(data.error || "매칭 대기열 참가 실패");
+      if (!res.ok || !data.ok) throw new Error(data.error || L("매칭 대기열 참가 실패", "Failed to join matchmaking queue"));
       const nextState = applyPvpStatusPayload(data);
       if (nextState === "ready" || nextState === "cancelled") {
         return;
       }
-      setStatus(nextState === "matching" ? "매칭 성사! 수락 버튼을 눌러주세요." : "상대를 찾는 중...");
+      setStatus(
+        nextState === "matching"
+          ? L("매칭 성사! 수락 버튼을 눌러주세요.", "Match found! Press accept.")
+          : L("상대를 찾는 중...", "Searching for opponent...")
+      );
       setPlayMode("pvp");
       startPvpPolling(String(data.ticketId || ""));
       playSfx("ui");
@@ -1274,7 +1311,7 @@ function App() {
       // ignore cancellation errors
     }
     resetPvpQueueState();
-    if (!silent) setStatus("매칭 대기를 취소했습니다.");
+    if (!silent) setStatus(L("매칭 대기를 취소했습니다.", "Matchmaking cancelled."));
   };
 
   const acceptPvpMatch = async () => {
@@ -1288,7 +1325,7 @@ function App() {
         body: JSON.stringify({ ticketId }),
       });
       const data = await parseJsonSafe(res);
-      if (!res.ok || !data.ok) throw new Error(data.error || "수락 처리 실패");
+      if (!res.ok || !data.ok) throw new Error(data.error || L("수락 처리 실패", "Failed to accept match"));
       applyPvpStatusPayload(data);
     } catch (err) {
       setStatus(err.message);
@@ -1311,7 +1348,7 @@ function App() {
         body: JSON.stringify(body),
       });
       const data = await parseJsonSafe(res);
-      if (!res.ok || !data.ok) throw new Error(data.error || "밴 처리 실패");
+      if (!res.ok || !data.ok) throw new Error(data.error || L("밴 처리 실패", "Failed to submit ban"));
       applyPvpStatusPayload(data);
     } catch (err) {
       setStatus(err.message);
@@ -1405,7 +1442,7 @@ function App() {
     const visibility = createVisibility === "private" ? "private" : "public";
     const password = createPassword.trim();
     if (!isLoggedIn) {
-      setStatus("멀티플레이는 로그인 후 이용 가능해.");
+      setStatus(L("멀티플레이는 로그인 후 이용 가능해.", "Multiplayer is available after login."));
       return;
     }
     const [wStr, hStr] = createSize.split("x");
@@ -1416,7 +1453,7 @@ function App() {
       return;
     }
     if (visibility === "private" && !password) {
-      setStatus("비밀방 비밀번호를 입력해줘.");
+      setStatus(L("비밀방 비밀번호를 입력해줘.", "Enter a password for the private room."));
       return;
     }
     setIsLoading(true);
@@ -1459,11 +1496,11 @@ function App() {
     const code = String(roomCodeArg || "").trim().toUpperCase();
     const password = String(passwordArg || "").trim();
     if (!isLoggedIn) {
-      setStatus("멀티플레이는 로그인 후 이용 가능해.");
+      setStatus(L("멀티플레이는 로그인 후 이용 가능해.", "Multiplayer is available after login."));
       return;
     }
     if (!code) {
-      setStatus("방 코드를 입력해줘.");
+      setStatus(L("방 코드를 입력해줘.", "Enter a room code."));
       return;
     }
     setIsLoading(true);
@@ -1527,7 +1564,7 @@ function App() {
       if (!res.ok || !data.ok) throw new Error(data.error || "Failed to start race.");
       applyRaceRoomState(data.room);
       playSfx("ui");
-      setStatus("5초 후 시작합니다.");
+      setStatus(L("5초 후 시작합니다.", "Starting in 5 seconds."));
     } catch (err) {
       setStatus(err.message);
     }
@@ -1549,7 +1586,7 @@ function App() {
         initializePuzzle(data.puzzle, {
           resume: false,
           startTimer: false,
-          message: "새 게임 준비 완료. 다시 Ready를 눌러 시작해.",
+          message: L("새 게임 준비 완료. 다시 Ready를 눌러 시작해.", "New game is ready. Press Ready again."),
         });
         playSfx("ui");
       }
@@ -1616,7 +1653,7 @@ function App() {
         body: JSON.stringify({ roomCode: raceRoomCode, playerId: racePlayerId, text }),
       });
       const data = await parseJsonSafe(res);
-      if (!res.ok || !data.ok) throw new Error(data.error || "채팅 전송 실패");
+      if (!res.ok || !data.ok) throw new Error(data.error || L("채팅 전송 실패", "Failed to send chat"));
       applyRaceRoomState(data.room);
       setChatInput("");
       setShowEmojiPicker(false);
@@ -1637,7 +1674,7 @@ function App() {
         body: JSON.stringify({ roomCode: raceRoomCode, playerId: racePlayerId, targetPlayerId, emoji }),
       });
       const data = await parseJsonSafe(res);
-      if (!res.ok || !data.ok) throw new Error(data.error || "리액션 전송 실패");
+      if (!res.ok || !data.ok) throw new Error(data.error || L("리액션 전송 실패", "Failed to send reaction"));
       applyRaceRoomState(data.room);
     } catch (err) {
       setStatus(err.message);
@@ -1968,7 +2005,7 @@ function App() {
       if (isModeTutorial) {
         // Tutorial completion status is handled by tutorial progress effect.
       } else if (isInRaceRoom && isRacePlaying) {
-        setStatus("완주! 다른 플레이어 결과 대기중...");
+        setStatus(L("완주! 다른 플레이어 결과 대기중...", "Finished! Waiting for other players..."));
       } else {
         setStatus("Success! Puzzle solved.");
       }
@@ -1983,10 +2020,10 @@ function App() {
     if (!isInRaceRoom || racePhase !== "finished" || !raceState?.winnerPlayerId || raceResultShownRef.current) return;
     raceResultShownRef.current = true;
     if (raceState.winnerPlayerId === racePlayerId) {
-      setStatus("승리하였습니다.");
+      setStatus(L("승리하였습니다.", "Victory."));
       playSfx("win");
     } else {
-      setStatus("패배하였습니다.");
+      setStatus(L("패배하였습니다.", "Defeat."));
       setTimerRunning(false);
       playSfx("lose");
     }
@@ -2105,7 +2142,7 @@ function App() {
         initializePuzzle(data.puzzle, {
           resume: false,
           startTimer: false,
-          message: `방 퍼즐이 변경됨: ${data.puzzle.id}`,
+          message: L(`방 퍼즐이 변경됨: ${data.puzzle.id}`, `Room puzzle changed: ${data.puzzle.id}`),
         });
       } catch {
         // ignore transient sync errors
@@ -2262,7 +2299,7 @@ function App() {
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.35, ease: "easeOut" }}
-        className={`panel ${isModeMenu || isModeAuth ? "panelMenu" : ""}`}
+        className={`panel ${isModeMenu || isModeAuth ? "panelMenu" : ""} ${lang === "en" ? "langEn" : "langKo"}`}
       >
         <div className="topBar">
           <div className="brandWrap">
@@ -2272,14 +2309,22 @@ function App() {
           {!isModeAuth && (
             <div className="topAuth">
               <button className="ghostBtn tutorialTriggerBtn" onClick={startTutorialMode}>
-                <Sparkles size={15} /> {isModeTutorial ? "Restart Tutorial" : "Tutorial"}
+                <Sparkles size={15} /> {isModeTutorial ? L("튜토리얼 다시 시작", "Restart Tutorial") : L("튜토리얼", "Tutorial")}
               </button>
+              <div className="langSwitch" role="group" aria-label="Language switch">
+                <button type="button" className={lang === "ko" ? "active" : ""} onClick={() => setLang("ko")}>
+                  KO
+                </button>
+                <button type="button" className={lang === "en" ? "active" : ""} onClick={() => setLang("en")}>
+                  EN
+                </button>
+              </div>
               {isLoggedIn ? (
                 <>
                   <span className="userChip">
                     {authUser.nickname} ({authUser.username}) · R {Number(authUser.rating || 1500)}
                   </span>
-                  <button onClick={logout}>로그아웃</button>
+                  <button onClick={logout}>{L("로그아웃", "Logout")}</button>
                 </>
               ) : (
                 <>
@@ -2318,7 +2363,7 @@ function App() {
                 onClick={goMultiMode}
                 data-tutorial="menu-multi"
               >
-                {!isLoggedIn && <span className="modeTag">Login Required</span>}
+                {!isLoggedIn && <span className="modeTag">{L("로그인 필요", "Login Required")}</span>}
                 <span className="modeName">MULTI PLAYER</span>
               </motion.button>
               <motion.button
@@ -2327,7 +2372,7 @@ function App() {
                 className="modeBtn modePvp"
                 onClick={goPvpMode}
               >
-                {!isLoggedIn && <span className="modeTag">Login Required</span>}
+                {!isLoggedIn && <span className="modeTag">{L("로그인 필요", "Login Required")}</span>}
                 <span className="modeName">PVP MATCH</span>
               </motion.button>
               <motion.button
@@ -2340,7 +2385,7 @@ function App() {
               </motion.button>
             </div>
             <button className="menuTutorialBtn" onClick={startTutorialMode}>
-              HOW TO PLAY
+              {L("플레이 방법", "HOW TO PLAY")}
             </button>
             <div className="menuDust menuDustA" />
             <div className="menuDust menuDustB" />
@@ -2359,7 +2404,7 @@ function App() {
                   setLoginFieldErrors({ username: "", password: "" });
                 }}
               >
-                로그인
+                {L("로그인", "Login")}
               </button>
               <button
                 className={authTab === "signup" ? "active" : ""}
@@ -2369,15 +2414,15 @@ function App() {
                   setSignupFieldErrors({ username: "", nickname: "", password: "" });
                 }}
               >
-                회원가입
+                {L("회원가입", "Sign Up")}
               </button>
-              <button onClick={backToMenu}>메인으로</button>
+              <button onClick={backToMenu}>{L("메인으로", "Home")}</button>
             </div>
 
             {authTab === "login" && (
               <div className="authCard">
                 <label>
-                  아이디
+                  {L("아이디", "Username")}
                   <input
                     type="text"
                     className={loginFieldErrors.username ? "fieldError" : ""}
@@ -2387,12 +2432,12 @@ function App() {
                       setLoginFieldErrors((prev) => ({ ...prev, username: "" }));
                       if (loginError) setLoginError("");
                     }}
-                    placeholder="아이디"
+                    placeholder={L("아이디", "Username")}
                   />
                   {loginFieldErrors.username && <span className="fieldErrorText">{loginFieldErrors.username}</span>}
                 </label>
                 <label>
-                  비밀번호
+                  {L("비밀번호", "Password")}
                   <input
                     type="password"
                     className={loginFieldErrors.password ? "fieldError" : ""}
@@ -2402,15 +2447,15 @@ function App() {
                       setLoginFieldErrors((prev) => ({ ...prev, password: "" }));
                       if (loginError) setLoginError("");
                     }}
-                    placeholder="비밀번호"
+                    placeholder={L("비밀번호", "Password")}
                   />
                   {loginFieldErrors.password && <span className="fieldErrorText">{loginFieldErrors.password}</span>}
                 </label>
                 {loginError && <div className="modalError">{loginError}</div>}
                 <div className="modalActions">
-                  <button onClick={backToMenu}>취소</button>
+                  <button onClick={backToMenu}>{L("취소", "Cancel")}</button>
                   <button onClick={login} disabled={isLoading || !loginUsername.trim() || !loginPassword}>
-                    {isLoading ? "로그인 중..." : "로그인"}
+                    {isLoading ? L("로그인 중...", "Logging in...") : L("로그인", "Login")}
                   </button>
                 </div>
               </div>
@@ -2419,7 +2464,7 @@ function App() {
             {authTab === "signup" && (
               <div className="authCard">
                 <label>
-                  아이디
+                  {L("아이디", "Username")}
                   <input
                     type="text"
                     className={signupFieldErrors.username ? "fieldError" : ""}
@@ -2429,14 +2474,14 @@ function App() {
                       setSignupFieldErrors((prev) => ({ ...prev, username: "" }));
                       if (signupError) setSignupError("");
                     }}
-                    placeholder="아이디(3~24자)"
+                    placeholder={L("아이디(3~24자)", "Username (3-24 chars)")}
                   />
                   {signupFieldErrors.username && (
                     <span className="fieldErrorText">{signupFieldErrors.username}</span>
                   )}
                 </label>
                 <label>
-                  닉네임
+                  {L("닉네임", "Nickname")}
                   <input
                     type="text"
                     className={signupFieldErrors.nickname ? "fieldError" : ""}
@@ -2446,14 +2491,14 @@ function App() {
                       setSignupFieldErrors((prev) => ({ ...prev, nickname: "" }));
                       if (signupError) setSignupError("");
                     }}
-                    placeholder="닉네임"
+                    placeholder={L("닉네임", "Nickname")}
                   />
                   {signupFieldErrors.nickname && (
                     <span className="fieldErrorText">{signupFieldErrors.nickname}</span>
                   )}
                 </label>
                 <label>
-                  비밀번호
+                  {L("비밀번호", "Password")}
                   <input
                     type="password"
                     className={signupFieldErrors.password ? "fieldError" : ""}
@@ -2463,7 +2508,7 @@ function App() {
                       setSignupFieldErrors((prev) => ({ ...prev, password: "" }));
                       if (signupError) setSignupError("");
                     }}
-                    placeholder="영문+숫자 포함 8자 이상"
+                    placeholder={L("영문+숫자 포함 8자 이상", "At least 8 chars with letters and numbers")}
                   />
                   {signupFieldErrors.password && (
                     <span className="fieldErrorText">{signupFieldErrors.password}</span>
@@ -2471,12 +2516,12 @@ function App() {
                 </label>
                 {signupError && <div className="modalError">{signupError}</div>}
                 <div className="modalActions">
-                  <button onClick={backToMenu}>취소</button>
+                  <button onClick={backToMenu}>{L("취소", "Cancel")}</button>
                   <button
                     onClick={signup}
                     disabled={isLoading || !signupUsername.trim() || !signupNickname.trim() || !signupPassword}
                   >
-                    {isLoading ? "가입 중..." : "회원가입"}
+                    {isLoading ? L("가입 중...", "Signing up...") : L("회원가입", "Sign Up")}
                   </button>
                 </div>
               </div>
@@ -2488,7 +2533,7 @@ function App() {
           <section className="rankingScreen">
             <div className="rankingTopBar">
               <div className="rankingTitle">
-                <Trophy size={18} /> 레이팅 랭킹
+                <Trophy size={18} /> {L("레이팅 랭킹", "Rating Ranking")}
               </div>
               <div className="rankingActions">
                 <button className="singleActionBtn" onClick={fetchRatingUsers} disabled={ratingLoading}>
@@ -2504,17 +2549,17 @@ function App() {
                 <thead>
                   <tr>
                     <th>#</th>
-                    <th>닉네임</th>
-                    <th>레이팅</th>
-                    <th>전적</th>
-                    <th>승률</th>
+                    <th>{L("닉네임", "Nickname")}</th>
+                    <th>{L("레이팅", "Rating")}</th>
+                    <th>{L("전적", "Record")}</th>
+                    <th>{L("승률", "Win Rate")}</th>
                   </tr>
                 </thead>
                 <tbody>
                   {ratingUsers.length === 0 ? (
                     <tr>
                       <td colSpan={5} className="rankingEmpty">
-                        {ratingLoading ? "불러오는 중..." : "표시할 유저가 없습니다."}
+                        {ratingLoading ? L("불러오는 중...", "Loading...") : L("표시할 유저가 없습니다.", "No users to display.")}
                       </td>
                     </tr>
                   ) : (
@@ -2588,12 +2633,12 @@ function App() {
                 </div>
               </div>
               <div className={`tutorialCoachPrompt ${tutorialAllDone ? "done" : ""}`}>
-                {tutorialAllDone ? "완성!" : tutorialCurrentTask?.prompt}
+                {tutorialCurrentPrompt}
               </div>
               <div className="tutorialStageActions">
-                <button onClick={startTutorialMode}>다시 시작</button>
-                <button onClick={skipTutorial}>건너뛰기</button>
-                <button onClick={backToMenu}>종료</button>
+                <button onClick={startTutorialMode}>{L("다시 시작", "Restart")}</button>
+                <button onClick={skipTutorial}>{L("건너뛰기", "Skip")}</button>
+                <button onClick={backToMenu}>{L("종료", "Exit")}</button>
               </div>
             </div>
           </section>
@@ -2603,26 +2648,28 @@ function App() {
           <>
             {!isLoggedIn && (
               <div className="raceStateBox">
-                <div>오른쪽 상단에서 로그인 후 PvP 매칭을 이용하세요.</div>
+                <div>{L("오른쪽 상단에서 로그인 후 PvP 매칭을 이용하세요.", "Log in from the top-right to use PvP matchmaking.")}</div>
               </div>
             )}
             {isLoggedIn && !isInRaceRoom && (
               <section className="pvpQueuePanel">
                 <div className="pvpQueueTitle">RANKED PVP MATCH</div>
-                <div className="pvpQueueDesc">랜덤 사이즈(5x5/10x10/15x15/20x20/25x25) 중 1개로 매칭됩니다.</div>
+                <div className="pvpQueueDesc">
+                  {L("랜덤 사이즈(5x5/10x10/15x15/20x20/25x25) 중 1개로 매칭됩니다.", "One random size is selected from 5x5/10x10/15x15/20x20/25x25.")}
+                </div>
                 <div className="pvpQueueState">
-                  {pvpServerState === "matching" && pvpMatchState === "accept" && "매칭 성사 - 수락 대기"}
-                  {pvpServerState === "matching" && pvpMatchState === "ban" && "퍼즐 밴 단계"}
-                  {pvpServerState === "matching" && pvpMatchState === "reveal" && "최종 퍼즐 추첨 중"}
-                  {pvpServerState === "matching" && !pvpMatchState && "상대 탐색 중"}
-                  {pvpServerState === "waiting" && `매칭 중... 대기열 ${pvpQueueSize}명`}
-                  {pvpServerState === "cancelled" && "매칭 취소됨"}
-                  {pvpServerState === "idle" && "대기 중"}
+                  {pvpServerState === "matching" && pvpMatchState === "accept" && L("매칭 성사 - 수락 대기", "Match found - waiting for accept")}
+                  {pvpServerState === "matching" && pvpMatchState === "ban" && L("퍼즐 밴 단계", "Puzzle ban phase")}
+                  {pvpServerState === "matching" && pvpMatchState === "reveal" && L("최종 퍼즐 추첨 중", "Final puzzle roulette")}
+                  {pvpServerState === "matching" && !pvpMatchState && L("상대 탐색 중", "Searching opponent")}
+                  {pvpServerState === "waiting" && L(`매칭 중... 대기열 ${pvpQueueSize}명`, `Matching... queue ${pvpQueueSize}`)}
+                  {pvpServerState === "cancelled" && L("매칭 취소됨", "Match cancelled")}
+                  {pvpServerState === "idle" && L("대기 중", "Idle")}
                 </div>
 
                 {pvpMatchState === "accept" && (
                   <div className="pvpStageCard">
-                    <div className="pvpStageTitle">수락을 눌러야 게임이 시작됩니다</div>
+                    <div className="pvpStageTitle">{L("수락을 눌러야 게임이 시작됩니다", "Press accept to start the game")}</div>
                     <div className="pvpGaugeWrap">
                       <div className="pvpGaugeFill" style={{ width: `${pvpAcceptPercent}%` }} />
                     </div>
@@ -2631,7 +2678,7 @@ function App() {
                       {(pvpMatch?.players || []).map((p) => (
                         <div key={p.userId} className={`pvpAcceptPlayer ${p.accepted ? "accepted" : ""}`}>
                           <span>{p.nickname}</span>
-                          <span>{p.accepted ? "수락 완료" : "대기 중"}</span>
+                          <span>{p.accepted ? L("수락 완료", "Accepted") : L("대기 중", "Waiting")}</span>
                         </div>
                       ))}
                     </div>
@@ -2640,14 +2687,14 @@ function App() {
                       onClick={acceptPvpMatch}
                       disabled={pvpAcceptBusy || pvpMatch?.me?.accepted === true}
                     >
-                      {pvpMatch?.me?.accepted ? "ACCEPTED" : pvpAcceptBusy ? "처리중..." : "ACCEPT MATCH"}
+                      {pvpMatch?.me?.accepted ? "ACCEPTED" : pvpAcceptBusy ? L("처리중...", "Processing...") : "ACCEPT MATCH"}
                     </button>
                   </div>
                 )}
 
                 {pvpMatchState === "ban" && (
                   <div className="pvpStageCard">
-                    <div className="pvpStageTitle">5개 유형 중 1개를 밴하거나 스킵하세요</div>
+                    <div className="pvpStageTitle">{L("5개 유형 중 1개를 밴하거나 스킵하세요", "Ban one of five types, or skip")}</div>
                     <div className="pvpGaugeWrap ban">
                       <div className="pvpGaugeFill" style={{ width: `${pvpBanPercent}%` }} />
                     </div>
@@ -2681,14 +2728,14 @@ function App() {
                       onClick={() => submitPvpBan("")}
                       disabled={pvpBanBusy || pvpMatch?.me?.banSubmitted === true}
                     >
-                      {pvpMatch?.me?.banSubmitted ? "제출 완료" : "SKIP BAN"}
+                      {pvpMatch?.me?.banSubmitted ? L("제출 완료", "Submitted") : "SKIP BAN"}
                     </button>
                   </div>
                 )}
 
                 {pvpMatchState === "reveal" && (
                   <div className="pvpStageCard">
-                    <div className="pvpStageTitle">밴 제외 유형 중 랜덤 추첨</div>
+                    <div className="pvpStageTitle">{L("밴 제외 유형 중 랜덤 추첨", "Random draw among unbanned types")}</div>
                     <div className="pvpRevealTrack">
                       {(pvpOptions.length
                         ? pvpOptions
@@ -2714,8 +2761,8 @@ function App() {
                     </div>
                     <div className="pvpRevealResult">
                       {!isPvpRevealSpinning && pvpMatch?.chosenSizeKey
-                        ? `선택됨: ${pvpMatch.chosenSizeKey}`
-                        : "결정 중..."}
+                        ? L(`선택됨: ${pvpMatch.chosenSizeKey}`, `Selected: ${pvpMatch.chosenSizeKey}`)
+                        : L("결정 중...", "Deciding...")}
                     </div>
                   </div>
                 )}
@@ -2757,10 +2804,10 @@ function App() {
               <div className="multiLobbyShell">
                 <div className="lobbyQuick">
                   <button className="lobbyQuickBtn" onClick={handleToggleSfx}>
-                    {soundOn ? <Volume2 size={18} /> : <VolumeX size={18} />} SOUND ON/OFF
+                    {soundOn ? <Volume2 size={18} /> : <VolumeX size={18} />} {L("사운드 ON/OFF", "SOUND ON/OFF")}
                   </button>
                   <button className="lobbyQuickBtn" onClick={backToMenu}>
-                    <Home size={18} /> HOME
+                    <Home size={18} /> {L("메인", "HOME")}
                   </button>
                 </div>
                 <div className="lobbyActions" data-tutorial="lobby-actions">
@@ -2776,17 +2823,17 @@ function App() {
                     }}
                     disabled={isLoading}
                   >
-                    CREATE ROOM
+                    {L("방 만들기", "CREATE ROOM")}
                   </button>
 
                   <div className="lobbyCardBtn join">
-                    <div className="lobbyJoinTitle">JOIN ROOM</div>
+                    <div className="lobbyJoinTitle">{L("방 참가", "JOIN ROOM")}</div>
                     <div className="lobbyJoinRow">
                       <input
                         type="text"
                         value={joinRoomCode}
                         onChange={(e) => setJoinRoomCode(e.target.value.toUpperCase())}
-                        placeholder="Enter room code"
+                        placeholder={L("방 코드를 입력하세요", "Enter room code")}
                       />
                       <button
                         onClick={() => {
@@ -2797,13 +2844,13 @@ function App() {
                         }}
                         disabled={!joinRoomCode.trim()}
                       >
-                        JOIN
+                        {L("참가", "JOIN")}
                       </button>
                     </div>
                   </div>
 
                   <button className="lobbyCardBtn refresh" onClick={fetchPublicRooms} disabled={roomsLoading}>
-                    {roomsLoading ? "REFRESHING..." : "REFRESH LIST"}
+                    {roomsLoading ? L("새로고침 중...", "REFRESHING...") : L("목록 새로고침", "REFRESH LIST")}
                   </button>
                 </div>
               </div>
@@ -2811,14 +2858,14 @@ function App() {
 
             {!isLoggedIn && (
               <div className="raceStateBox">
-                <div>오른쪽 상단에서 로그인 후 멀티플레이를 이용하세요.</div>
+                <div>{L("오른쪽 상단에서 로그인 후 멀티플레이를 이용하세요.", "Log in from the top-right to use multiplayer.")}</div>
               </div>
             )}
 
             {isLoggedIn && isInRaceRoom && (
               <div className="racePanel">
                 <button onClick={leaveRace} disabled={!raceRoomCode}>
-                  Leave Room
+                  {L("방 나가기", "Leave Room")}
                 </button>
               </div>
             )}
@@ -2827,19 +2874,19 @@ function App() {
 
         {isModeMulti && isLoggedIn && !isInRaceRoom && (
           <div className="lobbyTableWrap" data-tutorial="lobby-table">
-            <div className="lobbyTableTitle">ROOM LIST</div>
+            <div className="lobbyTableTitle">{L("방 목록", "ROOM LIST")}</div>
             {publicRooms.length === 0 ? (
-              <div className="lobbyEmpty">입장 가능한 방이 없습니다.</div>
+              <div className="lobbyEmpty">{L("입장 가능한 방이 없습니다.", "No rooms available to join.")}</div>
             ) : (
               <table className="lobbyTable">
                 <thead>
                   <tr>
-                    <th>Room Code</th>
-                    <th>Title</th>
-                    <th>Size</th>
-                    <th>Players</th>
-                    <th>Status</th>
-                    <th>Action</th>
+                    <th>{L("방 코드", "Room Code")}</th>
+                    <th>{L("제목", "Title")}</th>
+                    <th>{L("크기", "Size")}</th>
+                    <th>{L("인원", "Players")}</th>
+                    <th>{L("상태", "Status")}</th>
+                    <th>{L("입장", "Action")}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -2856,10 +2903,10 @@ function App() {
                       <td className={room.isPrivate ? "private" : "open"}>
                         {room.isPrivate ? (
                           <span>
-                            Private <Lock size={14} />
+                            {L("비밀방", "Private")} <Lock size={14} />
                           </span>
                         ) : (
-                          "Open"
+                          L("오픈방", "Open")
                         )}
                       </td>
                       <td>
@@ -2877,7 +2924,7 @@ function App() {
                             await joinRaceRoomWith(room.roomCode, "");
                           }}
                         >
-                          Join
+                          {L("참가", "Join")}
                         </button>
                       </td>
                     </tr>
@@ -2891,12 +2938,14 @@ function App() {
         {(isModeMulti || isModePvp) && isLoggedIn && raceRoomCode && shouldShowPuzzleBoard && (
           <section className="raceMatchLayout">
             <aside className="raceInfoPane">
-              <div className="raceInfoTitle">경기 상태: {isRacePlaying ? "진행 중" : racePhase}</div>
-              <div>Room: <b>{roomTitleText || raceRoomCode}</b></div>
-              <div>Code: <b>{raceRoomCode}</b></div>
-              <div>Players: {(raceState?.players || []).length}/{raceState?.maxPlayers || 2}</div>
+              <div className="raceInfoTitle">
+                {L("경기 상태", "Match Status")}: {racePhaseLabel}
+              </div>
+              <div>{L("방", "Room")}: <b>{roomTitleText || raceRoomCode}</b></div>
+              <div>{L("코드", "Code")}: <b>{raceRoomCode}</b></div>
+              <div>{L("인원", "Players")}: {(raceState?.players || []).length}/{raceState?.maxPlayers || 2}</div>
               {myRacePlayer && <div className="raceInfoMe">{myRacePlayer.nickname}</div>}
-              <div className="timerBar">TIME {formattedTime}</div>
+              <div className="timerBar">{L("시간", "TIME")} {formattedTime}</div>
               {isModePvp && isRaceFinished && pvpRatingFx && (
                 <motion.div
                   initial={{ opacity: 0, y: 10, scale: 0.97 }}
@@ -2930,17 +2979,17 @@ function App() {
                 {isModeMulti && isRaceLobby && (
                   <>
                     <button onClick={() => setReady(!(myRacePlayer?.isReady === true))} disabled={!myRacePlayer}>
-                      {myRacePlayer?.isReady ? "Unready" : "Ready"}
+                      {myRacePlayer?.isReady ? L("준비 해제", "Unready") : L("준비", "Ready")}
                     </button>
                     <button onClick={startRace} disabled={raceState?.hostPlayerId !== racePlayerId || !raceState?.canStart}>
-                      Start (Host)
+                      {L("시작 (방장)", "Start (Host)")}
                     </button>
                   </>
                 )}
-                <button onClick={leaveRace} disabled={!raceRoomCode}>Leave</button>
+                <button onClick={leaveRace} disabled={!raceRoomCode}>{L("나가기", "Leave")}</button>
                 {isModeMulti && isRaceFinished && (
                   <button onClick={requestRematch} disabled={isRematchLoading}>
-                    {isRematchLoading ? "준비중..." : "한판 더?"}
+                    {isRematchLoading ? L("준비중...", "Preparing...") : L("한판 더?", "Rematch?")}
                   </button>
                 )}
               </div>
@@ -3006,15 +3055,15 @@ function App() {
                   >
                     <canvas ref={canvasRef} className="boardCanvas" />
                     {isRaceCountdown && <div className="countdownOverlay">{countdownLeft ?? 0}</div>}
-                    {isRaceLobby && <div className="countdownOverlay wait">READY 대기</div>}
+                    {isRaceLobby && <div className="countdownOverlay wait">{L("READY 대기", "Waiting for READY")}</div>}
                     {isRaceFinished && <div className="countdownOverlay result">{raceResultText}</div>}
                   </div>
                 </div>
               </div>
               <div className="singleTools">
-                <button className="toolBtn toolUndo" onClick={undo} disabled={!canUndo || !canInteractBoard}>UNDO</button>
-                <button className="toolBtn toolRedo" onClick={redo} disabled={!canRedo || !canInteractBoard}>REDO</button>
-                <button className="toolBtn toolClear" onClick={resetGrid} disabled={!canInteractBoard}>CLEAR</button>
+                <button className="toolBtn toolUndo" onClick={undo} disabled={!canUndo || !canInteractBoard}>{L("되돌리기", "UNDO")}</button>
+                <button className="toolBtn toolRedo" onClick={redo} disabled={!canRedo || !canInteractBoard}>{L("다시하기", "REDO")}</button>
+                <button className="toolBtn toolClear" onClick={resetGrid} disabled={!canInteractBoard}>{L("초기화", "CLEAR")}</button>
               </div>
             </div>
 
@@ -3067,10 +3116,10 @@ function App() {
               </div>
 
               <div className="chatBox">
-                <div className="chatTitle">Room Chat</div>
+                <div className="chatTitle">{L("방 채팅", "Room Chat")}</div>
                 <div className="chatBody" ref={chatBodyRef}>
                   {chatMessages.length === 0 ? (
-                    <div className="chatEmpty">아직 채팅이 없습니다.</div>
+                    <div className="chatEmpty">{L("아직 채팅이 없습니다.", "No chat yet.")}</div>
                   ) : (
                     chatMessages.map((msg) => (
                       <div className="chatMsg" key={msg.id}>
@@ -3081,7 +3130,7 @@ function App() {
                 </div>
                 <div className="chatInputRow">
                   <div className="emojiWrap" ref={emojiWrapRef}>
-                    <button type="button" onClick={() => setShowEmojiPicker((prev) => !prev)} title="이모지">🙂</button>
+                    <button type="button" onClick={() => setShowEmojiPicker((prev) => !prev)} title={L("이모지", "Emoji")}>🙂</button>
                     {showEmojiPicker && (
                       <div className="emojiPopover">
                         <EmojiPicker
@@ -3100,7 +3149,7 @@ function App() {
                     type="text"
                     value={chatInput}
                     onChange={(e) => setChatInput(e.target.value)}
-                    placeholder="메시지 입력..."
+                    placeholder={L("메시지 입력...", "Type a message...")}
                     onKeyDown={(e) => {
                       if (e.key === "Enter") {
                         e.preventDefault();
@@ -3108,7 +3157,9 @@ function App() {
                       }
                     }}
                   />
-                  <button onClick={sendRaceChat} disabled={chatSending || !chatInput.trim()}>{chatSending ? "..." : "전송"}</button>
+                  <button onClick={sendRaceChat} disabled={chatSending || !chatInput.trim()}>
+                    {chatSending ? "..." : L("전송", "Send")}
+                  </button>
                 </div>
               </div>
             </aside>
@@ -3169,9 +3220,9 @@ function App() {
         {showCreateModal && (
           <div className="modalBackdrop" onClick={() => setShowCreateModal(false)}>
             <div className="modalCard" onClick={(e) => e.stopPropagation()}>
-              <h2>방 만들기</h2>
+              <h2>{L("방 만들기", "Create Room")}</h2>
               <label>
-                퍼즐 유형
+                {L("퍼즐 유형", "Puzzle Size")}
                 <select value={createSize} onChange={(e) => setCreateSize(e.target.value)}>
                   <option value="5x5">5x5</option>
                   <option value="10x10">10x10</option>
@@ -3181,44 +3232,44 @@ function App() {
                 </select>
               </label>
               <label>
-                최대 인원
+                {L("최대 인원", "Max Players")}
                 <select value={createMaxPlayers} onChange={(e) => setCreateMaxPlayers(e.target.value)}>
-                  <option value="2">2명</option>
-                  <option value="3">3명</option>
-                  <option value="4">4명</option>
+                  <option value="2">{L("2명", "2 players")}</option>
+                  <option value="3">{L("3명", "3 players")}</option>
+                  <option value="4">{L("4명", "4 players")}</option>
                 </select>
               </label>
               <label>
-                방 공개 설정
+                {L("방 공개 설정", "Room Visibility")}
                 <select value={createVisibility} onChange={(e) => setCreateVisibility(e.target.value)}>
-                  <option value="public">오픈방</option>
-                  <option value="private">비밀방</option>
+                  <option value="public">{L("오픈방", "Public")}</option>
+                  <option value="private">{L("비밀방", "Private")}</option>
                 </select>
               </label>
               {createVisibility === "private" && (
                 <label>
-                  비밀번호
+                  {L("비밀번호", "Password")}
                   <input
                     type="password"
                     value={createPassword}
                     onChange={(e) => setCreatePassword(e.target.value)}
-                    placeholder="비밀번호"
+                    placeholder={L("비밀번호", "Password")}
                   />
                 </label>
               )}
               <label>
-                방 제목
+                {L("방 제목", "Room Title")}
                 <input
                   type="text"
                   value={createRoomTitle}
                   onChange={(e) => setCreateRoomTitle(e.target.value)}
-                  placeholder="예: 10x10 스피드전"
+                  placeholder={L("예: 10x10 스피드전", "e.g. 10x10 Speed Run")}
                 />
               </label>
               <div className="modalActions">
-                <button onClick={() => setShowCreateModal(false)}>취소</button>
+                <button onClick={() => setShowCreateModal(false)}>{L("취소", "Cancel")}</button>
                 <button onClick={createRaceRoom} disabled={isLoading}>
-                  {isLoading ? "생성중..." : "생성"}
+                  {isLoading ? L("생성중...", "Creating...") : L("생성", "Create")}
                 </button>
               </div>
             </div>
@@ -3228,10 +3279,10 @@ function App() {
         {showJoinModal && (
           <div className="modalBackdrop" onClick={() => setShowJoinModal(false)}>
             <div className="modalCard" onClick={(e) => e.stopPropagation()}>
-              <h2>방 참가</h2>
+              <h2>{L("방 참가", "Join Room")}</h2>
               {joinModalSource === "manual" && (
                 <label>
-                  방 코드
+                  {L("방 코드", "Room Code")}
                   <input
                     type="text"
                     value={joinRoomCode}
@@ -3241,23 +3292,23 @@ function App() {
                       const matched = publicRooms.find((r) => r.roomCode === code);
                       setJoinRoomType(matched ? (matched.isPrivate ? "private" : "public") : "unknown");
                     }}
-                    placeholder="예: AB12CD"
+                    placeholder={L("예: AB12CD", "e.g. AB12CD")}
                   />
                 </label>
               )}
               {joinRoomType !== "public" && (
                 <label>
-                  비밀번호(비밀방만)
+                  {L("비밀번호(비밀방만)", "Password (private rooms only)")}
                   <input
                     type="password"
                     value={joinPassword}
                     onChange={(e) => setJoinPassword(e.target.value)}
-                    placeholder="비밀방 비밀번호"
+                    placeholder={L("비밀방 비밀번호", "Private room password")}
                   />
                 </label>
               )}
               <div className="modalActions">
-                <button onClick={() => setShowJoinModal(false)}>취소</button>
+                <button onClick={() => setShowJoinModal(false)}>{L("취소", "Cancel")}</button>
                 <button
                   onClick={joinRaceRoom}
                   disabled={
@@ -3266,7 +3317,7 @@ function App() {
                     (joinRoomType !== "public" && !joinPassword.trim())
                   }
                 >
-                  {isLoading ? "참가중..." : "참가"}
+                  {isLoading ? L("참가중...", "Joining...") : L("참가", "Join")}
                 </button>
               </div>
             </div>
@@ -3276,17 +3327,19 @@ function App() {
         {showNeedLoginPopup && (
           <div className="modalBackdrop" onClick={() => setShowNeedLoginPopup(false)}>
             <div className="modalCard" onClick={(e) => e.stopPropagation()}>
-              <h2>로그인 필요</h2>
-              <p>{needLoginReturnMode === "pvp" ? "PVP 매칭은 로그인 후 이용 가능합니다." : "멀티플레이는 로그인 후 이용 가능합니다."}</p>
+              <h2>{L("로그인 필요", "Login Required")}</h2>
+              <p>{needLoginReturnMode === "pvp"
+                ? L("PVP 매칭은 로그인 후 이용 가능합니다.", "PVP matchmaking requires login.")
+                : L("멀티플레이는 로그인 후 이용 가능합니다.", "Multiplayer requires login.")}</p>
               <div className="modalActions">
-                <button onClick={() => setShowNeedLoginPopup(false)}>취소</button>
+                <button onClick={() => setShowNeedLoginPopup(false)}>{L("취소", "Cancel")}</button>
                 <button
                   onClick={() => {
                     setShowNeedLoginPopup(false);
                     openAuthScreen("login", needLoginReturnMode);
                   }}
                 >
-                  로그인하러 가기
+                  {L("로그인하러 가기", "Go to Login")}
                 </button>
               </div>
             </div>
@@ -3404,7 +3457,7 @@ function App() {
                 {isRaceCountdown && (
                   <div className="countdownOverlay">{countdownLeft ?? 0}</div>
                 )}
-                {isRaceLobby && <div className="countdownOverlay wait">READY 대기</div>}
+                {isRaceLobby && <div className="countdownOverlay wait">{L("READY 대기", "Waiting for READY")}</div>}
                 {isRaceFinished && <div className="countdownOverlay result">{raceResultText}</div>}
               </div>
             </div>

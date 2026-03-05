@@ -105,6 +105,33 @@
   justify-content: flex-end;
 }
 
+.langSwitch {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.18rem;
+  border: 2px solid #2a7bb2;
+  border-radius: 999px;
+  background: #f4fbff;
+  padding: 0.16rem;
+}
+
+.langSwitch button {
+  min-width: 44px;
+  min-height: 32px;
+  border-radius: 999px;
+  border: none;
+  background: transparent;
+  color: #1f6ea6;
+  font-size: 0.82rem;
+  font-weight: 900;
+  padding: 0.2rem 0.52rem;
+}
+
+.langSwitch button.active {
+  background: linear-gradient(180deg, #3495d4 0%, #1d72af 100%);
+  color: #fff;
+}
+
 .topAuth .ghostBtn,
 .topAuth .primaryBtn {
   min-width: 138px;
@@ -138,6 +165,38 @@
   gap: 0.32rem;
   font-size: 0.94rem;
   font-weight: 900;
+}
+
+.panel.langEn {
+  letter-spacing: 0;
+}
+
+.panel.langEn .lobbyCardBtn {
+  font-size: 1.72rem;
+}
+
+.panel.langEn .lobbyJoinTitle {
+  font-size: 1.72rem;
+}
+
+.panel.langEn .lobbyJoinRow input {
+  font-size: 1.35rem;
+}
+
+.panel.langEn .lobbyTableTitle {
+  font-size: 2.4rem;
+}
+
+.panel.langEn .toolBtn {
+  font-size: 1.5rem;
+}
+
+.panel.langEn .singleTimer {
+  font-size: 1.72rem;
+}
+
+.panel.langEn .countdownOverlay.wait {
+  font-size: 24px;
 }
 
 .userChip {
@@ -1815,6 +1874,16 @@ button:disabled {
     justify-content: flex-end;
   }
 
+  .langSwitch {
+    order: -1;
+  }
+
+  .langSwitch button {
+    min-width: 38px;
+    min-height: 28px;
+    font-size: 0.74rem;
+  }
+
   .topAuth .ghostBtn,
   .topAuth .primaryBtn {
     min-width: 112px;
@@ -1883,6 +1952,10 @@ button:disabled {
 
   .lobbyTableTitle {
     font-size: 1.65rem;
+  }
+
+  .panel.langEn .lobbyTableTitle {
+    font-size: 1.35rem;
   }
 
   .lobbyTable th,
