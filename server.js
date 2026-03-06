@@ -33,7 +33,9 @@ const PVP_ACCEPT_MS = 12000;
 const PVP_BAN_MS = 10000;
 const PVP_REVEAL_MS = 4200;
 const RACE_INACTIVITY_TIMEOUT_MS = Math.max(5000, Number(process.env.RACE_INACTIVITY_TIMEOUT_MS || 30000));
-const PVP_BOT_ENABLED = process.env.PVP_BOT_ENABLED !== "false";
+const PVP_BOT_ENABLED_DEFAULT = process.env.PVP_BOT_ENABLED !== "false";
+let pvpBotEnabledRuntime = PVP_BOT_ENABLED_DEFAULT;
+const ADMIN_API_KEY = String(process.env.ADMIN_API_KEY || "").trim();
 const PVP_BOT_WAIT_MS = Math.max(3000, Number(process.env.PVP_BOT_WAIT_MS || 12000));
 const PVP_BOT_WAIT_MIN_MS = Math.max(
   3000,
@@ -510,7 +512,7 @@ function buildBotIdentity() {
 }
 
 async function ensureBotUsers() {
-  if (!PVP_BOT_ENABLED) return;
+  if (!pvpBotEnabledRuntime) return;
   const { rows: botRows } = await pool.query(
     `SELECT id, nickname, bot_skill FROM users WHERE is_bot = true ORDER BY id ASC`
   );
@@ -585,15 +587,6 @@ async function ensureBotUsers() {
       throw err;
     }
   }
-  await pool.query(
-    `UPDATE users
-     SET rating = $1,
-         rating_games = 0,
-         rating_wins = 0,
-         rating_losses = 0
-     WHERE is_bot = true`,
-    [ELO_DEFAULT_RATING]
-  );
 }
 
 function normalizeMaxPlayers(raw) {
@@ -634,7 +627,7 @@ function createPvpBotTicket(botUser, now = Date.now()) {
 }
 
 async function fetchAvailablePvpBotTicket(now = Date.now()) {
-  if (!PVP_BOT_ENABLED) return null;
+  if (!pvpBotEnabledRuntime) return null;
   const { rows } = await pool.query(
     `SELECT id, username, nickname, bot_skill
      FROM users
@@ -1566,6 +1559,24 @@ setInterval(async () => {
   }
 }, 1000 * 60 * 30);
 
+function parseEnabledToggle(raw) {
+  if (typeof raw === "boolean") return raw;
+  const v = String(raw ?? "").trim().toLowerCase();
+  if (!v) return null;
+  if (["1", "true", "on", "yes", "enable", "enabled"].includes(v)) return true;
+  if (["0", "false", "off", "no", "disable", "disabled"].includes(v)) return false;
+  return null;
+}
+
+function isAdminToggleAuthorized(req) {
+  if (!ADMIN_API_KEY) return true;
+  const headerKey = String(req.headers["x-admin-key"] || "").trim();
+  const bodyKey = String(req.body?.adminKey || "").trim();
+  const queryKey = String(req.query?.adminKey || "").trim();
+  const key = headerKey || bodyKey || queryKey;
+  return key === ADMIN_API_KEY;
+}
+
 app.get("/health", async (_req, res) => {
   try {
     await pool.query("SELECT 1");
@@ -1573,6 +1584,35 @@ app.get("/health", async (_req, res) => {
   } catch (err) {
     res.status(500).json({ ok: false, error: err.message });
   }
+});
+
+app.get("/admin/pvp-bot", (req, res) => {
+  if (!isAdminToggleAuthorized(req)) {
+    return res.status(403).json({ ok: false, error: "Forbidden" });
+  }
+  return res.json({ ok: true, enabled: pvpBotEnabledRuntime });
+});
+
+app.post("/admin/pvp-bot", async (req, res) => {
+  if (!isAdminToggleAuthorized(req)) {
+    return res.status(403).json({ ok: false, error: "Forbidden" });
+  }
+  const enabled = parseEnabledToggle(req.body?.enabled ?? req.query?.enabled);
+  if (enabled == null) {
+    return res.status(400).json({
+      ok: false,
+      error: "enabled must be one of: true/false, on/off, 1/0",
+    });
+  }
+  pvpBotEnabledRuntime = enabled;
+  if (enabled) {
+    try {
+      await ensureBotUsers();
+    } catch (err) {
+      return res.status(500).json({ ok: false, error: err.message || "Failed to enable bot matchmaking" });
+    }
+  }
+  return res.json({ ok: true, enabled: pvpBotEnabledRuntime });
 });
 
 app.post("/auth/signup", async (req, res) => {
@@ -1983,7 +2023,7 @@ function createPvpMatch(ticketA, ticketB) {
 }
 
 async function maybeMatchWaitingTicketsWithBot(now = Date.now()) {
-  if (!PVP_BOT_ENABLED) return;
+  if (!pvpBotEnabledRuntime) return;
   const candidates = [...pvpWaitingOrder];
   for (const ticketId of candidates) {
     const ticket = pvpQueueTickets.get(ticketId);
