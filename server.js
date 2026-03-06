@@ -137,6 +137,8 @@ const ELO_DEFAULT_RATING = 1500;
 const ELO_PLACEMENT_GAMES = 20;
 const ELO_K_PLACEMENT = 40;
 const ELO_K_NORMAL = 24;
+const ELO_MIN_WIN_DELTA = Math.max(1, Number(process.env.ELO_MIN_WIN_DELTA || 5));
+const ELO_MIN_LOSS_DELTA = Math.max(1, Number(process.env.ELO_MIN_LOSS_DELTA || 5));
 const SESSION_TTL_MS = 1000 * 60 * 60 * 24 * 30;
 const POPCOUNT = new Uint8Array(256);
 for (let i = 0; i < 256; i += 1) {
@@ -692,9 +694,17 @@ function eloKFactor(games) {
   return n < ELO_PLACEMENT_GAMES ? ELO_K_PLACEMENT : ELO_K_NORMAL;
 }
 
+function eloSignedDelta(expected, score, k) {
+  const raw = Math.round(Number(k) * (Number(score) - Number(expected)));
+  if (score >= 1) return Math.max(ELO_MIN_WIN_DELTA, raw);
+  if (score <= 0) return Math.min(-ELO_MIN_LOSS_DELTA, raw);
+  return raw;
+}
+
 function eloNextRating(currentRating, expected, score, k) {
   const base = Number.isFinite(Number(currentRating)) ? Number(currentRating) : ELO_DEFAULT_RATING;
-  return Math.max(100, Math.min(4000, Math.round(base + k * (score - expected))));
+  const delta = eloSignedDelta(expected, score, k);
+  return Math.max(100, Math.min(4000, Math.round(base + delta)));
 }
 
 function isUserInAnyRoom(userId) {
