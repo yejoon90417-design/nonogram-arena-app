@@ -140,6 +140,7 @@ const ELO_K_PLACEMENT = 40;
 const ELO_K_NORMAL = 24;
 const ELO_MIN_WIN_DELTA = Math.max(1, Number(process.env.ELO_MIN_WIN_DELTA || 5));
 const ELO_MIN_LOSS_DELTA = Math.max(1, Number(process.env.ELO_MIN_LOSS_DELTA || 5));
+const LEAVE_ROOM_PENALTY_RATING = Math.max(1, Number(process.env.LEAVE_ROOM_PENALTY_RATING || 30));
 const SESSION_TTL_MS = 1000 * 60 * 60 * 24 * 30;
 const POPCOUNT = new Uint8Array(256);
 for (let i = 0; i < 256; i += 1) {
@@ -1245,6 +1246,33 @@ function shouldFinishRace(room) {
     (p) => !Number.isInteger(p.elapsedSec) && !p.disconnectedAt
   ).length;
   return finishedCount + activeCount < target;
+}
+
+async function applyLeaveRoomPenaltyIfNeeded(room, player) {
+  if (!room || !player) return { applied: false, points: 0 };
+  if (room.state === "lobby" || room.state === "finished") return { applied: false, points: 0 };
+  if (room.mode !== "pvp_ranked" && room.mode !== "pvp_bot") return { applied: false, points: 0 };
+  if (player.isBot === true) return { applied: false, points: 0 };
+  const userId = Number(player.userId);
+  if (!Number.isInteger(userId)) return { applied: false, points: 0 };
+  if (player.leavePenaltyAppliedAt) return { applied: false, points: 0 };
+
+  const { rowCount } = await pool.query(
+    `UPDATE users
+     SET rating = GREATEST(100, rating - $2),
+         rating_games = rating_games + 1,
+         rating_losses = rating_losses + 1
+     WHERE id = $1`,
+    [userId, LEAVE_ROOM_PENALTY_RATING]
+  );
+  if (!rowCount) return { applied: false, points: 0 };
+
+  player.leavePenaltyAppliedAt = new Date().toISOString();
+  return {
+    applied: true,
+    points: LEAVE_ROOM_PENALTY_RATING,
+    userId,
+  };
 }
 
 async function applyRatedResultIfNeeded(room) {
@@ -2703,13 +2731,41 @@ app.post("/race/leave", async (req, res) => {
       room.hostPlayerId = nextHost.playerId;
     }
     await applyRatedResultIfNeeded(room);
-    return res.json({ ok: true, room: roomPublicState(room) });
+    return res.json({ ok: true, leavePenalty: { applied: false, points: 0 }, room: roomPublicState(room) });
+  }
+
+  const leavePenalty = await applyLeaveRoomPenaltyIfNeeded(room, player);
+  if (leavePenalty.applied) {
+    room.ratedResultApplied = true;
+    room.ratedResultApplying = false;
+    room.ratedResult = {
+      type: "leave_penalty",
+      loserUserId: leavePenalty.userId,
+      loserDelta: -leavePenalty.points,
+      appliedAt: Date.now(),
+    };
   }
 
   if (!player.disconnectedAt) {
     player.disconnectedAt = new Date().toISOString();
   }
+  player.loseReason = player.loseReason || (leavePenalty.applied ? "left_penalty" : "left");
   player.isReady = false;
+
+  if (leavePenalty.applied && (room.mode === "pvp_ranked" || room.mode === "pvp_bot")) {
+    if (!room.winnerPlayerId) {
+      const alive = Array.from(room.players.values()).filter(
+        (p) =>
+          p.playerId !== player.playerId &&
+          !p.disconnectedAt &&
+          !Number.isInteger(p.elapsedSec) &&
+          !p.loseReason
+      );
+      if (alive.length === 1) room.winnerPlayerId = alive[0].playerId;
+    }
+    room.state = "finished";
+  }
+
   if (!room.winnerPlayerId) {
     const alive = Array.from(room.players.values()).filter(
       (p) => !p.disconnectedAt && !Number.isInteger(p.elapsedSec) && !p.loseReason
@@ -2722,7 +2778,7 @@ app.post("/race/leave", async (req, res) => {
   await applyRatedResultIfNeeded(room);
   await persistMatchLogIfNeeded(room);
 
-  return res.json({ ok: true, room: roomPublicState(room) });
+  return res.json({ ok: true, leavePenalty, room: roomPublicState(room) });
 });
 
 app.post("/verify", async (req, res) => {

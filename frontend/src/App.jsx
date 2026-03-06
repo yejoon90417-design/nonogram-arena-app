@@ -1389,6 +1389,20 @@ function App() {
   };
 
   const leaveRace = async () => {
+    const willPenaltyLeave =
+      Boolean(raceRoomCode && racePlayerId) &&
+      isModePvp &&
+      (racePhase === "countdown" || racePhase === "playing");
+    if (willPenaltyLeave) {
+      const ok = window.confirm(
+        L(
+          "게임 종료 전에 나가면 즉시 패배 + 점수 30점이 차감됩니다. 정말 나갈까요?",
+          "Leaving before the match ends causes instant defeat and -30 rating. Leave anyway?"
+        )
+      );
+      if (!ok) return;
+    }
+    let leaveStatusMessage = "";
     if (pvpSearching && !raceRoomCode && !racePlayerId) {
       await cancelPvpQueue({ silent: true });
     }
@@ -1406,11 +1420,19 @@ function App() {
     }
     if (raceRoomCode && racePlayerId) {
       try {
-        await fetch(`${API_BASE}/race/leave`, {
+        const res = await fetch(`${API_BASE}/race/leave`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ roomCode: raceRoomCode, playerId: racePlayerId }),
         });
+        const data = await parseJsonSafe(res);
+        if (data?.leavePenalty?.applied) {
+          const points = Number(data.leavePenalty.points || 30);
+          leaveStatusMessage = L(
+            `게임 종료 전 방을 나가 점수 ${points}점이 차감되었습니다.`,
+            `You left before match end. ${points} rating points were deducted.`
+          );
+        }
       } catch {
         // ignore leave API errors
       }
@@ -1429,7 +1451,7 @@ function App() {
     setReactionMenuForPlayerId("");
     setReactionFlights([]);
     setPublicRooms([]);
-    setStatus("");
+    setStatus(leaveStatusMessage);
     seenReactionIdsRef.current = new Set();
     raceFinishedSentRef.current = false;
     raceResultShownRef.current = false;
