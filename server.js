@@ -32,6 +32,7 @@ const PVP_MATCH_TICKET_TTL_MS = 1000 * 60 * 5;
 const PVP_ACCEPT_MS = 12000;
 const PVP_BAN_MS = 10000;
 const PVP_REVEAL_MS = 4200;
+const RACE_INACTIVITY_TIMEOUT_MS = Math.max(5000, Number(process.env.RACE_INACTIVITY_TIMEOUT_MS || 30000));
 const PVP_BOT_ENABLED = process.env.PVP_BOT_ENABLED !== "false";
 const PVP_BOT_WAIT_MS = Math.max(3000, Number(process.env.PVP_BOT_WAIT_MS || 12000));
 const PVP_BOT_WAIT_MIN_MS = Math.max(
@@ -73,9 +74,9 @@ const PVP_BOT_NAME_POOL = [
   "Leo", "Nico", "Jude", "Evan", "Kira", "Ryu", "Dami", "Suji",
 ];
 const BOT_DIFFICULTY_WEIGHTS = [
-  ["easy", 40],
-  ["normal", 40],
-  ["hard", 20],
+  ["easy", 25],
+  ["normal", 25],
+  ["hard", 50],
 ];
 const BOT_DIFFICULTY_CONFIG = {
   easy: {
@@ -557,13 +558,7 @@ async function ensureBotUsers() {
     }
   }
   const existingIds = botRows.map((r) => Number(r.id)).filter((v) => Number.isInteger(v));
-  if (existingIds.length > PVP_BOT_POOL_MIN) {
-    const deleteIds = existingIds.slice(PVP_BOT_POOL_MIN);
-    if (deleteIds.length) {
-      await pool.query(`DELETE FROM users WHERE id = ANY($1::bigint[])`, [deleteIds]);
-    }
-  }
-  let needed = Math.max(0, PVP_BOT_POOL_MIN - Math.min(existingIds.length, PVP_BOT_POOL_MIN));
+  let needed = Math.max(0, PVP_BOT_POOL_MIN - existingIds.length);
   while (needed > 0) {
     const identity = buildBotIdentity();
     const passwordHash = hashUserPassword(crypto.randomBytes(24).toString("hex"));
@@ -642,10 +637,7 @@ async function fetchAvailablePvpBotTicket(now = Date.now()) {
   const { rows } = await pool.query(
     `SELECT id, username, nickname, bot_skill
      FROM users
-     WHERE is_bot = true
-     ORDER BY id ASC
-     LIMIT $1`,
-    [PVP_BOT_POOL_MIN]
+     WHERE is_bot = true`
   );
   if (!rows.length) return null;
 
@@ -659,15 +651,17 @@ async function fetchAvailablePvpBotTicket(now = Date.now()) {
     return false;
   };
 
+  const candidates = [];
   for (const row of rows) {
     const botId = Number(row.id);
     if (!Number.isInteger(botId)) continue;
     if (isUserInAnyRoom(botId)) continue;
     if (isBotBusyInMatch(botId)) continue;
     const ticket = createPvpBotTicket(row, now);
-    if (ticket) return ticket;
+    if (ticket) candidates.push(ticket);
   }
-  return null;
+  if (!candidates.length) return null;
+  return randomFrom(candidates);
 }
 
 function pickBotTargetSec(width, height, rawDifficulty = "normal") {
@@ -956,6 +950,8 @@ async function createPvpRoomForMatch(match) {
       disconnectedAt: null,
       correctAnswerCells: 0,
       lastSeenAt: now,
+      lastMoveAt: now + COUNTDOWN_MS,
+      loseReason: null,
     });
   }
 
@@ -1050,9 +1046,68 @@ function cleanupPvpQueue(now = Date.now()) {
 }
 
 function syncRoomState(room) {
+  if (!room) return;
   if (room.state === "countdown" && room.gameStartAt && Date.now() >= room.gameStartAt) {
+    const gameStartAt = Number(room.gameStartAt || Date.now());
     room.state = "playing";
+    for (const p of room.players.values()) {
+      if (!Number.isFinite(Number(p.lastMoveAt)) || Number(p.lastMoveAt) < gameStartAt) {
+        p.lastMoveAt = gameStartAt;
+      }
+      p.loseReason = null;
+    }
   }
+}
+
+function pickWinnerPlayer(room) {
+  if (!room) return null;
+  if (room.winnerPlayerId && room.players.has(room.winnerPlayerId)) {
+    return room.players.get(room.winnerPlayerId);
+  }
+  const finished = getFinishedPlayers(room);
+  const nonForfeit = finished.find((p) => !p.loseReason);
+  return nonForfeit || finished[0] || null;
+}
+
+function maybeFinalizeRoom(room) {
+  if (!room || room.state !== "playing") return false;
+  if (!shouldFinishRace(room)) return false;
+  const winner = pickWinnerPlayer(room);
+  room.winnerPlayerId = winner ? winner.playerId : null;
+  room.state = "finished";
+  void applyRatedResultIfNeeded(room);
+  void persistMatchLogIfNeeded(room);
+  return true;
+}
+
+function applyInactiveAutoLoss(room, now = Date.now()) {
+  if (!room || room.state !== "playing") return false;
+  const gameStartAt = Number(room.gameStartAt || now);
+  let changed = false;
+
+  for (const p of room.players.values()) {
+    if (p.isBot) continue;
+    if (p.disconnectedAt || Number.isInteger(p.elapsedSec)) continue;
+    const lastMoveAt = Number.isFinite(Number(p.lastMoveAt)) ? Number(p.lastMoveAt) : gameStartAt;
+    if (now - lastMoveAt < RACE_INACTIVITY_TIMEOUT_MS) continue;
+
+    p.elapsedSec = Math.max(0, Math.floor((now - gameStartAt) / 1000));
+    p.finishedAt = new Date(now).toISOString();
+    p.loseReason = "inactive_timeout";
+    p.isReady = false;
+    changed = true;
+  }
+
+  if (!changed) return false;
+
+  const active = Array.from(room.players.values()).filter((p) => !p.disconnectedAt && !Number.isInteger(p.elapsedSec));
+  const alive = active.filter((p) => !p.loseReason);
+  if (alive.length === 1) {
+    room.winnerPlayerId = alive[0].playerId;
+  }
+
+  maybeFinalizeRoom(room);
+  return true;
 }
 
 function advanceBotPlayers(room, now = Date.now()) {
@@ -1080,17 +1135,11 @@ function advanceBotPlayers(room, now = Date.now()) {
       p.elapsedSec = targetSec;
       p.finishedAt = new Date(gameStartAt + targetSec * 1000).toISOString();
       p.correctAnswerCells = room.totalAnswerCells || 0;
+      p.loseReason = null;
       changed = true;
     }
   }
-  if (room.state === "playing" && shouldFinishRace(room)) {
-    const finished = getFinishedPlayers(room);
-    if (!room.winnerPlayerId && finished.length > 0) {
-      room.winnerPlayerId = finished[0].playerId;
-    }
-    room.state = "finished";
-    void applyRatedResultIfNeeded(room);
-    void persistMatchLogIfNeeded(room);
+  if (maybeFinalizeRoom(room)) {
     changed = true;
   }
   return changed;
@@ -1138,14 +1187,7 @@ function removeStalePlayers(room, now = Date.now()) {
 
   if (room.players.size === 0) return { changed: true, deleteRoom: true };
 
-  if (room.state === "playing" && shouldFinishRace(room)) {
-    const finished = getFinishedPlayers(room);
-    if (!room.winnerPlayerId && finished.length > 0) {
-      room.winnerPlayerId = finished[0].playerId;
-    }
-    room.state = "finished";
-    void applyRatedResultIfNeeded(room);
-    void persistMatchLogIfNeeded(room);
+  if (maybeFinalizeRoom(room)) {
     changed = true;
   }
 
@@ -1162,6 +1204,9 @@ function getFinishedPlayers(room) {
   return Array.from(room.players.values())
     .filter((p) => Number.isInteger(p.elapsedSec))
     .sort((a, b) => {
+      const aForfeit = Boolean(a.loseReason);
+      const bForfeit = Boolean(b.loseReason);
+      if (aForfeit !== bForfeit) return aForfeit ? 1 : -1;
       if (a.elapsedSec !== b.elapsedSec) return a.elapsedSec - b.elapsedSec;
       if (a.finishedAt && b.finishedAt) return a.finishedAt > b.finishedAt ? 1 : -1;
       return 0;
@@ -1174,7 +1219,7 @@ function buildRankings(room) {
     playerId: p.playerId,
     nickname: p.nickname,
     elapsedSec: p.elapsedSec,
-    status: "finished",
+    status: p.loseReason === "inactive_timeout" ? "timeout" : "finished",
   }));
 
   const unfinished = Array.from(room.players.values())
@@ -1211,8 +1256,7 @@ async function applyRatedResultIfNeeded(room) {
   const [userA, userB] = room.ratedUserIds.map((v) => Number(v)).filter((v) => Number.isInteger(v));
   if (!Number.isInteger(userA) || !Number.isInteger(userB) || userA === userB) return;
 
-  const winnerPlayer =
-    (room.winnerPlayerId && room.players.get(room.winnerPlayerId)) || getFinishedPlayers(room)[0] || null;
+  const winnerPlayer = pickWinnerPlayer(room);
   if (!winnerPlayer || !Number.isInteger(Number(winnerPlayer.userId))) return;
 
   const winnerUserId = Number(winnerPlayer.userId);
@@ -1306,8 +1350,7 @@ async function persistMatchLogIfNeeded(room) {
   try {
     const rankings = buildRankings(room);
     const rankingByPlayerId = new Map(rankings.map((r) => [String(r.playerId || ""), r]));
-    const winnerPlayer =
-      (room.winnerPlayerId && room.players.get(room.winnerPlayerId)) || getFinishedPlayers(room)[0] || null;
+    const winnerPlayer = pickWinnerPlayer(room);
     const winnerUserId =
       winnerPlayer && Number.isInteger(Number(winnerPlayer.userId)) ? Number(winnerPlayer.userId) : null;
     const winnerNickname = winnerPlayer ? String(winnerPlayer.nickname || "") : null;
@@ -1369,11 +1412,12 @@ async function persistMatchLogIfNeeded(room) {
 
 function roomPublicState(room) {
   syncRoomState(room);
-  advanceBotPlayers(room, Date.now());
-  removeStalePlayers(room, Date.now());
+  const now = Date.now();
+  advanceBotPlayers(room, now);
+  applyInactiveAutoLoss(room, now);
+  removeStalePlayers(room, now);
   void applyRatedResultIfNeeded(room);
   void persistMatchLogIfNeeded(room);
-  const now = Date.now();
   if (!Array.isArray(room.reactionEvents)) {
     room.reactionEvents = [];
   } else {
@@ -1389,6 +1433,7 @@ function roomPublicState(room) {
       elapsedSec: p.elapsedSec,
       isReady: p.isReady,
       disconnectedAt: p.disconnectedAt || null,
+      loseReason: p.loseReason || null,
       correctAnswerCells: p.correctAnswerCells ?? 0,
       remainingAnswerCells: Math.max(0, (room.totalAnswerCells || 0) - (p.correctAnswerCells || 0)),
     }))
@@ -1481,6 +1526,7 @@ setInterval(async () => {
   for (const room of raceRooms.values()) {
     syncRoomState(room);
     advanceBotPlayers(room, now);
+    applyInactiveAutoLoss(room, now);
   }
 }, 1000);
 
@@ -2212,6 +2258,8 @@ app.post("/race/create", requireAuth, async (req, res) => {
       disconnectedAt: null,
       correctAnswerCells: 0,
       lastSeenAt: Date.now(),
+      lastMoveAt: null,
+      loseReason: null,
     });
     raceRooms.set(roomCode, room);
 
@@ -2278,6 +2326,8 @@ app.post("/race/join", requireAuth, async (req, res) => {
       disconnectedAt: null,
       correctAnswerCells: 0,
       lastSeenAt: Date.now(),
+      lastMoveAt: null,
+      loseReason: null,
     });
 
     return res.json({
@@ -2352,6 +2402,8 @@ app.post("/race/start", (req, res) => {
     p.disconnectedAt = null;
     p.correctAnswerCells = 0;
     p.lastSeenAt = now;
+    p.lastMoveAt = room.gameStartAt;
+    p.loseReason = null;
   }
 
   return res.json({ ok: true, room: roomPublicState(room) });
@@ -2373,6 +2425,7 @@ app.post("/race/progress", async (req, res) => {
   if (!player) {
     return res.status(404).json({ ok: false, error: "Player not found in room" });
   }
+  const actionAt = Date.now();
   touchPlayer(room, playerId);
   if (room.state !== "playing" && room.state !== "finished") {
     return res.status(400).json({ ok: false, error: "Race has not started yet" });
@@ -2394,6 +2447,10 @@ app.post("/race/progress", async (req, res) => {
       });
     }
     player.correctAnswerCells = countCorrectAnswerCells(room.solutionBits, userBits);
+    player.lastMoveAt = actionAt;
+    if (player.loseReason === "inactive_timeout") {
+      player.loseReason = null;
+    }
   } catch (err) {
     return res.status(400).json({ ok: false, error: err.message });
   }
@@ -2465,6 +2522,8 @@ app.post("/race/rematch", async (req, res) => {
       p.disconnectedAt = null;
       p.correctAnswerCells = 0;
       p.lastSeenAt = Date.now();
+      p.lastMoveAt = null;
+      p.loseReason = null;
     }
     return res.json({ ok: true, puzzle: puzzleForClient, room: roomPublicState(room) });
   } catch (err) {
@@ -2603,14 +2662,10 @@ app.post("/race/finish", async (req, res) => {
     player.elapsedSec = Math.max(0, Math.floor(elapsedSec));
     player.finishedAt = new Date().toISOString();
     player.correctAnswerCells = room.totalAnswerCells || player.correctAnswerCells || 0;
+    player.lastMoveAt = Date.now();
+    player.loseReason = null;
   }
-  const finished = getFinishedPlayers(room);
-  if (!room.winnerPlayerId && finished.length > 0) {
-    room.winnerPlayerId = finished[0].playerId;
-  }
-  if (shouldFinishRace(room)) {
-    room.state = "finished";
-  }
+  maybeFinalizeRoom(room);
   await applyRatedResultIfNeeded(room);
   await persistMatchLogIfNeeded(room);
 
@@ -2655,14 +2710,15 @@ app.post("/race/leave", async (req, res) => {
     player.disconnectedAt = new Date().toISOString();
   }
   player.isReady = false;
-
-  const finished = getFinishedPlayers(room);
-  if (!room.winnerPlayerId && finished.length > 0) {
-    room.winnerPlayerId = finished[0].playerId;
+  if (!room.winnerPlayerId) {
+    const alive = Array.from(room.players.values()).filter(
+      (p) => !p.disconnectedAt && !Number.isInteger(p.elapsedSec) && !p.loseReason
+    );
+    if (alive.length === 1) {
+      room.winnerPlayerId = alive[0].playerId;
+    }
   }
-  if (room.state === "playing" && shouldFinishRace(room)) {
-    room.state = "finished";
-  }
+  maybeFinalizeRoom(room);
   await applyRatedResultIfNeeded(room);
   await persistMatchLogIfNeeded(room);
 

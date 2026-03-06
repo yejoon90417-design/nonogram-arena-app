@@ -2058,11 +2058,20 @@ function App() {
       setStatus(L("승리하였습니다.", "Victory."));
       playSfx("win");
     } else {
-      setStatus(L("패배하였습니다.", "Defeat."));
+      if (myRacePlayer?.loseReason === "inactive_timeout") {
+        setStatus(
+          L(
+            "경고: 30초 동안 움직임이 없어 자동 패배 처리되었습니다.",
+            "Warning: You were inactive for 30 seconds and lost automatically."
+          )
+        );
+      } else {
+        setStatus(L("패배하였습니다.", "Defeat."));
+      }
       setTimerRunning(false);
       playSfx("lose");
     }
-  }, [isInRaceRoom, racePhase, raceState, racePlayerId]);
+  }, [isInRaceRoom, racePhase, raceState, racePlayerId, myRacePlayer, L]);
 
   useEffect(() => {
     if (!isLoggedIn || !isModePvp || !isInRaceRoom || racePhase !== "finished") return;
