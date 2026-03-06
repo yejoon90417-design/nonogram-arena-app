@@ -1578,6 +1578,7 @@ app.get("/ratings/leaderboard", async (req, res) => {
   const limit = Number.isInteger(limitRaw) ? Math.max(1, Math.min(200, limitRaw)) : 100;
   const offset = Number.isInteger(offsetRaw) ? Math.max(0, offsetRaw) : 0;
   try {
+    const authUser = await getAuthUserFromReq(req);
     const { rows } = await pool.query(
       `SELECT id, username, nickname, is_bot, rating, rating_games, rating_wins, rating_losses
        FROM users
@@ -1585,7 +1586,31 @@ app.get("/ratings/leaderboard", async (req, res) => {
        LIMIT $1 OFFSET $2`,
       [limit, offset]
     );
-    return res.json({ ok: true, users: rows });
+    let myRank = null;
+    if (authUser && Number.isInteger(Number(authUser.id))) {
+      const { rows: rankRows } = await pool.query(
+        `SELECT ranked.rank_pos
+         FROM (
+           SELECT id, ROW_NUMBER() OVER (ORDER BY rating DESC, rating_wins DESC, rating_games DESC, id ASC) AS rank_pos
+           FROM users
+         ) AS ranked
+         WHERE ranked.id = $1
+         LIMIT 1`,
+        [Number(authUser.id)]
+      );
+      if (rankRows.length) {
+        myRank = Number(rankRows[0].rank_pos);
+      }
+    }
+    const { rows: totalRows } = await pool.query(`SELECT COUNT(*)::int AS total_users FROM users`);
+    const totalUsers = totalRows.length ? Number(totalRows[0].total_users) : rows.length;
+    return res.json({
+      ok: true,
+      users: rows,
+      myRank,
+      myUserId: authUser ? Number(authUser.id) : null,
+      totalUsers,
+    });
   } catch (err) {
     return res.status(500).json({ ok: false, error: err.message });
   }

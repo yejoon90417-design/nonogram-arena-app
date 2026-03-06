@@ -176,6 +176,8 @@ function App() {
   const [roomsLoading, setRoomsLoading] = useState(false);
   const [ratingUsers, setRatingUsers] = useState([]);
   const [ratingLoading, setRatingLoading] = useState(false);
+  const [myRatingRank, setMyRatingRank] = useState(null);
+  const [ratingTotalUsers, setRatingTotalUsers] = useState(0);
   const [isRematchLoading, setIsRematchLoading] = useState(false);
   const [lang, setLang] = useState(() => {
     const saved = localStorage.getItem(LANG_KEY);
@@ -1086,10 +1088,14 @@ function App() {
   const fetchRatingUsers = async () => {
     setRatingLoading(true);
     try {
-      const res = await fetch(`${API_BASE}/ratings/leaderboard?limit=200`);
+      const res = await fetch(`${API_BASE}/ratings/leaderboard?limit=200`, {
+        headers: { ...authHeaders },
+      });
       const data = await parseJsonSafe(res);
       if (!res.ok || !data.ok) throw new Error(data.error || L("랭킹 조회 실패", "Failed to load ranking"));
       setRatingUsers(Array.isArray(data.users) ? data.users : []);
+      setMyRatingRank(Number.isInteger(Number(data.myRank)) ? Number(data.myRank) : null);
+      setRatingTotalUsers(Number.isInteger(Number(data.totalUsers)) ? Number(data.totalUsers) : 0);
     } catch (err) {
       setStatus(err.message);
     } finally {
@@ -2677,8 +2683,20 @@ function App() {
         {isModeRanking && (
           <section className="rankingScreen">
             <div className="rankingTopBar">
-              <div className="rankingTitle">
-                <Trophy size={18} /> {L("레이팅 랭킹", "Rating Ranking")}
+              <div className="rankingTitleBlock">
+                <div className="rankingTitle">
+                  <Trophy size={18} /> {L("레이팅 랭킹", "Rating Ranking")}
+                </div>
+                {isLoggedIn && (
+                  <div className="rankingMeBadge">
+                    {myRatingRank
+                      ? L(
+                          `내 순위 #${myRatingRank}${ratingTotalUsers > 0 ? ` / ${ratingTotalUsers}` : ""}`,
+                          `My Rank #${myRatingRank}${ratingTotalUsers > 0 ? ` / ${ratingTotalUsers}` : ""}`
+                        )
+                      : L("내 순위: 집계 중", "My Rank: calculating")}
+                  </div>
+                )}
               </div>
               <div className="rankingActions">
                 <button className="singleActionBtn" onClick={fetchRatingUsers} disabled={ratingLoading}>

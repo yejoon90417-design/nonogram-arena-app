@@ -940,6 +940,11 @@
   gap: 0.6rem;
 }
 
+.rankingTitleBlock {
+  display: grid;
+  gap: 0.24rem;
+}
+
 .rankingTitle {
   display: inline-flex;
   align-items: center;
@@ -947,6 +952,19 @@
   font-size: 1.7rem;
   font-weight: 900;
   color: #172f4a;
+}
+
+.rankingMeBadge {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  border: 1px solid #98b2ce;
+  background: #eef6ff;
+  color: #1c3f67;
+  border-radius: 999px;
+  padding: 0.22rem 0.62rem;
+  font-size: 0.86rem;
+  font-weight: 800;
 }
 
 .rankingActions {
@@ -1985,6 +2003,11 @@ button:disabled {
 
   .rankingTitle {
     font-size: 1.3rem;
+  }
+
+  .rankingMeBadge {
+    font-size: 0.76rem;
+    padding: 0.2rem 0.52rem;
   }
 
   .rankingTableWrap {
