@@ -561,6 +561,9 @@ async function ensureAuthTables() {
   await pool.query(
     `CREATE INDEX IF NOT EXISTS idx_hall_replay_size_finished_desc ON hall_replay_records (width, height, finished_at_ms DESC);`
   );
+  // Defensive cleanup for legacy bad records.
+  await pool.query(`DELETE FROM best_replay_records WHERE elapsed_sec <= 0`);
+  await pool.query(`DELETE FROM hall_replay_records WHERE elapsed_sec <= 0`);
   const { rows: hallCountRows } = await pool.query(`SELECT COUNT(*)::int AS cnt FROM hall_replay_records`);
   const hallCount = hallCountRows.length ? Number(hallCountRows[0].cnt || 0) : 0;
   if (hallCount === 0) {
@@ -581,6 +584,7 @@ async function ensureAuthTables() {
       FROM best_replay_records b
       JOIN users u ON u.id = b.user_id
       WHERE u.is_bot = false
+        AND b.elapsed_sec > 0
       ON CONFLICT (width, height, user_id, puzzle_id, game_start_at_ms) DO NOTHING`
     );
   }
@@ -1600,6 +1604,7 @@ async function persistBestReplayRecordIfNeeded(room) {
         if (!Number.isInteger(Number(p.userId))) return false;
         if (p.isBot === true) return false;
         if (!Number.isInteger(Number(p.elapsedSec))) return false;
+        if (Number(p.elapsedSec) <= 0) return false;
         if (p.loseReason) return false;
         return true;
       })
@@ -2103,6 +2108,7 @@ app.get("/replays/best", async (_req, res) => {
        FROM best_replay_records r
        JOIN users u ON u.id = r.user_id
        WHERE u.is_bot = false
+         AND r.elapsed_sec > 0
        ORDER BY r.width ASC, r.height ASC`
     );
     return res.json({
@@ -2140,6 +2146,7 @@ app.get("/replays/best/:width/:height", async (req, res) => {
        JOIN puzzles p ON p.id = r.puzzle_id
        WHERE r.width = $1 AND r.height = $2
          AND u.is_bot = false
+         AND r.elapsed_sec > 0
        LIMIT 1`,
       [width, height]
     );
@@ -2198,6 +2205,7 @@ app.get("/replays/hall", async (_req, res) => {
          FROM hall_replay_records h
          JOIN users u ON u.id = h.user_id
          WHERE u.is_bot = false
+           AND h.elapsed_sec > 0
        ) ranked
        WHERE ranked.rank <= $1
        ORDER BY ranked.width ASC, ranked.height ASC, ranked.rank ASC`,
@@ -2267,6 +2275,7 @@ app.get("/replays/hall/record/:recordId", async (req, res) => {
        JOIN puzzles p ON p.id = h.puzzle_id
        WHERE h.id = $1
          AND u.is_bot = false
+         AND h.elapsed_sec > 0
        LIMIT 1`,
       [recordId]
     );
@@ -3291,7 +3300,7 @@ app.post("/race/finish", async (req, res) => {
       room.solutionBits = room.solutionBits || (await loadSolutionBitsHexById(room.puzzleId));
       room.totalAnswerCells = room.solutionBits ? popcountBuffer(room.solutionBits) : 0;
     }
-    player.elapsedSec = Math.max(0, Math.floor(elapsedSec));
+    player.elapsedSec = Math.max(1, Math.floor(elapsedSec));
     player.finishedAt = new Date().toISOString();
     player.correctAnswerCells = room.totalAnswerCells || player.correctAnswerCells || 0;
     player.lastMoveAt = Date.now();
