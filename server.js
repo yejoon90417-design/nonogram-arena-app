@@ -32,6 +32,9 @@ const PVP_MATCH_TICKET_TTL_MS = 1000 * 60 * 5;
 const PVP_ACCEPT_MS = 12000;
 const PVP_BAN_MS = 10000;
 const PVP_REVEAL_MS = 4200;
+const PVP_BOT_ENABLED = process.env.PVP_BOT_ENABLED !== "false";
+const PVP_BOT_WAIT_MS = Math.max(3000, Number(process.env.PVP_BOT_WAIT_MS || 12000));
+const PVP_BOT_POOL_MIN = 3;
 const PVP_SIZE_OPTIONS = [
   [5, 5],
   [10, 10],
@@ -39,6 +42,55 @@ const PVP_SIZE_OPTIONS = [
   [20, 20],
   [25, 25],
 ];
+const PVP_BOT_NAME_POOL = [
+  "Mina", "Jisoo", "Hana", "Yuna", "Sora", "Aria", "Noah", "Liam",
+  "Ava", "Ella", "Sena", "Haru", "Minji", "Yejin", "Rina", "Nari",
+  "Leo", "Nico", "Jude", "Evan", "Kira", "Ryu", "Dami", "Suji",
+];
+const BOT_DIFFICULTY_WEIGHTS = [
+  ["easy", 80],
+  ["normal", 20],
+  ["hard", 0],
+  ["pro", 0],
+];
+const BOT_DIFFICULTY_CONFIG = {
+  easy: {
+    acceptMin: 3800,
+    acceptMax: 7600,
+    banMin: 4200,
+    banMax: 8000,
+    skipBanRate: 0.55,
+    targetMinMul: 2.3,
+    targetMaxMul: 3.2,
+  },
+  normal: {
+    acceptMin: 3000,
+    acceptMax: 6200,
+    banMin: 3200,
+    banMax: 6800,
+    skipBanRate: 0.45,
+    targetMinMul: 1.8,
+    targetMaxMul: 2.6,
+  },
+  hard: {
+    acceptMin: 2200,
+    acceptMax: 4800,
+    banMin: 2400,
+    banMax: 5200,
+    skipBanRate: 0.35,
+    targetMinMul: 1.45,
+    targetMaxMul: 2.0,
+  },
+  pro: {
+    acceptMin: 1800,
+    acceptMax: 4200,
+    banMin: 2000,
+    banMax: 4500,
+    skipBanRate: 0.28,
+    targetMinMul: 1.2,
+    targetMaxMul: 1.7,
+  },
+};
 const ELO_DEFAULT_RATING = 1500;
 const ELO_PLACEMENT_GAMES = 20;
 const ELO_K_PLACEMENT = 40;
@@ -293,11 +345,14 @@ async function ensureAuthTables() {
       ADD COLUMN IF NOT EXISTS rating INTEGER NOT NULL DEFAULT ${ELO_DEFAULT_RATING},
       ADD COLUMN IF NOT EXISTS rating_games INTEGER NOT NULL DEFAULT 0,
       ADD COLUMN IF NOT EXISTS rating_wins INTEGER NOT NULL DEFAULT 0,
-      ADD COLUMN IF NOT EXISTS rating_losses INTEGER NOT NULL DEFAULT 0;
+      ADD COLUMN IF NOT EXISTS rating_losses INTEGER NOT NULL DEFAULT 0,
+      ADD COLUMN IF NOT EXISTS is_bot BOOLEAN NOT NULL DEFAULT false,
+      ADD COLUMN IF NOT EXISTS bot_skill VARCHAR(16);
   `);
   await pool.query(
     `CREATE INDEX IF NOT EXISTS idx_users_rating_desc ON users (rating DESC, rating_games DESC, id ASC);`
   );
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_users_is_bot ON users (is_bot);`);
   await pool.query(`
     CREATE TABLE IF NOT EXISTS user_sessions (
       token_hash CHAR(64) PRIMARY KEY,
@@ -314,6 +369,89 @@ async function ensureAuthTables() {
   );
 }
 
+function randomInt(min, max) {
+  const lo = Math.min(min, max);
+  const hi = Math.max(min, max);
+  return lo + Math.floor(Math.random() * (hi - lo + 1));
+}
+
+function randomFrom(arr) {
+  if (!Array.isArray(arr) || arr.length === 0) return null;
+  return arr[Math.floor(Math.random() * arr.length)];
+}
+
+function pickRandomBotDifficulty() {
+  const total = BOT_DIFFICULTY_WEIGHTS.reduce((acc, [, w]) => acc + Number(w || 0), 0);
+  if (total <= 0) return "normal";
+  let x = Math.random() * total;
+  for (const [difficulty, weight] of BOT_DIFFICULTY_WEIGHTS) {
+    x -= Number(weight || 0);
+    if (x <= 0) return difficulty;
+  }
+  return "normal";
+}
+
+function normalizeBotDifficulty(raw) {
+  const v = String(raw || "").trim().toLowerCase();
+  return BOT_DIFFICULTY_CONFIG[v] ? v : "normal";
+}
+
+function buildBotIdentity() {
+  const name = randomFrom(PVP_BOT_NAME_POOL) || "Player";
+  const suffix = randomInt(100, 999);
+  const nickname = `${name}${suffix}`;
+  const username = `bot_${crypto.randomBytes(6).toString("hex").slice(0, 10)}`;
+  const botSkill = pickRandomBotDifficulty();
+  return { username, nickname, botSkill };
+}
+
+async function ensureBotUsers() {
+  if (!PVP_BOT_ENABLED) return;
+  const { rows: botRows } = await pool.query(
+    `SELECT id FROM users WHERE is_bot = true ORDER BY id ASC`
+  );
+  const existingIds = botRows.map((r) => Number(r.id)).filter((v) => Number.isInteger(v));
+  if (existingIds.length > PVP_BOT_POOL_MIN) {
+    const deleteIds = existingIds.slice(PVP_BOT_POOL_MIN);
+    if (deleteIds.length) {
+      await pool.query(`DELETE FROM users WHERE id = ANY($1::bigint[])`, [deleteIds]);
+    }
+  }
+  let needed = Math.max(0, PVP_BOT_POOL_MIN - Math.min(existingIds.length, PVP_BOT_POOL_MIN));
+  while (needed > 0) {
+    const identity = buildBotIdentity();
+    const passwordHash = hashUserPassword(crypto.randomBytes(24).toString("hex"));
+    const skill = normalizeBotDifficulty(identity.botSkill);
+    const ratingBySkill = {
+      easy: randomInt(950, 1180),
+      normal: randomInt(1180, 1360),
+      hard: randomInt(1360, 1500),
+      pro: randomInt(1500, 1620),
+    };
+    try {
+      await pool.query(
+        `INSERT INTO users (
+          username, nickname, password_hash, is_bot, bot_skill, rating
+        ) VALUES ($1, $2, $3, true, $4, $5)`,
+        [
+          identity.username,
+          identity.nickname,
+          passwordHash,
+          skill,
+          ratingBySkill[skill] || ELO_DEFAULT_RATING,
+        ]
+      );
+      needed -= 1;
+    } catch (err) {
+      const msg = String(err.message || "");
+      if (msg.includes("users_username_key") || msg.includes("users_nickname_key")) {
+        continue;
+      }
+      throw err;
+    }
+  }
+}
+
 function normalizeMaxPlayers(raw) {
   const n = Number(raw);
   if (!Number.isInteger(n)) return 2;
@@ -326,6 +464,80 @@ function randomPvpSize() {
 
 function pvpSizeKey(width, height) {
   return `${width}x${height}`;
+}
+
+function createPvpBotTicket(botUser, now = Date.now()) {
+  const shortId = crypto.randomBytes(5).toString("hex");
+  const userId = Number(botUser?.id);
+  if (!Number.isInteger(userId)) return null;
+  const nickname = String(botUser?.nickname || "").trim() || `Player${randomInt(100, 999)}`;
+  const rawSkill = normalizeBotDifficulty(botUser?.bot_skill);
+  const botSkill = rawSkill === "hard" || rawSkill === "pro" ? "normal" : rawSkill;
+  return {
+    ticketId: `bot-ticket-${shortId}`,
+    userId,
+    username: String(botUser?.username || ""),
+    nickname,
+    botSkill,
+    state: "bot",
+    createdAt: now,
+    updatedAt: now,
+    matchId: null,
+    roomCode: null,
+    playerId: null,
+    cancelReason: null,
+    isBot: true,
+  };
+}
+
+async function fetchAvailablePvpBotTicket(now = Date.now()) {
+  if (!PVP_BOT_ENABLED) return null;
+  const { rows } = await pool.query(
+    `SELECT id, username, nickname, bot_skill
+     FROM users
+     WHERE is_bot = true
+     ORDER BY id ASC
+     LIMIT $1`,
+    [PVP_BOT_POOL_MIN]
+  );
+  if (!rows.length) return null;
+
+  const isBotBusyInMatch = (botUserId) => {
+    for (const match of pvpMatches.values()) {
+      if (!match || match.state === "cancelled") continue;
+      if (Array.isArray(match.players) && match.players.some((p) => Number(p.userId) === Number(botUserId))) {
+        return true;
+      }
+    }
+    return false;
+  };
+
+  for (const row of rows) {
+    const botId = Number(row.id);
+    if (!Number.isInteger(botId)) continue;
+    if (isUserInAnyRoom(botId)) continue;
+    if (isBotBusyInMatch(botId)) continue;
+    const ticket = createPvpBotTicket(row, now);
+    if (ticket) return ticket;
+  }
+  return null;
+}
+
+function pickBotTargetSec(width, height, rawDifficulty = "normal") {
+  const difficulty = normalizeBotDifficulty(rawDifficulty);
+  const conf = BOT_DIFFICULTY_CONFIG[difficulty] || BOT_DIFFICULTY_CONFIG.normal;
+  const key = `${width}x${height}`;
+  const baseMap = {
+    "5x5": 12,
+    "10x10": 26,
+    "15x15": 46,
+    "20x20": 72,
+    "25x25": 102,
+  };
+  const base = baseMap[key] || Math.max(18, Math.round((width * height) * 0.18));
+  const mul = conf.targetMinMul + Math.random() * (conf.targetMaxMul - conf.targetMinMul);
+  const jitter = 0.96 + Math.random() * 0.1;
+  return Math.max(6, Math.round(base * mul * jitter));
 }
 
 function eloExpected(myRating, opponentRating) {
@@ -481,6 +693,41 @@ function finalizePvpBans(match) {
   match.updatedAt = Date.now();
 }
 
+function runBotActionsForMatch(match, now = Date.now()) {
+  if (!match) return;
+  for (const player of match.players) {
+    if (!player.isBot) continue;
+    if (match.state === "accept" && !player.accepted) {
+      if (!player.botAcceptAt) {
+        const conf = BOT_DIFFICULTY_CONFIG[normalizeBotDifficulty(player.botDifficulty)] || BOT_DIFFICULTY_CONFIG.normal;
+        player.botAcceptAt = now + randomInt(conf.acceptMin, conf.acceptMax);
+      }
+      if (now < player.botAcceptAt) continue;
+      player.accepted = true;
+      player.acceptedAt = now;
+      match.updatedAt = now;
+      continue;
+    }
+    if (match.state === "ban" && !player.banSubmitted) {
+      const conf = BOT_DIFFICULTY_CONFIG[normalizeBotDifficulty(player.botDifficulty)] || BOT_DIFFICULTY_CONFIG.normal;
+      if (!player.botBanAt) {
+        player.botBanAt = now + randomInt(conf.banMin, conf.banMax);
+      }
+      if (now < player.botBanAt) continue;
+      const shouldSkip = Math.random() < conf.skipBanRate;
+      if (!shouldSkip && Array.isArray(match.options) && match.options.length > 0) {
+        const pick = match.options[Math.floor(Math.random() * match.options.length)];
+        player.bannedSizeKey = pick?.sizeKey || null;
+      } else {
+        player.bannedSizeKey = null;
+      }
+      player.banSubmitted = true;
+      player.banSubmittedAt = now;
+      match.updatedAt = now;
+    }
+  }
+}
+
 async function createPvpRoomForMatch(match) {
   if (!match || match.roomCode) return;
   if (!match.chosenWidth || !match.chosenHeight) {
@@ -507,11 +754,12 @@ async function createPvpRoomForMatch(match) {
   const now = Date.now();
   const nowIso = new Date(now).toISOString();
   const playerIdByUserId = new Map();
+  const hasBot = match.players.some((p) => p.isBot === true);
 
   const room = {
     roomCode,
     roomTitle: "PvP Match",
-    mode: "pvp_ranked",
+    mode: hasBot ? "pvp_bot" : "pvp_ranked",
     visibility: "public",
     passwordHash: null,
     puzzleId: puzzle.id,
@@ -543,6 +791,9 @@ async function createPvpRoomForMatch(match) {
       playerId,
       userId: p.userId,
       nickname: p.nickname,
+      isBot: p.isBot === true,
+      botDifficulty: p.isBot ? normalizeBotDifficulty(p.botDifficulty) : null,
+      botTargetSec: p.isBot ? pickBotTargetSec(puzzle.width, puzzle.height, p.botDifficulty) : null,
       joinedAt: nowIso,
       finishedAt: null,
       elapsedSec: null,
@@ -579,6 +830,7 @@ async function syncPvpMatchState(match) {
   const now = Date.now();
 
   if (match.state === "accept") {
+    runBotActionsForMatch(match, now);
     const allAccepted = match.players.every((p) => p.accepted === true);
     if (allAccepted) {
       match.state = "ban";
@@ -590,6 +842,7 @@ async function syncPvpMatchState(match) {
   }
 
   if (match.state === "ban") {
+    runBotActionsForMatch(match, now);
     const allSubmitted = match.players.every((p) => p.banSubmitted === true);
     if (allSubmitted || now >= match.banDeadlineAt) {
       finalizePvpBans(match);
@@ -647,6 +900,46 @@ function syncRoomState(room) {
   }
 }
 
+function advanceBotPlayers(room, now = Date.now()) {
+  if (!room || room.state !== "playing") return false;
+  const gameStartAt = Number(room.gameStartAt || now);
+  let changed = false;
+  for (const p of room.players.values()) {
+    if (!p.isBot) continue;
+    p.lastSeenAt = now;
+    if (p.disconnectedAt || Number.isInteger(p.elapsedSec)) continue;
+    const targetSec = Number(p.botTargetSec || pickBotTargetSec(room.width, room.height, p.botDifficulty));
+    if (!p.botTargetSec) p.botTargetSec = targetSec;
+    const elapsedSec = Math.max(0, Math.floor((now - gameStartAt) / 1000));
+    const clamped = Math.min(targetSec, elapsedSec);
+    const progress = Math.min(1, clamped / targetSec);
+    const nextCorrect = Math.max(
+      Number(p.correctAnswerCells || 0),
+      Math.min(Number(room.totalAnswerCells || 0), Math.floor((room.totalAnswerCells || 0) * progress))
+    );
+    if (nextCorrect !== Number(p.correctAnswerCells || 0)) {
+      p.correctAnswerCells = nextCorrect;
+      changed = true;
+    }
+    if (progress >= 1) {
+      p.elapsedSec = targetSec;
+      p.finishedAt = new Date(gameStartAt + targetSec * 1000).toISOString();
+      p.correctAnswerCells = room.totalAnswerCells || 0;
+      changed = true;
+    }
+  }
+  if (room.state === "playing" && shouldFinishRace(room)) {
+    const finished = getFinishedPlayers(room);
+    if (!room.winnerPlayerId && finished.length > 0) {
+      room.winnerPlayerId = finished[0].playerId;
+    }
+    room.state = "finished";
+    void applyRatedResultIfNeeded(room);
+    changed = true;
+  }
+  return changed;
+}
+
 function touchPlayer(room, playerId) {
   if (!room || !playerId) return null;
   const player = room.players.get(playerId);
@@ -659,6 +952,10 @@ function removeStalePlayers(room, now = Date.now()) {
   let changed = false;
 
   for (const [playerId, p] of room.players.entries()) {
+    if (p.isBot) {
+      p.lastSeenAt = now;
+      continue;
+    }
     let lastSeenAt = Number(p.lastSeenAt || 0);
     if (!lastSeenAt) {
       const joinedAtMs = Date.parse(p.joinedAt || "") || room.createdAt || now;
@@ -750,7 +1047,7 @@ function shouldFinishRace(room) {
 
 async function applyRatedResultIfNeeded(room) {
   if (!room || room.state !== "finished") return;
-  if (room.mode !== "pvp_ranked") return;
+  if (room.mode !== "pvp_ranked" && room.mode !== "pvp_bot") return;
   if (room.ratedResultApplied === true || room.ratedResultApplying === true) return;
   if (!Array.isArray(room.ratedUserIds) || room.ratedUserIds.length !== 2) return;
 
@@ -834,6 +1131,7 @@ async function applyRatedResultIfNeeded(room) {
 
 function roomPublicState(room) {
   syncRoomState(room);
+  advanceBotPlayers(room, Date.now());
   removeStalePlayers(room, Date.now());
   void applyRatedResultIfNeeded(room);
   const now = Date.now();
@@ -940,6 +1238,11 @@ setInterval(async () => {
     }
   }
   cleanupPvpQueue(now);
+  await maybeMatchWaitingTicketsWithBot(now);
+  for (const room of raceRooms.values()) {
+    syncRoomState(room);
+    advanceBotPlayers(room, now);
+  }
 }, 1000);
 
 setInterval(async () => {
@@ -1007,6 +1310,7 @@ app.post("/auth/login", async (req, res) => {
       `SELECT id, username, nickname, password_hash, rating, rating_games, rating_wins, rating_losses
        FROM users
        WHERE username = $1
+         AND is_bot = false
        LIMIT 1`,
       [username]
     );
@@ -1067,7 +1371,7 @@ app.get("/ratings/leaderboard", async (req, res) => {
   const offset = Number.isInteger(offsetRaw) ? Math.max(0, offsetRaw) : 0;
   try {
     const { rows } = await pool.query(
-      `SELECT id, username, nickname, rating, rating_games, rating_wins, rating_losses
+      `SELECT id, username, nickname, is_bot, rating, rating_games, rating_wins, rating_losses
        FROM users
        ORDER BY rating DESC, rating_wins DESC, rating_games DESC, id ASC
        LIMIT $1 OFFSET $2`,
@@ -1274,6 +1578,28 @@ function findPvpOpponent(myUserId) {
 function createPvpMatch(ticketA, ticketB) {
   const now = Date.now();
   const matchId = randomPlayerId();
+  const players = [ticketA, ticketB].map((ticket) => {
+    const isBot = ticket?.isBot === true;
+    const botDifficulty = isBot ? pickRandomBotDifficulty() : null;
+    const botConf = isBot
+      ? BOT_DIFFICULTY_CONFIG[normalizeBotDifficulty(botDifficulty)] || BOT_DIFFICULTY_CONFIG.normal
+      : null;
+    return {
+      userId: ticket.userId,
+      nickname: ticket.nickname,
+      ticketId: ticket.ticketId,
+      isBot,
+      botDifficulty,
+      botAcceptAt: isBot ? now + randomInt(botConf.acceptMin, botConf.acceptMax) : null,
+      botBanAt: null,
+      accepted: false,
+      acceptedAt: null,
+      banSubmitted: false,
+      bannedSizeKey: null,
+      banSubmittedAt: null,
+      playerId: null,
+    };
+  });
   const match = {
     matchId,
     state: "accept",
@@ -1290,30 +1616,7 @@ function createPvpMatch(ticketA, ticketB) {
     roomCode: null,
     puzzleId: null,
     puzzlePreview: null,
-    players: [
-      {
-        userId: ticketA.userId,
-        nickname: ticketA.nickname,
-        ticketId: ticketA.ticketId,
-        accepted: false,
-        acceptedAt: null,
-        banSubmitted: false,
-        bannedSizeKey: null,
-        banSubmittedAt: null,
-        playerId: null,
-      },
-      {
-        userId: ticketB.userId,
-        nickname: ticketB.nickname,
-        ticketId: ticketB.ticketId,
-        accepted: false,
-        acceptedAt: null,
-        banSubmitted: false,
-        bannedSizeKey: null,
-        banSubmittedAt: null,
-        playerId: null,
-      },
-    ],
+    players,
     options: PVP_SIZE_OPTIONS.map(([width, height]) => ({
       sizeKey: pvpSizeKey(width, height),
       width,
@@ -1325,16 +1628,44 @@ function createPvpMatch(ticketA, ticketB) {
 
   pvpMatches.set(matchId, match);
 
-  ticketA.state = "matching";
-  ticketA.matchId = matchId;
-  ticketA.cancelReason = null;
-  ticketA.updatedAt = now;
-  ticketB.state = "matching";
-  ticketB.matchId = matchId;
-  ticketB.cancelReason = null;
-  ticketB.updatedAt = now;
+  if (!ticketA.isBot) {
+    ticketA.state = "matching";
+    ticketA.matchId = matchId;
+    ticketA.cancelReason = null;
+    ticketA.updatedAt = now;
+  }
+  if (!ticketB.isBot) {
+    ticketB.state = "matching";
+    ticketB.matchId = matchId;
+    ticketB.cancelReason = null;
+    ticketB.updatedAt = now;
+  }
 
   return match;
+}
+
+async function maybeMatchWaitingTicketsWithBot(now = Date.now()) {
+  if (!PVP_BOT_ENABLED) return;
+  const candidates = [...pvpWaitingOrder];
+  for (const ticketId of candidates) {
+    const ticket = pvpQueueTickets.get(ticketId);
+    if (!ticket) continue;
+    if (ticket.state !== "waiting") continue;
+    if (isUserInAnyRoom(ticket.userId)) {
+      removePvpTicket(ticketId);
+      continue;
+    }
+    const waitedMs = now - Number(ticket.createdAt || now);
+    if (waitedMs < PVP_BOT_WAIT_MS) continue;
+    const idx = pvpWaitingOrder.indexOf(ticketId);
+    if (idx >= 0) pvpWaitingOrder.splice(idx, 1);
+    const botTicket = await fetchAvailablePvpBotTicket(now);
+    if (!botTicket) {
+      pvpWaitingOrder.push(ticketId);
+      continue;
+    }
+    createPvpMatch(ticket, botTicket);
+  }
 }
 
 app.post("/pvp/queue/join", requireAuth, async (req, res) => {
@@ -2093,6 +2424,7 @@ app.post("/verify", async (req, res) => {
 
 async function startServer() {
   await ensureAuthTables();
+  await ensureBotUsers();
   app.listen(PORT, () => {
     console.log(`server listening on http://localhost:${PORT}`);
   });
