@@ -1399,6 +1399,16 @@ async function applyLeaveRoomPenaltyIfNeeded(room, player) {
   if (room.state === "lobby" || room.state === "finished") return { applied: false, points: 0 };
   if (room.mode !== "pvp_ranked" && room.mode !== "pvp_bot") return { applied: false, points: 0 };
   if (player.isBot === true) return { applied: false, points: 0 };
+  // Don't penalize players who already finished (or effectively solved) this round.
+  if (Number.isInteger(Number(player.elapsedSec))) return { applied: false, points: 0 };
+  if (
+    Number.isFinite(Number(room.totalAnswerCells)) &&
+    Number(room.totalAnswerCells) > 0 &&
+    Number.isFinite(Number(player.correctAnswerCells)) &&
+    Number(player.correctAnswerCells) >= Number(room.totalAnswerCells)
+  ) {
+    return { applied: false, points: 0 };
+  }
   const userId = Number(player.userId);
   if (!Number.isInteger(userId)) return { applied: false, points: 0 };
   if (player.leavePenaltyAppliedAt) return { applied: false, points: 0 };
@@ -3328,6 +3338,9 @@ app.post("/race/leave", async (req, res) => {
   if (!player) {
     return res.status(404).json({ ok: false, error: "Player not found in room" });
   }
+
+  // Finalize first if finish conditions are already satisfied.
+  maybeFinalizeRoom(room);
 
   if (room.state === "lobby") {
     const wasHost = room.hostPlayerId === playerId;
