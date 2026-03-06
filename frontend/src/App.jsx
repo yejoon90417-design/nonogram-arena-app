@@ -1727,6 +1727,10 @@ function App() {
   };
 
   const queueCellPaint = (index, value) => {
+    const pending = pendingPaintRef.current;
+    const current = pending.has(index) ? pending.get(index) : (cellValuesRef.current[index] ?? 0);
+    // Prevent filled-paint from overwriting X marks.
+    if (value === 1 && current === 2) return;
     pendingPaintRef.current.set(index, value);
     if (!frameRef.current) {
       frameRef.current = requestAnimationFrame(flushQueuedPaint);
@@ -3154,8 +3158,14 @@ function App() {
                         {Array.from({ length: maxColHintDepth }).map((_, depthIdx) => {
                           const value = hint[hint.length - maxColHintDepth + depthIdx];
                           const hintId = `c-${colIdx}-${depthIdx}`;
+                          const solvedByHint = solvedCols.has(colIdx) && value != null;
                           return (
-                            <button key={hintId} type="button" className={`hintNum ${activeHints.has(hintId) ? "active" : ""}`} onClick={() => toggleHint(hintId)}>
+                            <button
+                              key={hintId}
+                              type="button"
+                              className={`hintNum ${activeHints.has(hintId) ? "active" : ""} ${solvedByHint ? "solved" : ""}`}
+                              onClick={() => toggleHint(hintId)}
+                            >
                               {value ?? ""}
                             </button>
                           );
@@ -3173,8 +3183,14 @@ function App() {
                         {Array.from({ length: maxRowHintDepth }).map((_, depthIdx) => {
                           const value = hint[hint.length - maxRowHintDepth + depthIdx];
                           const hintId = `r-${rowIdx}-${depthIdx}`;
+                          const solvedByHint = solvedRows.has(rowIdx) && value != null;
                           return (
-                            <button key={hintId} type="button" className={`hintNum ${activeHints.has(hintId) ? "active" : ""}`} onClick={() => toggleHint(hintId)}>
+                            <button
+                              key={hintId}
+                              type="button"
+                              className={`hintNum ${activeHints.has(hintId) ? "active" : ""} ${solvedByHint ? "solved" : ""}`}
+                              onClick={() => toggleHint(hintId)}
+                            >
                               {value ?? ""}
                             </button>
                           );
@@ -3519,11 +3535,12 @@ function App() {
                     {Array.from({ length: maxColHintDepth }).map((_, depthIdx) => {
                       const value = hint[hint.length - maxColHintDepth + depthIdx];
                       const hintId = `c-${colIdx}-${depthIdx}`;
+                      const solvedByHint = solvedCols.has(colIdx) && value != null;
                       return (
                         <button
                           key={hintId}
                           type="button"
-                          className={`hintNum ${activeHints.has(hintId) ? "active" : ""}`}
+                          className={`hintNum ${activeHints.has(hintId) ? "active" : ""} ${solvedByHint ? "solved" : ""}`}
                           onClick={() => toggleHint(hintId)}
                         >
                           {value ?? ""}
@@ -3547,11 +3564,12 @@ function App() {
                     {Array.from({ length: maxRowHintDepth }).map((_, depthIdx) => {
                       const value = hint[hint.length - maxRowHintDepth + depthIdx];
                       const hintId = `r-${rowIdx}-${depthIdx}`;
+                      const solvedByHint = solvedRows.has(rowIdx) && value != null;
                       return (
                         <button
                           key={hintId}
                           type="button"
-                          className={`hintNum ${activeHints.has(hintId) ? "active" : ""}`}
+                          className={`hintNum ${activeHints.has(hintId) ? "active" : ""} ${solvedByHint ? "solved" : ""}`}
                           onClick={() => toggleHint(hintId)}
                         >
                           {value ?? ""}

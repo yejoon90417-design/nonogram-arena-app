@@ -1679,6 +1679,12 @@ button:disabled {
   color: #5b3500;
 }
 
+.hintNum.solved {
+  background: #dce3eb;
+  color: #6f7f90;
+  border-color: #8ea0b4;
+}
+
 .board {
   touch-action: none;
   cursor: var(--board-cursor);
