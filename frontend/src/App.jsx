@@ -197,6 +197,7 @@ function App() {
   const [myRatingRank, setMyRatingRank] = useState(null);
   const [ratingTotalUsers, setRatingTotalUsers] = useState(0);
   const [hallDataBySize, setHallDataBySize] = useState({});
+  const [hallStreakTop, setHallStreakTop] = useState([]);
   const [hallActiveSizeKey, setHallActiveSizeKey] = useState("10x10");
   const [replayLoading, setReplayLoading] = useState(false);
   const [replayError, setReplayError] = useState("");
@@ -1291,7 +1292,18 @@ function App() {
           sizeKey,
         }));
       }
+      const streakTopRaw = Array.isArray(data?.streakTop) ? data.streakTop : [];
+      const streakTop = streakTopRaw
+        .map((r, idx) => ({
+          rank: Number(r.rank || idx + 1),
+          userId: Number(r.userId || 0),
+          nickname: String(r.nickname || ""),
+          winStreakBest: Number(r.winStreakBest || 0),
+        }))
+        .filter((r) => r.winStreakBest > 0)
+        .slice(0, 3);
       setHallDataBySize(mapped);
+      setHallStreakTop(streakTop);
       const fallbackSize = PVP_SIZE_KEYS.includes(hallActiveSizeKey)
         ? hallActiveSizeKey
         : PVP_SIZE_KEYS[0];
@@ -1300,6 +1312,7 @@ function App() {
       setReplayError(err.message);
       setStatus(err.message);
       setHallDataBySize({});
+      setHallStreakTop([]);
     } finally {
       setReplayLoading(false);
     }
@@ -3110,6 +3123,36 @@ function App() {
                 </tbody>
               </table>
             </div>
+
+            {hallStreakTop.length > 0 && (
+              <div className="hallStreakWrap">
+                <div className="hallStreakTitle">{L("최대 연승 TOP 3", "Best Win Streak TOP 3")}</div>
+                <table className="hallStreakTable">
+                  <thead>
+                    <tr>
+                      <th>{L("순위", "Rank")}</th>
+                      <th>{L("플레이어 이름", "Player")}</th>
+                      <th>{L("최대 연승", "Best Streak")}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {hallStreakTop.map((row, idx) => {
+                      const rank = Number(row.rank || idx + 1);
+                      const medalClass = rank === 1 ? "gold" : rank === 2 ? "silver" : rank === 3 ? "bronze" : "plain";
+                      return (
+                        <tr key={`hall-streak-${row.userId || idx}`}>
+                          <td className="hallRankCell">
+                            <span className={`hallMedal ${medalClass}`}>{formatRankLabel(rank)}</span>
+                          </td>
+                          <td>{row.nickname || "-"}</td>
+                          <td className="hallStreakValue">{Number(row.winStreakBest)} {L("연승", "wins")}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </section>
         )}
 

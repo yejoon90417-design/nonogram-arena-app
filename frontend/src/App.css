@@ -1206,6 +1206,40 @@
   padding: 1.2rem 0.8rem !important;
 }
 
+.hallStreakWrap {
+  border: 2px solid #173c61;
+  border-radius: 12px;
+  background: #f9fcff;
+  overflow: auto;
+}
+
+.hallStreakTitle {
+  padding: 0.58rem 0.72rem;
+  font-size: 1.02rem;
+  font-weight: 900;
+  color: #163a5f;
+  border-bottom: 1px solid #cfdeee;
+  background: #e7f1fc;
+}
+
+.hallStreakTable {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.hallStreakTable th,
+.hallStreakTable td {
+  border-bottom: 1px solid #cfdeee;
+  padding: 0.6rem 0.72rem;
+  text-align: left;
+  font-size: 0.98rem;
+}
+
+.hallStreakValue {
+  font-weight: 900;
+  color: #17385a;
+}
+
 .hallError {
   font-size: 0.95rem;
   font-weight: 800;
@@ -2600,6 +2634,18 @@ button:disabled {
 
   .hallTable th,
   .hallTable td {
+    font-size: 0.82rem;
+    padding: 0.42rem 0.34rem;
+    white-space: nowrap;
+  }
+
+  .hallStreakTitle {
+    font-size: 0.84rem;
+    padding: 0.42rem 0.34rem;
+  }
+
+  .hallStreakTable th,
+  .hallStreakTable td {
     font-size: 0.82rem;
     padding: 0.42rem 0.34rem;
     white-space: nowrap;

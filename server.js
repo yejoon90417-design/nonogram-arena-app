@@ -112,6 +112,13 @@ const BOT_DIFFICULTY_CONFIG = {
     targetMaxMul: 2.0,
   },
 };
+const BOT_SPAWN_WEIGHT_MIN = 1;
+const BOT_SPAWN_WEIGHT_MAX = 9;
+const BOT_SPAWN_WEIGHT_TIERS = [
+  [6, 35], // frequently seen
+  [3, 45], // normal
+  [1, 20], // rare
+];
 const BOT_SOLVE_TIME_RANGE_SEC = {
   "5x5": {
     easy: [120, 180],
@@ -146,6 +153,12 @@ const ELO_K_NORMAL = 24;
 const ELO_MIN_WIN_DELTA = Math.max(1, Number(process.env.ELO_MIN_WIN_DELTA || 5));
 const ELO_MIN_LOSS_DELTA = Math.max(1, Number(process.env.ELO_MIN_LOSS_DELTA || 5));
 const LEAVE_ROOM_PENALTY_RATING = Math.max(1, Number(process.env.LEAVE_ROOM_PENALTY_RATING || 30));
+const WIN_STREAK_BONUS_TABLE = [
+  [5, 10],
+  [4, 7],
+  [3, 5],
+  [2, 3],
+];
 const SESSION_TTL_MS = 1000 * 60 * 60 * 24 * 30;
 const POPCOUNT = new Uint8Array(256);
 for (let i = 0; i < 256; i += 1) {
@@ -433,7 +446,8 @@ async function getAuthUserFromReq(req) {
   if (!token) return null;
   const tokenHash = hashToken(token);
   const { rows } = await pool.query(
-    `SELECT u.id, u.username, u.nickname, u.rating, u.rating_games, u.rating_wins, u.rating_losses
+    `SELECT u.id, u.username, u.nickname, u.rating, u.rating_games, u.rating_wins, u.rating_losses,
+            u.win_streak_current, u.win_streak_best
      FROM user_sessions s
      JOIN users u ON u.id = s.user_id
      WHERE s.token_hash = $1
@@ -474,8 +488,11 @@ async function ensureAuthTables() {
       ADD COLUMN IF NOT EXISTS rating_games INTEGER NOT NULL DEFAULT 0,
       ADD COLUMN IF NOT EXISTS rating_wins INTEGER NOT NULL DEFAULT 0,
       ADD COLUMN IF NOT EXISTS rating_losses INTEGER NOT NULL DEFAULT 0,
+      ADD COLUMN IF NOT EXISTS win_streak_current INTEGER NOT NULL DEFAULT 0,
+      ADD COLUMN IF NOT EXISTS win_streak_best INTEGER NOT NULL DEFAULT 0,
       ADD COLUMN IF NOT EXISTS is_bot BOOLEAN NOT NULL DEFAULT false,
-      ADD COLUMN IF NOT EXISTS bot_skill VARCHAR(16);
+      ADD COLUMN IF NOT EXISTS bot_skill VARCHAR(16),
+      ADD COLUMN IF NOT EXISTS bot_spawn_weight INTEGER NOT NULL DEFAULT 3;
   `);
   await pool.query(
     `CREATE INDEX IF NOT EXISTS idx_users_rating_desc ON users (rating DESC, rating_games DESC, id ASC);`
@@ -647,19 +664,41 @@ function normalizeBotDifficulty(raw) {
   return BOT_DIFFICULTY_CONFIG[v] ? v : "normal";
 }
 
+function normalizeBotSpawnWeight(raw) {
+  const n = Number(raw);
+  if (!Number.isInteger(n)) return null;
+  return Math.max(BOT_SPAWN_WEIGHT_MIN, Math.min(BOT_SPAWN_WEIGHT_MAX, n));
+}
+
+function pickRandomBotSpawnWeight() {
+  const total = BOT_SPAWN_WEIGHT_TIERS.reduce((acc, [, weight]) => acc + Number(weight || 0), 0);
+  if (total <= 0) return 3;
+  let x = Math.random() * total;
+  for (const [spawnWeight, chance] of BOT_SPAWN_WEIGHT_TIERS) {
+    x -= Number(chance || 0);
+    if (x <= 0) return normalizeBotSpawnWeight(spawnWeight) || 3;
+  }
+  return 3;
+}
+
 function buildBotIdentity() {
   const name = randomFrom(PVP_BOT_NAME_POOL) || "Player";
   const nickname = name;
   const username = `bot_${crypto.randomBytes(6).toString("hex").slice(0, 10)}`;
   const botSkill = pickRandomBotDifficulty();
-  return { username, nickname, botSkill };
+  const botSpawnWeight = pickRandomBotSpawnWeight();
+  return { username, nickname, botSkill, botSpawnWeight };
 }
 
 async function ensureBotUsers() {
   if (!pvpBotEnabledRuntime) return;
   const { rows: botRows } = await pool.query(
-    `SELECT id, nickname, bot_skill FROM users WHERE is_bot = true ORDER BY id ASC`
+    `SELECT id, nickname, bot_skill, bot_spawn_weight FROM users WHERE is_bot = true ORDER BY id ASC`
   );
+  const currentSpawnWeights = botRows
+    .map((r) => normalizeBotSpawnWeight(r?.bot_spawn_weight))
+    .filter((v) => Number.isInteger(v));
+  const shouldRebalanceSpawnWeights = currentSpawnWeights.length > 0 && new Set(currentSpawnWeights).size <= 1;
   for (const row of botRows) {
     const botId = Number(row?.id);
     if (!Number.isInteger(botId)) continue;
@@ -672,6 +711,19 @@ async function ensureBotUsers() {
          SET bot_skill = $2
          WHERE id = $1 AND is_bot = true`,
         [botId, fixedSkill]
+      );
+    }
+    const rawSpawnWeight = normalizeBotSpawnWeight(row?.bot_spawn_weight);
+    const fixedSpawnWeight =
+      shouldRebalanceSpawnWeights || !Number.isInteger(rawSpawnWeight)
+        ? pickRandomBotSpawnWeight()
+        : rawSpawnWeight;
+    if (!Number.isInteger(rawSpawnWeight) || rawSpawnWeight !== fixedSpawnWeight) {
+      await pool.query(
+        `UPDATE users
+         SET bot_spawn_weight = $2
+         WHERE id = $1 AND is_bot = true`,
+        [botId, fixedSpawnWeight]
       );
     }
     const currentNickname = String(row?.nickname || "").trim();
@@ -710,16 +762,18 @@ async function ensureBotUsers() {
     const identity = buildBotIdentity();
     const passwordHash = hashUserPassword(crypto.randomBytes(24).toString("hex"));
     const skill = normalizeBotDifficulty(identity.botSkill);
+    const spawnWeight = normalizeBotSpawnWeight(identity.botSpawnWeight) || 3;
     try {
       await pool.query(
         `INSERT INTO users (
-          username, nickname, password_hash, is_bot, bot_skill
-        ) VALUES ($1, $2, $3, true, $4)`,
+          username, nickname, password_hash, is_bot, bot_skill, bot_spawn_weight
+        ) VALUES ($1, $2, $3, true, $4, $5)`,
         [
           identity.username,
           identity.nickname,
           passwordHash,
           skill,
+          spawnWeight,
         ]
       );
       needed -= 1;
@@ -753,12 +807,14 @@ function createPvpBotTicket(botUser, now = Date.now()) {
   if (!Number.isInteger(userId)) return null;
   const nickname = String(botUser?.nickname || "").trim() || `Player${randomInt(100, 999)}`;
   const botSkill = normalizeBotDifficulty(botUser?.bot_skill);
+  const botSpawnWeight = normalizeBotSpawnWeight(botUser?.bot_spawn_weight) || 3;
   return {
     ticketId: `bot-ticket-${shortId}`,
     userId,
     username: String(botUser?.username || ""),
     nickname,
     botSkill,
+    botSpawnWeight,
     state: "bot",
     createdAt: now,
     updatedAt: now,
@@ -770,10 +826,26 @@ function createPvpBotTicket(botUser, now = Date.now()) {
   };
 }
 
+function pickWeightedBotTicket(candidates) {
+  if (!Array.isArray(candidates) || candidates.length === 0) return null;
+  const weighted = candidates.map((ticket) => ({
+    ticket,
+    weight: normalizeBotSpawnWeight(ticket?.botSpawnWeight) || 1,
+  }));
+  const total = weighted.reduce((acc, x) => acc + x.weight, 0);
+  if (total <= 0) return randomFrom(candidates);
+  let x = Math.random() * total;
+  for (const entry of weighted) {
+    x -= entry.weight;
+    if (x <= 0) return entry.ticket;
+  }
+  return weighted[weighted.length - 1].ticket;
+}
+
 async function fetchAvailablePvpBotTicket(now = Date.now()) {
   if (!pvpBotEnabledRuntime) return null;
   const { rows } = await pool.query(
-    `SELECT id, username, nickname, bot_skill
+    `SELECT id, username, nickname, bot_skill, bot_spawn_weight
      FROM users
      WHERE is_bot = true`
   );
@@ -799,7 +871,7 @@ async function fetchAvailablePvpBotTicket(now = Date.now()) {
     if (ticket) candidates.push(ticket);
   }
   if (!candidates.length) return null;
-  return randomFrom(candidates);
+  return pickWeightedBotTicket(candidates);
 }
 
 function pickBotTargetSec(width, height, rawDifficulty = "normal") {
@@ -837,6 +909,15 @@ function eloNextRating(currentRating, expected, score, k) {
   const base = Number.isFinite(Number(currentRating)) ? Number(currentRating) : ELO_DEFAULT_RATING;
   const delta = eloSignedDelta(expected, score, k);
   return Math.max(100, Math.min(4000, Math.round(base + delta)));
+}
+
+function getWinStreakBonus(nextStreak) {
+  const streak = Number(nextStreak || 0);
+  if (!Number.isInteger(streak) || streak < 2) return 0;
+  for (const [minStreak, bonus] of WIN_STREAK_BONUS_TABLE) {
+    if (streak >= minStreak) return Number(bonus || 0);
+  }
+  return 0;
 }
 
 function isUserInAnyRoom(userId) {
@@ -1417,7 +1498,8 @@ async function applyLeaveRoomPenaltyIfNeeded(room, player) {
     `UPDATE users
      SET rating = GREATEST(100, rating - $2),
          rating_games = rating_games + 1,
-         rating_losses = rating_losses + 1
+         rating_losses = rating_losses + 1,
+         win_streak_current = 0
      WHERE id = $1`,
     [userId, LEAVE_ROOM_PENALTY_RATING]
   );
@@ -1452,7 +1534,7 @@ async function applyRatedResultIfNeeded(room) {
   try {
     await client.query("BEGIN");
     const { rows } = await client.query(
-      `SELECT id, rating, rating_games, rating_wins, rating_losses
+      `SELECT id, rating, rating_games, rating_wins, rating_losses, win_streak_current, win_streak_best
        FROM users
        WHERE id = ANY($1::bigint[])`,
       [[winnerUserId, loserUserId]]
@@ -1473,22 +1555,28 @@ async function applyRatedResultIfNeeded(room) {
     const expectedLoser = eloExpected(Number(loser.rating), Number(winner.rating));
     const winnerK = eloKFactor(Number(winner.rating_games));
     const loserK = eloKFactor(Number(loser.rating_games));
-    const winnerNext = eloNextRating(Number(winner.rating), expectedWinner, 1, winnerK);
+    const winnerBaseNext = eloNextRating(Number(winner.rating), expectedWinner, 1, winnerK);
     const loserNext = eloNextRating(Number(loser.rating), expectedLoser, 0, loserK);
+    const winnerNextStreak = Math.max(0, Number(winner.win_streak_current || 0)) + 1;
+    const winnerStreakBonus = getWinStreakBonus(winnerNextStreak);
+    const winnerNext = Math.max(100, Math.min(4000, winnerBaseNext + winnerStreakBonus));
 
     await client.query(
       `UPDATE users
        SET rating = $2,
            rating_games = rating_games + 1,
-           rating_wins = rating_wins + 1
+           rating_wins = rating_wins + 1,
+           win_streak_current = $3,
+           win_streak_best = GREATEST(win_streak_best, $3)
        WHERE id = $1`,
-      [winnerUserId, winnerNext]
+      [winnerUserId, winnerNext, winnerNextStreak]
     );
     await client.query(
       `UPDATE users
        SET rating = $2,
            rating_games = rating_games + 1,
-           rating_losses = rating_losses + 1
+           rating_losses = rating_losses + 1,
+           win_streak_current = 0
        WHERE id = $1`,
       [loserUserId, loserNext]
     );
@@ -1500,6 +1588,8 @@ async function applyRatedResultIfNeeded(room) {
       loserUserId,
       winnerDelta: winnerNext - Number(winner.rating),
       loserDelta: loserNext - Number(loser.rating),
+      winnerStreak: winnerNextStreak,
+      winnerStreakBonus,
       appliedAt: Date.now(),
     };
   } catch (err) {
@@ -1986,7 +2076,8 @@ app.post("/auth/signup", async (req, res) => {
     const { rows } = await pool.query(
       `INSERT INTO users (username, nickname, password_hash)
        VALUES ($1, $2, $3)
-       RETURNING id, username, nickname, rating, rating_games, rating_wins, rating_losses`,
+       RETURNING id, username, nickname, rating, rating_games, rating_wins, rating_losses,
+                 win_streak_current, win_streak_best`,
       [username, nickname, passwordHash]
     );
     const user = rows[0];
@@ -2011,7 +2102,8 @@ app.post("/auth/login", async (req, res) => {
   }
   try {
     const { rows } = await pool.query(
-      `SELECT id, username, nickname, password_hash, rating, rating_games, rating_wins, rating_losses
+      `SELECT id, username, nickname, password_hash, rating, rating_games, rating_wins, rating_losses,
+              win_streak_current, win_streak_best
        FROM users
        WHERE username = $1
          AND is_bot = false
@@ -2037,6 +2129,8 @@ app.post("/auth/login", async (req, res) => {
         rating_games: user.rating_games,
         rating_wins: user.rating_wins,
         rating_losses: user.rating_losses,
+        win_streak_current: user.win_streak_current,
+        win_streak_best: user.win_streak_best,
       },
     });
   } catch (err) {
@@ -2055,6 +2149,8 @@ app.get("/auth/me", requireAuth, async (req, res) => {
       rating_games: req.authUser.rating_games,
       rating_wins: req.authUser.rating_wins,
       rating_losses: req.authUser.rating_losses,
+      win_streak_current: req.authUser.win_streak_current,
+      win_streak_best: req.authUser.win_streak_best,
     },
   });
 });
@@ -2076,7 +2172,8 @@ app.get("/ratings/leaderboard", async (req, res) => {
   try {
     const authUser = await getAuthUserFromReq(req);
     const { rows } = await pool.query(
-      `SELECT id, username, nickname, is_bot, rating, rating_games, rating_wins, rating_losses
+      `SELECT id, username, nickname, is_bot, rating, rating_games, rating_wins, rating_losses,
+              win_streak_current, win_streak_best
        FROM users
        ORDER BY rating DESC, rating_wins DESC, rating_games DESC, id ASC
        LIMIT $1 OFFSET $2`,
@@ -2223,6 +2320,24 @@ app.get("/replays/hall", async (_req, res) => {
        ORDER BY ranked.width ASC, ranked.height ASC, ranked.rank ASC`,
       [HALL_TOP_LIMIT]
     );
+    const { rows: streakRows } = await pool.query(
+      `SELECT ranked.user_id, ranked.nickname, ranked.win_streak_best, ranked.rank
+       FROM (
+         SELECT
+           u.id AS user_id,
+           u.nickname,
+           u.win_streak_best,
+           ROW_NUMBER() OVER (
+             ORDER BY u.win_streak_best DESC, u.rating DESC, u.id ASC
+           ) AS rank
+         FROM users u
+         WHERE u.is_bot = false
+           AND u.win_streak_best > 0
+       ) ranked
+       WHERE ranked.rank <= $1
+       ORDER BY ranked.rank ASC`,
+      [HALL_TOP_LIMIT]
+    );
 
     const bySize = new Map();
     for (const [w, h] of PVP_SIZE_OPTIONS) {
@@ -2254,7 +2369,14 @@ app.get("/replays/hall", async (_req, res) => {
       sizes.push(bySize.get(key) || { sizeKey: key, width: w, height: h, top: [] });
     }
 
-    return res.json({ ok: true, sizes });
+    const streakTop = streakRows.map((r) => ({
+      rank: Number(r.rank),
+      userId: Number(r.user_id),
+      nickname: String(r.nickname || ""),
+      winStreakBest: Number(r.win_streak_best || 0),
+    }));
+
+    return res.json({ ok: true, sizes, streakTop });
   } catch (err) {
     return res.status(500).json({ ok: false, error: err.message });
   }
