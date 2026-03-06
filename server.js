@@ -390,6 +390,33 @@ async function ensureAuthTables() {
   await pool.query(
     `CREATE INDEX IF NOT EXISTS idx_user_sessions_expires_at ON user_sessions(expires_at);`
   );
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS race_match_logs (
+      id BIGSERIAL PRIMARY KEY,
+      room_code VARCHAR(16) NOT NULL,
+      game_start_at_ms BIGINT NOT NULL,
+      room_created_at_ms BIGINT NOT NULL,
+      mode VARCHAR(32) NOT NULL,
+      puzzle_id BIGINT,
+      width INTEGER,
+      height INTEGER,
+      winner_user_id BIGINT,
+      winner_nickname VARCHAR(64),
+      player_count INTEGER NOT NULL DEFAULT 0,
+      participants TEXT NOT NULL DEFAULT '',
+      rankings_json JSONB NOT NULL,
+      players_json JSONB NOT NULL,
+      finished_at_ms BIGINT NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+      UNIQUE (room_code, game_start_at_ms)
+    );
+  `);
+  await pool.query(
+    `CREATE INDEX IF NOT EXISTS idx_race_match_logs_finished_desc ON race_match_logs (finished_at_ms DESC);`
+  );
+  await pool.query(
+    `CREATE INDEX IF NOT EXISTS idx_race_match_logs_mode ON race_match_logs (mode);`
+  );
 }
 
 function randomInt(min, max) {
@@ -874,6 +901,8 @@ async function createPvpRoomForMatch(match) {
     ratedResultApplied: false,
     ratedResultApplying: false,
     ratedResult: null,
+    matchLogSaved: false,
+    matchLogSaving: false,
     chatMessages: [],
     reactionEvents: [],
     players: new Map(),
@@ -1030,6 +1059,7 @@ function advanceBotPlayers(room, now = Date.now()) {
     }
     room.state = "finished";
     void applyRatedResultIfNeeded(room);
+    void persistMatchLogIfNeeded(room);
     changed = true;
   }
   return changed;
@@ -1084,6 +1114,7 @@ function removeStalePlayers(room, now = Date.now()) {
     }
     room.state = "finished";
     void applyRatedResultIfNeeded(room);
+    void persistMatchLogIfNeeded(room);
     changed = true;
   }
 
@@ -1224,11 +1255,93 @@ async function applyRatedResultIfNeeded(room) {
   }
 }
 
+function getRoomMode(room) {
+  const mode = String(room?.mode || "").trim().toLowerCase();
+  return mode || "race_room";
+}
+
+async function persistMatchLogIfNeeded(room) {
+  if (!room || room.state !== "finished") return;
+  if (room.matchLogSaved === true || room.matchLogSaving === true) return;
+
+  const mode = getRoomMode(room);
+  if (mode === "single") return;
+
+  const gameStartAtMs = Number(room.gameStartAt || room.countdownStartAt || room.createdAt || Date.now());
+  const roomCreatedAtMs = Number(room.createdAt || gameStartAtMs || Date.now());
+  const finishedAtMs = Date.now();
+
+  room.matchLogSaving = true;
+  try {
+    const rankings = buildRankings(room);
+    const rankingByPlayerId = new Map(rankings.map((r) => [String(r.playerId || ""), r]));
+    const winnerPlayer =
+      (room.winnerPlayerId && room.players.get(room.winnerPlayerId)) || getFinishedPlayers(room)[0] || null;
+    const winnerUserId =
+      winnerPlayer && Number.isInteger(Number(winnerPlayer.userId)) ? Number(winnerPlayer.userId) : null;
+    const winnerNickname = winnerPlayer ? String(winnerPlayer.nickname || "") : null;
+
+    const playersPayload = Array.from(room.players.values())
+      .sort((a, b) => (String(a.joinedAt || "") > String(b.joinedAt || "") ? 1 : -1))
+      .map((p) => {
+        const rankInfo = rankingByPlayerId.get(String(p.playerId || "")) || null;
+        const status = String(rankInfo?.status || (p.disconnectedAt ? "left" : "dnf"));
+        const isWinner = room.winnerPlayerId && p.playerId === room.winnerPlayerId;
+        const outcome = isWinner ? "win" : status === "finished" ? "loss" : status;
+        return {
+          userId: Number.isInteger(Number(p.userId)) ? Number(p.userId) : null,
+          playerId: String(p.playerId || ""),
+          nickname: String(p.nickname || ""),
+          isBot: p.isBot === true,
+          elapsedSec: Number.isInteger(Number(p.elapsedSec)) ? Number(p.elapsedSec) : null,
+          rank: Number.isInteger(Number(rankInfo?.rank)) ? Number(rankInfo.rank) : null,
+          status,
+          outcome,
+          disconnectedAt: p.disconnectedAt || null,
+        };
+      });
+
+    const participants = playersPayload.map((p) => p.nickname).filter(Boolean).join(", ");
+    await pool.query(
+      `INSERT INTO race_match_logs (
+        room_code, game_start_at_ms, room_created_at_ms, mode, puzzle_id, width, height,
+        winner_user_id, winner_nickname, player_count, participants, rankings_json, players_json, finished_at_ms
+      ) VALUES (
+        $1, $2, $3, $4, $5, $6, $7,
+        $8, $9, $10, $11, $12::jsonb, $13::jsonb, $14
+      )
+      ON CONFLICT (room_code, game_start_at_ms) DO NOTHING`,
+      [
+        String(room.roomCode || ""),
+        gameStartAtMs,
+        roomCreatedAtMs,
+        mode,
+        Number.isInteger(Number(room.puzzleId)) ? Number(room.puzzleId) : null,
+        Number.isInteger(Number(room.width)) ? Number(room.width) : null,
+        Number.isInteger(Number(room.height)) ? Number(room.height) : null,
+        winnerUserId,
+        winnerNickname,
+        playersPayload.length,
+        participants,
+        JSON.stringify(rankings),
+        JSON.stringify(playersPayload),
+        finishedAtMs,
+      ]
+    );
+    room.matchLogSaved = true;
+  } catch (err) {
+    console.error("failed to persist race_match_logs:", err.message || err);
+  } finally {
+    room.matchLogSaving = false;
+  }
+}
+
 function roomPublicState(room) {
   syncRoomState(room);
   advanceBotPlayers(room, Date.now());
   removeStalePlayers(room, Date.now());
   void applyRatedResultIfNeeded(room);
+  void persistMatchLogIfNeeded(room);
   const now = Date.now();
   if (!Array.isArray(room.reactionEvents)) {
     room.reactionEvents = [];
@@ -1993,6 +2106,7 @@ app.post("/race/create", requireAuth, async (req, res) => {
     const room = {
       roomCode,
       roomTitle,
+      mode: "race_room",
       visibility,
       passwordHash: visibility === "private" ? hashPassword(roomPassword) : null,
       puzzleId: puzzle.id,
@@ -2008,6 +2122,8 @@ app.post("/race/create", requireAuth, async (req, res) => {
       countdownStartAt: null,
       gameStartAt: null,
       winnerPlayerId: null,
+      matchLogSaved: false,
+      matchLogSaving: false,
       chatMessages: [],
       reactionEvents: [],
       players: new Map(),
@@ -2154,6 +2270,8 @@ app.post("/race/start", (req, res) => {
   room.countdownStartAt = now;
   room.gameStartAt = now + COUNTDOWN_MS;
   room.winnerPlayerId = null;
+  room.matchLogSaved = false;
+  room.matchLogSaving = false;
   room.finishTarget = Math.max(1, room.players.size - 1);
   for (const p of room.players.values()) {
     p.finishedAt = null;
@@ -2226,6 +2344,7 @@ app.post("/race/rematch", async (req, res) => {
   if (room.state !== "finished") {
     return res.status(400).json({ ok: false, error: "Rematch is available only after finish" });
   }
+  await persistMatchLogIfNeeded(room);
 
   try {
     const { rows } = await pool.query(
@@ -2262,6 +2381,8 @@ app.post("/race/rematch", async (req, res) => {
     room.countdownStartAt = null;
     room.gameStartAt = null;
     room.winnerPlayerId = null;
+    room.matchLogSaved = false;
+    room.matchLogSaving = false;
     room.reactionEvents = [];
     room.finishTarget = Math.max(1, room.players.size - 1);
     for (const p of room.players.values()) {
@@ -2418,6 +2539,7 @@ app.post("/race/finish", async (req, res) => {
     room.state = "finished";
   }
   await applyRatedResultIfNeeded(room);
+  await persistMatchLogIfNeeded(room);
 
   return res.json({ ok: true, room: roomPublicState(room) });
 });
@@ -2469,6 +2591,7 @@ app.post("/race/leave", async (req, res) => {
     room.state = "finished";
   }
   await applyRatedResultIfNeeded(room);
+  await persistMatchLogIfNeeded(room);
 
   return res.json({ ok: true, room: roomPublicState(room) });
 });
