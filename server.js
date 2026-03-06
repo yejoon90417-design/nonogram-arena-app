@@ -34,7 +34,11 @@ const PVP_BAN_MS = 10000;
 const PVP_REVEAL_MS = 4200;
 const PVP_BOT_ENABLED = process.env.PVP_BOT_ENABLED !== "false";
 const PVP_BOT_WAIT_MS = Math.max(3000, Number(process.env.PVP_BOT_WAIT_MS || 12000));
-const PVP_BOT_POOL_MIN = 3;
+const PVP_BOT_POOL_MIN = 8;
+const PVP_FAKE_QUEUE_ENABLED = process.env.PVP_FAKE_QUEUE_ENABLED !== "false";
+const PVP_FAKE_QUEUE_MIN = Math.max(0, Number(process.env.PVP_FAKE_QUEUE_MIN || 0));
+const PVP_FAKE_QUEUE_MAX = Math.max(PVP_FAKE_QUEUE_MIN, Number(process.env.PVP_FAKE_QUEUE_MAX || 6));
+const PVP_FAKE_QUEUE_UPDATE_MS = Math.max(1200, Number(process.env.PVP_FAKE_QUEUE_UPDATE_MS || 3200));
 const PVP_SIZE_OPTIONS = [
   [5, 5],
   [10, 10],
@@ -106,6 +110,8 @@ for (let i = 0; i < 256; i += 1) {
   }
   POPCOUNT[i] = c;
 }
+let pvpFakeQueueCurrent = 0;
+let pvpFakeQueueUpdatedAt = 0;
 
 app.use(cors());
 app.use((req, res, next) => {
@@ -378,6 +384,35 @@ function randomInt(min, max) {
 function randomFrom(arr) {
   if (!Array.isArray(arr) || arr.length === 0) return null;
   return arr[Math.floor(Math.random() * arr.length)];
+}
+
+function updatePvpFakeQueue(now = Date.now()) {
+  if (!PVP_FAKE_QUEUE_ENABLED) {
+    pvpFakeQueueCurrent = 0;
+    pvpFakeQueueUpdatedAt = now;
+    return;
+  }
+  if (pvpFakeQueueUpdatedAt > 0 && now - pvpFakeQueueUpdatedAt < PVP_FAKE_QUEUE_UPDATE_MS) return;
+  pvpFakeQueueUpdatedAt = now;
+  if (pvpFakeQueueCurrent <= 0 && PVP_FAKE_QUEUE_MAX > 0) {
+    pvpFakeQueueCurrent = randomInt(PVP_FAKE_QUEUE_MIN, PVP_FAKE_QUEUE_MAX);
+    return;
+  }
+  const driftTarget = randomInt(PVP_FAKE_QUEUE_MIN, PVP_FAKE_QUEUE_MAX);
+  const step = randomInt(0, 2);
+  if (step <= 0) return;
+  if (driftTarget > pvpFakeQueueCurrent) {
+    pvpFakeQueueCurrent = Math.min(PVP_FAKE_QUEUE_MAX, pvpFakeQueueCurrent + step);
+  } else if (driftTarget < pvpFakeQueueCurrent) {
+    pvpFakeQueueCurrent = Math.max(PVP_FAKE_QUEUE_MIN, pvpFakeQueueCurrent - step);
+  }
+}
+
+function getVisiblePvpQueueSize(now = Date.now()) {
+  updatePvpFakeQueue(now);
+  const real = pvpWaitingOrder.length;
+  if (!PVP_FAKE_QUEUE_ENABLED) return real;
+  return Math.max(real, real + pvpFakeQueueCurrent);
 }
 
 function pickRandomBotDifficulty() {
@@ -1507,7 +1542,7 @@ async function buildPvpStatusPayload(ticket, viewerUserId) {
   const base = {
     ok: true,
     ticketId: ticket.ticketId,
-    queueSize: pvpWaitingOrder.length,
+    queueSize: getVisiblePvpQueueSize(),
   };
 
   if (ticket.state === "waiting") {
@@ -1752,7 +1787,7 @@ app.post("/pvp/queue/join", requireAuth, async (req, res) => {
       ticketId: myTicketId,
       state: "waiting",
       matched: false,
-      queueSize: pvpWaitingOrder.length,
+      queueSize: getVisiblePvpQueueSize(),
     });
   }
 
@@ -1762,7 +1797,7 @@ app.post("/pvp/queue/join", requireAuth, async (req, res) => {
     ticketId: myTicketId,
     state: "matching",
     matched: false,
-    queueSize: pvpWaitingOrder.length,
+    queueSize: getVisiblePvpQueueSize(),
     match: buildPvpMatchPublicState(match, req.authUser.id),
   });
 });
