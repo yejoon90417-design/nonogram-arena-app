@@ -219,6 +219,7 @@ function App() {
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [reactionMenuForPlayerId, setReactionMenuForPlayerId] = useState("");
   const [reactionFlights, setReactionFlights] = useState([]);
+  const [showMultiResultModal, setShowMultiResultModal] = useState(false);
   const [nowMs, setNowMs] = useState(Date.now());
   const [soundOn, setSoundOn] = useState(true);
   const [pvpTicketId, setPvpTicketId] = useState("");
@@ -272,6 +273,7 @@ function App() {
   const poopLoadingRef = useRef(false);
   const poopAudioFallbackRef = useRef(null);
   const tutorialCompleteShownRef = useRef(false);
+  const multiResultShownKeyRef = useRef("");
   const deferredCells = useDeferredValue(cells);
   const L = (ko, en) => (lang === "ko" ? ko : en);
 
@@ -533,9 +535,59 @@ function App() {
     }
     return L("패배하였습니다", "Defeat");
   }, [raceState, racePlayerId, lang]);
+  const raceResultKey = useMemo(() => {
+    if (!isModeMulti || !isInRaceRoom || !raceRoomCode || !raceState?.gameStartAt) return "";
+    return `${raceRoomCode}:${raceState.gameStartAt}`;
+  }, [isModeMulti, isInRaceRoom, raceRoomCode, raceState?.gameStartAt]);
+  const raceResultRows = useMemo(() => {
+    if (!isModeMulti || !raceState) return [];
+    const rankings = Array.isArray(raceState.rankings) ? raceState.rankings : [];
+    const rankingByPlayerId = new Map(rankings.map((r) => [String(r.playerId || ""), r]));
+    const players = Array.isArray(raceState.players) ? raceState.players : [];
+    return players
+      .map((p) => {
+        const rankInfo = rankingByPlayerId.get(String(p.playerId || "")) || null;
+        const rank = Number.isInteger(Number(rankInfo?.rank)) ? Number(rankInfo.rank) : null;
+        const elapsedSec = Number.isInteger(Number(p.elapsedSec))
+          ? Number(p.elapsedSec)
+          : Number.isInteger(Number(rankInfo?.elapsedSec))
+            ? Number(rankInfo.elapsedSec)
+            : null;
+        const status = String(rankInfo?.status || (p.disconnectedAt ? "left" : "dnf"));
+        return {
+          playerId: p.playerId,
+          nickname: p.nickname,
+          rank,
+          elapsedSec,
+          status,
+          isMe: p.playerId === racePlayerId,
+        };
+      })
+      .sort((a, b) => {
+        const ar = Number.isInteger(a.rank) ? a.rank : Number.MAX_SAFE_INTEGER;
+        const br = Number.isInteger(b.rank) ? b.rank : Number.MAX_SAFE_INTEGER;
+        if (ar !== br) return ar - br;
+        return String(a.nickname || "").localeCompare(String(b.nickname || ""));
+      });
+  }, [isModeMulti, raceState, racePlayerId]);
   const roomTitleText = raceState?.roomTitle || "";
   const chatMessages = Array.isArray(raceState?.chatMessages) ? raceState.chatMessages : [];
   const reactionEvents = Array.isArray(raceState?.reactionEvents) ? raceState.reactionEvents : [];
+
+  const formatRaceElapsedSec = (sec) => {
+    if (!Number.isInteger(Number(sec))) return "-";
+    const mm = String(Math.floor(Number(sec) / 60)).padStart(2, "0");
+    const ss = String(Number(sec) % 60).padStart(2, "0");
+    return `${mm}:${ss}`;
+  };
+
+  const formatRaceStatusLabel = (status) => {
+    if (status === "finished") return L("완주", "Finished");
+    if (status === "timeout") return L("타임아웃", "Timeout");
+    if (status === "left") return L("중도 이탈", "Left");
+    if (status === "dnf") return L("미완주", "DNF");
+    return status || "-";
+  };
 
   const countdownLeft = useMemo(() => {
     if (!isRaceCountdown || !raceState?.gameStartAt) return null;
@@ -1450,6 +1502,7 @@ function App() {
     setShowEmojiPicker(false);
     setReactionMenuForPlayerId("");
     setReactionFlights([]);
+    setShowMultiResultModal(false);
     setPublicRooms([]);
     setStatus(leaveStatusMessage);
     seenReactionIdsRef.current = new Set();
@@ -2094,6 +2147,20 @@ function App() {
       playSfx("lose");
     }
   }, [isInRaceRoom, racePhase, raceState, racePlayerId, myRacePlayer, L]);
+
+  useEffect(() => {
+    if (!showMultiResultModal) return;
+    if (!isModeMulti || !isInRaceRoom || racePhase !== "finished") {
+      setShowMultiResultModal(false);
+    }
+  }, [showMultiResultModal, isModeMulti, isInRaceRoom, racePhase]);
+
+  useEffect(() => {
+    if (!isModeMulti || !isInRaceRoom || racePhase !== "finished" || !raceResultKey) return;
+    if (multiResultShownKeyRef.current === raceResultKey) return;
+    multiResultShownKeyRef.current = raceResultKey;
+    setShowMultiResultModal(true);
+  }, [isModeMulti, isInRaceRoom, racePhase, raceResultKey]);
 
   useEffect(() => {
     if (!isLoggedIn || !isModePvp || !isInRaceRoom || racePhase !== "finished") return;
@@ -3421,6 +3488,44 @@ function App() {
         )}
 
         {status && !isModeAuth && <div className="status">{status}</div>}
+
+        {showMultiResultModal && isModeMulti && isInRaceRoom && isRaceFinished && (
+          <div className="modalBackdrop" onClick={() => setShowMultiResultModal(false)}>
+            <div className="modalCard raceResultModal" onClick={(e) => e.stopPropagation()}>
+              <h2>{L("경기 기록", "Match Results")}</h2>
+              <p>
+                {L("참가자 결과", "Participants")}:
+                {" "}
+                <b>{roomTitleText || raceRoomCode}</b>
+              </p>
+              <div className="raceResultTableWrap">
+                <table className="raceResultTable">
+                  <thead>
+                    <tr>
+                      <th>{L("순위", "Rank")}</th>
+                      <th>{L("닉네임", "Nickname")}</th>
+                      <th>{L("기록", "Time")}</th>
+                      <th>{L("상태", "Status")}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {raceResultRows.map((row) => (
+                      <tr key={`result-${row.playerId}`} className={row.isMe ? "me" : ""}>
+                        <td>{Number.isInteger(row.rank) ? row.rank : "-"}</td>
+                        <td>{row.nickname}</td>
+                        <td>{formatRaceElapsedSec(row.elapsedSec)}</td>
+                        <td>{formatRaceStatusLabel(row.status)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <div className="modalActions">
+                <button onClick={() => setShowMultiResultModal(false)}>{L("확인", "OK")}</button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {showCreateModal && (
           <div className="modalBackdrop" onClick={() => setShowCreateModal(false)}>

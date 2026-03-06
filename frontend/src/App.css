@@ -1520,6 +1520,50 @@
   margin: 0;
 }
 
+.raceResultModal {
+  width: min(620px, calc(100vw - 24px));
+}
+
+.raceResultTableWrap {
+  border: 1px solid #d0dfef;
+  border-radius: 6px;
+  overflow: hidden;
+  max-height: min(52vh, 420px);
+  overflow-y: auto;
+  background: #f8fcff;
+}
+
+.raceResultTable {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.raceResultTable th,
+.raceResultTable td {
+  padding: 0.46rem 0.54rem;
+  border-bottom: 1px solid #d9e6f2;
+  text-align: left;
+  font-size: 0.88rem;
+}
+
+.raceResultTable th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: #ecf4fb;
+  font-weight: 900;
+  color: #204061;
+}
+
+.raceResultTable tr:last-child td {
+  border-bottom: none;
+}
+
+.raceResultTable tr.me td {
+  background: #eef7ff;
+  font-weight: 800;
+}
+
 .modalCard label {
   display: grid;
   gap: 0.2rem;
