@@ -2580,7 +2580,7 @@ function App() {
         dx: to.left + to.width / 2 - (from.left + from.width / 2),
         dy: to.top + to.height / 2 - (from.top + from.height / 2),
       });
-      if (event.emoji === "💩") {
+      if (event.emoji === "??") {
         playPoopSfx();
       }
     }
@@ -2666,10 +2666,10 @@ function App() {
         className={`panel ${isModeMenu || isModeAuth ? "panelMenu" : ""} ${lang === "en" ? "langEn" : "langKo"}`}
       >
         <div className="topBar">
-          <div className="brandWrap">
+          <button type="button" className="brandWrap" onClick={backToMenu}>
             <div className="logoPixel" aria-hidden="true" />
             <h1 className="title">Nonogram Arena</h1>
-          </div>
+          </button>
           {!isModeAuth && (
             <div className="topAuth">
               <div className="langSwitch" role="group" aria-label="Language switch">
@@ -3731,9 +3731,9 @@ function App() {
                       <span>{percent}%</span>
                       {reactionMenuForPlayerId === p.playerId && (
                         <span className="reactionMenu">
-                          <button onClick={() => sendReaction(p.playerId, "💩")}>💩</button>
-                          <button onClick={() => sendReaction(p.playerId, "👍")}>👍</button>
-                          <button onClick={() => sendReaction(p.playerId, "❤️")}>❤️</button>
+                          <button onClick={() => sendReaction(p.playerId, "??")}>??</button>
+                          <button onClick={() => sendReaction(p.playerId, "??")}>??</button>
+                          <button onClick={() => sendReaction(p.playerId, "??")}>??</button>
                         </span>
                       )}
                     </div>
@@ -3764,7 +3764,7 @@ function App() {
                 </div>
                 <div className="chatInputRow">
                   <div className="emojiWrap" ref={emojiWrapRef}>
-                    <button type="button" onClick={() => setShowEmojiPicker((prev) => !prev)} title={L("이모지", "Emoji")}>🙂</button>
+                    <button type="button" onClick={() => setShowEmojiPicker((prev) => !prev)} title={L("이모지", "Emoji")}>??</button>
                     {showEmojiPicker && (
                       <div className="emojiPopover">
                         <EmojiPicker
@@ -4163,3 +4163,4 @@ function App() {
 }
 
 export default App;
+

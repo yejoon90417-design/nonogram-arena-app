@@ -35,7 +35,7 @@ const PVP_REVEAL_MS = 4200;
 const PVP_MATCH_DELAY_MIN_MS = Math.max(1000, Number(process.env.PVP_MATCH_DELAY_MIN_MS || 1000));
 const PVP_MATCH_DELAY_MAX_MS = Math.max(
   PVP_MATCH_DELAY_MIN_MS,
-  Number(process.env.PVP_MATCH_DELAY_MAX_MS || 60000)
+  Number(process.env.PVP_MATCH_DELAY_MAX_MS || 44000)
 );
 const RACE_INACTIVITY_TIMEOUT_MS = Math.max(5000, Number(process.env.RACE_INACTIVITY_TIMEOUT_MS || 60000));
 const PVP_BOT_ENABLED_DEFAULT = process.env.PVP_BOT_ENABLED !== "false";
