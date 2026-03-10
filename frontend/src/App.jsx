@@ -13,6 +13,42 @@ const THEME_KEY = "nonogram-ui-theme";
 const TUTORIAL_SEEN_KEY = "nonogram-tutorial-seen-v1";
 const PVP_SIZE_KEYS = ["5x5", "10x10", "15x15", "20x20", "25x25"];
 const PVP_REVEAL_RESULT_HOLD_MS = 1600;
+const ADSENSE_SCRIPT_ID = "adsense-auto-script";
+const ADSENSE_SRC = "https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-1492932683312516";
+const MODE_TO_PATH = {
+  menu: "/",
+  single: "/single",
+  multi: "/multi",
+  pvp: "/pvp",
+  auth: "/auth",
+  tutorial: "/tutorial",
+  ranking: "/ranking",
+  replay_hall: "/hall",
+};
+
+function normalizePath(pathname) {
+  let path = pathname || "/";
+  if (!path.startsWith("/")) path = `/${path}`;
+  if (path === "/index.html") return "/";
+  path = path.replace(/\/+$/, "");
+  return path || "/";
+}
+
+function getModeFromPath(pathname) {
+  const path = normalizePath(pathname);
+  if (path === "/single") return "single";
+  if (path === "/multi") return "multi";
+  if (path === "/pvp") return "pvp";
+  if (path === "/auth") return "auth";
+  if (path === "/tutorial") return "tutorial";
+  if (path === "/ranking") return "ranking";
+  if (path === "/hall") return "replay_hall";
+  return "menu";
+}
+
+function getPathFromMode(mode) {
+  return MODE_TO_PATH[mode] || "/";
+}
 
 const TUTORIAL_PUZZLE = {
   id: "tutorial-5x5",
@@ -164,7 +200,10 @@ function isRaceOnlyStatusMessage(message) {
 }
 
 function App() {
-  const [playMode, setPlayMode] = useState("menu"); // menu | single | multi | pvp | tutorial | auth | ranking | replay_hall
+  const [playMode, setPlayMode] = useState(() => {
+    if (typeof window === "undefined") return "menu";
+    return getModeFromPath(window.location.pathname);
+  }); // menu | single | multi | pvp | tutorial | auth | ranking | replay_hall
   const [selectedSize, setSelectedSize] = useState("25x25");
   const [puzzle, setPuzzle] = useState(null);
   const [cells, setCells] = useState([]); // 0 empty, 1 filled, 2 marked(X)
@@ -296,6 +335,44 @@ function App() {
   const multiResultShownKeyRef = useRef("");
   const deferredCells = useDeferredValue(cells);
   const L = (ko, en) => (lang === "ko" ? ko : en);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const onPopState = () => {
+      const modeFromPath = getModeFromPath(window.location.pathname);
+      setPlayMode((prev) => (prev === modeFromPath ? prev : modeFromPath));
+    };
+    window.addEventListener("popstate", onPopState);
+    return () => window.removeEventListener("popstate", onPopState);
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const targetPath = getPathFromMode(playMode);
+    const currentPath = normalizePath(window.location.pathname);
+    if (currentPath === targetPath) return;
+    window.history.pushState({ mode: playMode }, "", targetPath);
+  }, [playMode]);
+
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    const isAuthPage = playMode === "auth";
+    const existing = document.getElementById(ADSENSE_SCRIPT_ID);
+
+    if (isAuthPage) {
+      if (existing) existing.remove();
+      return;
+    }
+
+    if (existing) return;
+
+    const script = document.createElement("script");
+    script.id = ADSENSE_SCRIPT_ID;
+    script.async = true;
+    script.src = ADSENSE_SRC;
+    script.crossOrigin = "anonymous";
+    document.head.appendChild(script);
+  }, [playMode]);
 
   useEffect(() => {
     localStorage.setItem(LANG_KEY, lang);
