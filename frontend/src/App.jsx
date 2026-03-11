@@ -4373,14 +4373,6 @@ function App() {
                   <span className="settingsRangeValue">{Number(settingsDraft.soundVolume || 0)}%</span>
                 </div>
               </div>
-              {!isLoggedIn && (
-                <div className="settingsHint">
-                  {L(
-                    "비로그인 상태에서는 설정값이 아이디에 저장되지 않습니다",
-                    "When logged out, settings are not saved to an account."
-                  )}
-                </div>
-              )}
               {settingsError && <div className="modalError">{settingsError}</div>}
               <div className="modalActions">
                 <button onClick={() => setShowSettingsModal(false)}>{L("취소", "Cancel")}</button>
