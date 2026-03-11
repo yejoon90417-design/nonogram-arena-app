@@ -64,6 +64,7 @@ const PVP_BOT_RETRY_MAX_MS = Math.max(
   Number(process.env.PVP_BOT_RETRY_MAX_MS || 4200)
 );
 const PVP_BOT_POOL_MIN = 15;
+const PVP_BOT_EXCLUDE_EASY = process.env.PVP_BOT_EXCLUDE_EASY !== "false";
 const REPLAY_FRAME_MIN_INTERVAL_MS = Math.max(80, Number(process.env.REPLAY_FRAME_MIN_INTERVAL_MS || 140));
 const REPLAY_MAX_FRAMES = Math.max(200, Number(process.env.REPLAY_MAX_FRAMES || 2400));
 const PVP_FAKE_QUEUE_ENABLED = process.env.PVP_FAKE_QUEUE_ENABLED !== "false";
@@ -378,6 +379,24 @@ function normalizeUserPassword(raw) {
   return s;
 }
 
+function normalizeUiLang(raw) {
+  return String(raw || "").trim().toLowerCase() === "en" ? "en" : "ko";
+}
+
+function normalizeUiTheme(raw) {
+  return String(raw || "").trim().toLowerCase() === "dark" ? "dark" : "light";
+}
+
+function normalizeUiSoundVolume(raw, legacyOn = undefined) {
+  const n = Number(raw);
+  if (Number.isFinite(n)) {
+    return Math.max(0, Math.min(100, Math.round(n)));
+  }
+  if (legacyOn === false) return 0;
+  if (legacyOn === true) return 100;
+  return 100;
+}
+
 function normalizeRoomTitle(raw) {
   const s = String(raw || "").trim();
   if (!s) return "Race Room";
@@ -452,7 +471,7 @@ async function getAuthUserFromReq(req) {
   const tokenHash = hashToken(token);
   const { rows } = await pool.query(
     `SELECT u.id, u.username, u.nickname, u.rating, u.rating_games, u.rating_wins, u.rating_losses,
-            u.win_streak_current, u.win_streak_best
+            u.win_streak_current, u.win_streak_best, u.ui_lang, u.ui_theme, u.ui_sound_on, u.ui_sound_volume
      FROM user_sessions s
      JOIN users u ON u.id = s.user_id
      WHERE s.token_hash = $1
@@ -497,8 +516,27 @@ async function ensureAuthTables() {
       ADD COLUMN IF NOT EXISTS win_streak_best INTEGER NOT NULL DEFAULT 0,
       ADD COLUMN IF NOT EXISTS is_bot BOOLEAN NOT NULL DEFAULT false,
       ADD COLUMN IF NOT EXISTS bot_skill VARCHAR(16),
-      ADD COLUMN IF NOT EXISTS bot_spawn_weight INTEGER NOT NULL DEFAULT 3;
+      ADD COLUMN IF NOT EXISTS bot_spawn_weight INTEGER NOT NULL DEFAULT 3,
+      ADD COLUMN IF NOT EXISTS ui_lang VARCHAR(8) NOT NULL DEFAULT 'ko',
+      ADD COLUMN IF NOT EXISTS ui_theme VARCHAR(8) NOT NULL DEFAULT 'light',
+      ADD COLUMN IF NOT EXISTS ui_sound_on BOOLEAN NOT NULL DEFAULT true,
+      ADD COLUMN IF NOT EXISTS ui_sound_volume INTEGER;
   `);
+  await pool.query(`UPDATE users SET ui_lang = 'ko' WHERE ui_lang IS NULL OR ui_lang NOT IN ('ko', 'en')`);
+  await pool.query(`UPDATE users SET ui_theme = 'light' WHERE ui_theme IS NULL OR ui_theme NOT IN ('light', 'dark')`);
+  await pool.query(
+    `UPDATE users
+     SET ui_sound_volume = CASE
+       WHEN ui_sound_on = false THEN 0
+       ELSE 100
+     END
+     WHERE ui_sound_volume IS NULL`
+  );
+  await pool.query(
+    `UPDATE users
+     SET ui_sound_volume = GREATEST(0, LEAST(100, ui_sound_volume)),
+         ui_sound_on = (GREATEST(0, LEAST(100, ui_sound_volume)) > 0)`
+  );
   await pool.query(
     `CREATE INDEX IF NOT EXISTS idx_users_rating_desc ON users (rating DESC, rating_games DESC, id ASC);`
   );
@@ -675,6 +713,18 @@ function normalizeBotSpawnWeight(raw) {
   return Math.max(BOT_SPAWN_WEIGHT_MIN, Math.min(BOT_SPAWN_WEIGHT_MAX, n));
 }
 
+function normalizeRatingValue(raw) {
+  const n = Number(raw);
+  if (!Number.isFinite(n)) return ELO_DEFAULT_RATING;
+  return Math.max(100, Math.round(n));
+}
+
+function normalizeRatingRank(raw) {
+  const n = Number(raw);
+  if (!Number.isInteger(n) || n <= 0) return null;
+  return n;
+}
+
 function pickRandomBotSpawnWeight() {
   const total = BOT_SPAWN_WEIGHT_TIERS.reduce((acc, [, weight]) => acc + Number(weight || 0), 0);
   if (total <= 0) return 3;
@@ -813,11 +863,15 @@ function createPvpBotTicket(botUser, now = Date.now()) {
   const nickname = String(botUser?.nickname || "").trim() || `Player${randomInt(100, 999)}`;
   const botSkill = normalizeBotDifficulty(botUser?.bot_skill);
   const botSpawnWeight = normalizeBotSpawnWeight(botUser?.bot_spawn_weight) || 3;
+  const rating = normalizeRatingValue(botUser?.rating);
+  const ratingRank = normalizeRatingRank(botUser?.rating_rank);
   return {
     ticketId: `bot-ticket-${shortId}`,
     userId,
     username: String(botUser?.username || ""),
     nickname,
+    rating,
+    ratingRank,
     botSkill,
     botSpawnWeight,
     state: "bot",
@@ -850,8 +904,20 @@ function pickWeightedBotTicket(candidates) {
 async function fetchAvailablePvpBotTicket(now = Date.now()) {
   if (!pvpBotEnabledRuntime) return null;
   const { rows } = await pool.query(
-    `SELECT id, username, nickname, bot_skill, bot_spawn_weight
-     FROM users
+    `WITH ranked AS (
+       SELECT
+         u.id,
+         u.username,
+         u.nickname,
+         u.bot_skill,
+         u.bot_spawn_weight,
+         u.is_bot,
+         u.rating,
+         ROW_NUMBER() OVER (ORDER BY u.rating DESC, u.rating_wins DESC, u.rating_games DESC, u.id ASC) AS rating_rank
+       FROM users u
+     )
+     SELECT id, username, nickname, bot_skill, bot_spawn_weight, rating, rating_rank
+     FROM ranked
      WHERE is_bot = true`
   );
   if (!rows.length) return null;
@@ -868,6 +934,8 @@ async function fetchAvailablePvpBotTicket(now = Date.now()) {
 
   const candidates = [];
   for (const row of rows) {
+    const difficulty = normalizeBotDifficulty(row?.bot_skill);
+    if (PVP_BOT_EXCLUDE_EASY && difficulty === "easy") continue;
     const botId = Number(row.id);
     if (!Number.isInteger(botId)) continue;
     if (isUserInAnyRoom(botId)) continue;
@@ -877,6 +945,31 @@ async function fetchAvailablePvpBotTicket(now = Date.now()) {
   }
   if (!candidates.length) return null;
   return pickWeightedBotTicket(candidates);
+}
+
+async function fetchUserRatingSnapshot(userId) {
+  const numericUserId = Number(userId);
+  if (!Number.isInteger(numericUserId)) return null;
+  const { rows } = await pool.query(
+    `SELECT ranked.rating, ranked.rank_pos
+     FROM (
+       SELECT
+         u.id,
+         u.rating,
+         ROW_NUMBER() OVER (ORDER BY u.rating DESC, u.rating_wins DESC, u.rating_games DESC, u.id ASC) AS rank_pos
+       FROM users u
+     ) ranked
+     WHERE ranked.id = $1
+     LIMIT 1`,
+    [numericUserId]
+  );
+  if (!rows.length) return null;
+  const rating = normalizeRatingValue(rows[0].rating);
+  const rank = normalizeRatingRank(rows[0].rank_pos);
+  return {
+    rating,
+    rank,
+  };
 }
 
 function pickBotTargetSec(width, height, rawDifficulty = "normal") {
@@ -995,6 +1088,8 @@ function buildPvpMatchPublicState(match, viewerUserId) {
     players: match.players.map((p) => ({
       userId: p.userId,
       nickname: p.nickname,
+      rating: normalizeRatingValue(p.rating),
+      ratingRank: normalizeRatingRank(p.ratingRank),
       accepted: p.accepted === true,
       acceptedAt: p.acceptedAt || null,
       banSubmitted: p.banSubmitted === true,
@@ -2139,7 +2234,7 @@ app.post("/auth/signup", async (req, res) => {
       `INSERT INTO users (username, nickname, password_hash)
        VALUES ($1, $2, $3)
        RETURNING id, username, nickname, rating, rating_games, rating_wins, rating_losses,
-                 win_streak_current, win_streak_best`,
+                 win_streak_current, win_streak_best, ui_lang, ui_theme, ui_sound_on, ui_sound_volume`,
       [username, nickname, passwordHash]
     );
     const user = rows[0];
@@ -2165,7 +2260,7 @@ app.post("/auth/login", async (req, res) => {
   try {
     const { rows } = await pool.query(
       `SELECT id, username, nickname, password_hash, rating, rating_games, rating_wins, rating_losses,
-              win_streak_current, win_streak_best
+              win_streak_current, win_streak_best, ui_lang, ui_theme, ui_sound_on, ui_sound_volume
        FROM users
        WHERE username = $1
          AND is_bot = false
@@ -2193,6 +2288,10 @@ app.post("/auth/login", async (req, res) => {
         rating_losses: user.rating_losses,
         win_streak_current: user.win_streak_current,
         win_streak_best: user.win_streak_best,
+        ui_lang: user.ui_lang,
+        ui_theme: user.ui_theme,
+        ui_sound_on: user.ui_sound_on,
+        ui_sound_volume: user.ui_sound_volume,
       },
     });
   } catch (err) {
@@ -2213,9 +2312,47 @@ app.get("/auth/me", requireAuth, async (req, res) => {
       rating_losses: req.authUser.rating_losses,
       win_streak_current: req.authUser.win_streak_current,
       win_streak_best: req.authUser.win_streak_best,
+      ui_lang: req.authUser.ui_lang,
+      ui_theme: req.authUser.ui_theme,
+      ui_sound_on: req.authUser.ui_sound_on,
+      ui_sound_volume: req.authUser.ui_sound_volume,
     },
   });
 });
+
+const updateAuthPreferences = async (req, res) => {
+  const uiLang = normalizeUiLang(req.body?.ui_lang);
+  const uiTheme = normalizeUiTheme(req.body?.ui_theme);
+  const uiSoundVolume = normalizeUiSoundVolume(
+    req.body?.ui_sound_volume,
+    req.body?.ui_sound_on
+  );
+  const uiSoundOn = uiSoundVolume > 0;
+  try {
+    const { rows } = await pool.query(
+      `UPDATE users
+       SET ui_lang = $2,
+           ui_theme = $3,
+           ui_sound_on = $4,
+           ui_sound_volume = $5
+       WHERE id = $1
+       RETURNING id, username, nickname, rating, rating_games, rating_wins, rating_losses,
+                 win_streak_current, win_streak_best, ui_lang, ui_theme, ui_sound_on, ui_sound_volume`,
+      [Number(req.authUser.id), uiLang, uiTheme, uiSoundOn, uiSoundVolume]
+    );
+    if (!rows.length) {
+      return res.status(404).json({ ok: false, error: "User not found" });
+    }
+    return res.json({ ok: true, user: rows[0] });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: err.message });
+  }
+};
+
+app.put("/auth/preferences", requireAuth, updateAuthPreferences);
+// Compatibility routes for older/broken clients sending a different path or method.
+app.put("/auth", requireAuth, updateAuthPreferences);
+app.post("/auth/preferences", requireAuth, updateAuthPreferences);
 
 app.post("/auth/logout", requireAuth, async (req, res) => {
   try {
@@ -2721,9 +2858,13 @@ function createPvpMatch(ticketA, ticketB) {
     const botConf = isBot
       ? BOT_DIFFICULTY_CONFIG[normalizeBotDifficulty(botDifficulty)] || BOT_DIFFICULTY_CONFIG.normal
       : null;
+    const ticketRating = normalizeRatingValue(ticket?.rating);
+    const ticketRank = normalizeRatingRank(ticket?.ratingRank);
     return {
       userId: ticket.userId,
       nickname: ticket.nickname,
+      rating: ticketRating,
+      ratingRank: ticketRank,
       ticketId: ticket.ticketId,
       isBot,
       botDifficulty,
@@ -2895,6 +3036,13 @@ app.post("/pvp/queue/join", requireAuth, async (req, res) => {
     const existing = pvpQueueTickets.get(existingTicketId);
     if (existing) {
       existing.updatedAt = now;
+      const hasRating = Number.isFinite(Number(existing.rating));
+      const hasRank = Number.isInteger(Number(existing.ratingRank)) && Number(existing.ratingRank) > 0;
+      if (!hasRating || !hasRank) {
+        const existingSnapshot = await fetchUserRatingSnapshot(existing.userId);
+        existing.rating = normalizeRatingValue(existingSnapshot?.rating ?? req.authUser.rating);
+        existing.ratingRank = normalizeRatingRank(existingSnapshot?.rank);
+      }
       const payload = await buildPvpStatusPayload(existing, req.authUser.id);
       if (!payload) {
         removePvpTicket(existingTicketId);
@@ -2910,10 +3058,15 @@ app.post("/pvp/queue/join", requireAuth, async (req, res) => {
 
   const myTicketId = randomPlayerId();
   const matchEligibleAt = now + randomInt(PVP_MATCH_DELAY_MIN_MS, PVP_MATCH_DELAY_MAX_MS);
+  const ratingSnapshot = await fetchUserRatingSnapshot(req.authUser.id);
+  const myRating = normalizeRatingValue(ratingSnapshot?.rating ?? req.authUser.rating);
+  const myRatingRank = normalizeRatingRank(ratingSnapshot?.rank);
   const myTicket = {
     ticketId: myTicketId,
     userId: req.authUser.id,
     nickname: req.authUser.nickname,
+    rating: myRating,
+    ratingRank: myRatingRank,
     state: "waiting",
     createdAt: now,
     updatedAt: now,

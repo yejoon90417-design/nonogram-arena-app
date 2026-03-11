@@ -1,18 +1,32 @@
 ﻿import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import EmojiPicker from "emoji-picker-react";
 import { motion } from "framer-motion";
-import { ChevronDown, Eraser, Home, Lock, LogIn, Moon, Redo2, Sun, Trophy, Undo2, User, UserPlus, Volume2, VolumeX } from "lucide-react";
+import { ChevronDown, Eraser, Home, Lock, LogIn, Moon, Redo2, Settings, Sun, Trophy, Undo2, User, UserPlus, Volume2, VolumeX } from "lucide-react";
 import "./App.css";
 
-const API_BASE = (import.meta.env.VITE_API_BASE_URL || "https://nonogram-api.onrender.com").replace(/\/$/, "");
+const DEFAULT_API_BASE = "https://nonogram-api.onrender.com";
+
+function normalizeApiBase(raw) {
+  const value = String(raw || "").trim();
+  if (!value) return DEFAULT_API_BASE;
+  if (/^https?:\/\//i.test(value)) return value.replace(/\/+$/, "");
+  if (value.startsWith("//")) return `https:${value}`.replace(/\/+$/, "");
+  if (/^[a-z0-9.-]+\.[a-z]{2,}(?:\/.*)?$/i.test(value)) return `https://${value}`.replace(/\/+$/, "");
+  return DEFAULT_API_BASE;
+}
+
+const API_BASE = normalizeApiBase(import.meta.env.VITE_API_BASE_URL);
 const MAX_HISTORY = 200;
 const AUTH_TOKEN_KEY = "nonogram-auth-token";
 const AUTH_USER_KEY = "nonogram-auth-user";
 const LANG_KEY = "nonogram-ui-lang";
 const THEME_KEY = "nonogram-ui-theme";
+const STYLE_VARIANT_KEY = "nonogram-ui-style-variant";
+const SOUND_KEY = "nonogram-ui-sound";
 const TUTORIAL_SEEN_KEY = "nonogram-tutorial-seen-v1";
 const PVP_SIZE_KEYS = ["5x5", "10x10", "15x15", "20x20", "25x25"];
 const PVP_REVEAL_RESULT_HOLD_MS = 1600;
+const SOUND_MASTER_GAIN_MAX = 0.34;
 const ADSENSE_SCRIPT_ID = "adsense-auto-script";
 const ADSENSE_SRC = "https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-1492932683312516";
 const MODE_TO_PATH = {
@@ -48,6 +62,49 @@ function getModeFromPath(pathname) {
 
 function getPathFromMode(mode) {
   return MODE_TO_PATH[mode] || "/";
+}
+
+function normalizeUiLang(raw) {
+  return String(raw || "").toLowerCase() === "ko" ? "ko" : "en";
+}
+
+function normalizeUiTheme(raw) {
+  return String(raw || "").toLowerCase() === "dark" ? "dark" : "light";
+}
+
+function normalizeUiStyleVariant(raw) {
+  return String(raw || "").toLowerCase() === "excel" ? "excel" : "default";
+}
+
+function toSheetColumnLabel(index) {
+  let n = Number(index) + 1;
+  if (!Number.isFinite(n) || n <= 0) return "";
+  let label = "";
+  while (n > 0) {
+    const rem = (n - 1) % 26;
+    label = String.fromCharCode(65 + rem) + label;
+    n = Math.floor((n - 1) / 26);
+  }
+  return label;
+}
+
+function normalizeUiSoundVolume(raw, legacyOn = undefined) {
+  const n = Number(raw);
+  if (Number.isFinite(n)) {
+    return Math.max(0, Math.min(100, Math.round(n)));
+  }
+  if (legacyOn === false) return 0;
+  if (legacyOn === true) return 100;
+  return 100;
+}
+
+function readInitialSoundVolume() {
+  const saved = localStorage.getItem(SOUND_KEY);
+  if (saved == null) return 100;
+  const v = String(saved).trim().toLowerCase();
+  if (v === "off") return 0;
+  if (v === "on") return 100;
+  return normalizeUiSoundVolume(v);
 }
 
 const TUTORIAL_PUZZLE = {
@@ -182,7 +239,10 @@ async function parseJsonSafe(res) {
     return res.json();
   }
   const text = await res.text();
-  throw new Error(`Server returned non-JSON response (${res.status}): ${text.slice(0, 120)}`);
+  const url = String(res?.url || "");
+  throw new Error(
+    `Server returned non-JSON response (${res.status})${url ? ` [${url}]` : ""}: ${text.slice(0, 120)}`
+  );
 }
 
 function isRaceOnlyStatusMessage(message) {
@@ -243,9 +303,12 @@ function App() {
   const [isRematchLoading, setIsRematchLoading] = useState(false);
   const [lang, setLang] = useState(() => {
     const saved = localStorage.getItem(LANG_KEY);
-    return saved === "en" ? "en" : "ko";
+    return saved === "ko" ? "ko" : "en";
   });
   const [isDarkMode, setIsDarkMode] = useState(() => localStorage.getItem(THEME_KEY) === "dark");
+  const [uiStyleVariant, setUiStyleVariant] = useState(() =>
+    normalizeUiStyleVariant(localStorage.getItem(STYLE_VARIANT_KEY))
+  );
   const [authToken, setAuthToken] = useState(localStorage.getItem(AUTH_TOKEN_KEY) || "");
   const [authUser, setAuthUser] = useState(() => {
     try {
@@ -284,7 +347,15 @@ function App() {
   const [isCoarsePointer, setIsCoarsePointer] = useState(false);
   const [showMultiResultModal, setShowMultiResultModal] = useState(false);
   const [nowMs, setNowMs] = useState(Date.now());
-  const [soundOn, setSoundOn] = useState(true);
+  const [soundVolume, setSoundVolume] = useState(() => readInitialSoundVolume());
+  const [showSettingsModal, setShowSettingsModal] = useState(false);
+  const [settingsSaving, setSettingsSaving] = useState(false);
+  const [settingsError, setSettingsError] = useState("");
+  const [settingsDraft, setSettingsDraft] = useState({
+    lang: "en",
+    theme: "light",
+    soundVolume: 100,
+  });
   const [pvpTicketId, setPvpTicketId] = useState("");
   const [pvpSearching, setPvpSearching] = useState(false);
   const [pvpQueueSize, setPvpQueueSize] = useState(0);
@@ -294,6 +365,8 @@ function App() {
   const [pvpBanBusy, setPvpBanBusy] = useState(false);
   const [pvpRevealIndex, setPvpRevealIndex] = useState(0);
   const [pvpRatingFx, setPvpRatingFx] = useState(null);
+  const [pvpShowdownMatchId, setPvpShowdownMatchId] = useState("");
+  const [pvpShowdownUntilMs, setPvpShowdownUntilMs] = useState(0);
   const boardRef = useRef(null);
   const canvasRef = useRef(null);
   const chatBodyRef = useRef(null);
@@ -321,6 +394,7 @@ function App() {
   const pvpRatingBaseGamesRef = useRef(null);
   const pvpRatingFxDoneRoomRef = useRef("");
   const pvpAuthRefreshDoneRoomRef = useRef("");
+  const pvpShowdownSeenRef = useRef("");
   const raceFinishedSentRef = useRef(false);
   const raceResultShownRef = useRef(false);
   const raceProgressLastSentRef = useRef(0);
@@ -335,6 +409,64 @@ function App() {
   const multiResultShownKeyRef = useRef("");
   const deferredCells = useDeferredValue(cells);
   const L = (ko, en) => (lang === "ko" ? ko : en);
+
+  const applyUiPreferences = (prefUser) => {
+    if (!prefUser || typeof prefUser !== "object") return;
+    setLang(normalizeUiLang(prefUser.ui_lang));
+    setIsDarkMode(normalizeUiTheme(prefUser.ui_theme) === "dark");
+    setSoundVolume(normalizeUiSoundVolume(prefUser.ui_sound_volume, prefUser.ui_sound_on));
+  };
+
+  const cacheAuthUser = (user, { applyPrefs = false } = {}) => {
+    setAuthUser(user);
+    localStorage.setItem(AUTH_USER_KEY, JSON.stringify(user));
+    if (applyPrefs) applyUiPreferences(user);
+  };
+
+  const openSettingsModal = () => {
+    setSettingsError("");
+    setSettingsDraft({
+      lang,
+      theme: uiStyleVariant === "excel" ? "excel" : isDarkMode ? "dark" : "light",
+      soundVolume,
+    });
+    setShowSettingsModal(true);
+  };
+
+  const saveSettings = async () => {
+    const nextUiTheme = settingsDraft.theme === "dark" ? "dark" : "light";
+    const nextStyleVariant = settingsDraft.theme === "excel" ? "excel" : "default";
+    const payload = {
+      ui_lang: normalizeUiLang(settingsDraft.lang),
+      ui_theme: normalizeUiTheme(nextUiTheme),
+      ui_sound_volume: normalizeUiSoundVolume(settingsDraft.soundVolume),
+    };
+    setSettingsError("");
+    setSettingsSaving(true);
+    try {
+      if (isLoggedIn) {
+        const res = await fetch(`${API_BASE}/auth/preferences`, {
+          method: "PUT",
+          headers: { ...authHeaders, "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        const data = await parseJsonSafe(res);
+        if (!res.ok || !data.ok) throw new Error(data.error || L("설정 저장 실패", "Failed to save settings"));
+        cacheAuthUser(data.user, { applyPrefs: true });
+      } else {
+        setLang(payload.ui_lang);
+        setIsDarkMode(payload.ui_theme === "dark");
+        setSoundVolume(payload.ui_sound_volume);
+      }
+      setUiStyleVariant(nextStyleVariant);
+      setShowSettingsModal(false);
+      setStatus(L("설정이 저장되었습니다.", "Settings saved."));
+    } catch (err) {
+      setSettingsError(String(err.message || L("설정 저장 실패", "Failed to save settings")));
+    } finally {
+      setSettingsSaving(false);
+    }
+  };
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -385,6 +517,22 @@ function App() {
       // ignore localStorage errors
     }
   }, [isDarkMode]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(STYLE_VARIANT_KEY, uiStyleVariant);
+    } catch {
+      // ignore localStorage errors
+    }
+  }, [uiStyleVariant]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(SOUND_KEY, String(soundVolume));
+    } catch {
+      // ignore localStorage errors
+    }
+  }, [soundVolume]);
 
   useEffect(() => {
     if (typeof window === "undefined" || typeof window.matchMedia !== "function") return;
@@ -489,8 +637,7 @@ function App() {
           clearAuth();
           return;
         }
-        setAuthUser(data.user);
-        localStorage.setItem(AUTH_USER_KEY, JSON.stringify(data.user));
+        cacheAuthUser(data.user, { applyPrefs: true });
       } catch {
         if (!cancelled) clearAuth();
       }
@@ -532,6 +679,16 @@ function App() {
   const cellSize = useMemo(() => {
     if (!puzzle) return 24;
     return puzzle.width >= 25 ? 20 : 24;
+  }, [puzzle]);
+  const excelSheetCols = useMemo(() => Array.from({ length: 40 }, (_, idx) => toSheetColumnLabel(idx)), []);
+  const excelSheetRows = useMemo(() => Array.from({ length: 120 }, (_, idx) => idx + 1), []);
+  const excelBoardCols = useMemo(() => {
+    if (!puzzle) return [];
+    return Array.from({ length: puzzle.width }, (_, idx) => toSheetColumnLabel(idx));
+  }, [puzzle]);
+  const excelBoardRows = useMemo(() => {
+    if (!puzzle) return [];
+    return Array.from({ length: puzzle.height }, (_, idx) => idx + 1);
   }, [puzzle]);
 
   const solvedRows = useMemo(() => {
@@ -592,6 +749,7 @@ function App() {
   const isRaceCountdown = isInRaceRoom && racePhase === "countdown";
   const isRacePlaying = isInRaceRoom && racePhase === "playing";
   const isRaceFinished = isInRaceRoom && racePhase === "finished";
+  const isRacePreStartMasked = isInRaceRoom && (isRaceLobby || isRaceCountdown);
   const racePhaseLabel = useMemo(() => {
     if (racePhase === "lobby") return L("로비", "Lobby");
     if (racePhase === "countdown") return L("카운트다운", "Countdown");
@@ -756,6 +914,27 @@ function App() {
   const inactivityWarnPercent = Math.max(0, Math.min(100, (inactivityLeftMs / inactivityWarnLeadMs) * 100));
   const pvpMatchState = pvpMatch?.state || "";
   const pvpOptions = Array.isArray(pvpMatch?.options) ? pvpMatch.options : [];
+  const pvpPlayers = Array.isArray(pvpMatch?.players) ? pvpMatch.players : [];
+  const pvpAllAccepted = pvpPlayers.length >= 2 && pvpPlayers.every((p) => p.accepted === true);
+  const pvpShowdownPlayers = useMemo(() => {
+    if (!pvpPlayers.length) return [];
+    const myId = Number(authUser?.id || 0);
+    const list = [...pvpPlayers];
+    list.sort((a, b) => {
+      const am = Number(a.userId) === myId ? 0 : 1;
+      const bm = Number(b.userId) === myId ? 0 : 1;
+      if (am !== bm) return am - bm;
+      return Number(a.userId) - Number(b.userId);
+    });
+    return list.slice(0, 2);
+  }, [pvpPlayers, authUser?.id]);
+  const isPvpShowdownActive =
+    isModePvp &&
+    pvpSearching &&
+    !isInRaceRoom &&
+    pvpShowdownMatchId &&
+    pvpShowdownMatchId === String(pvpMatch?.matchId || "") &&
+    nowMs < pvpShowdownUntilMs;
   const pvpAcceptLeftMs = useMemo(() => {
     if (pvpMatchState !== "accept") return 0;
     const deadlineAt = Number(pvpMatch?.acceptDeadlineAt || 0);
@@ -793,12 +972,18 @@ function App() {
     if (!Ctx) return null;
     const ctx = new Ctx();
     const master = ctx.createGain();
-    master.gain.value = 0.14;
+    master.gain.value = SOUND_MASTER_GAIN_MAX * (soundVolume / 100);
     master.connect(ctx.destination);
     audioCtxRef.current = ctx;
     masterGainRef.current = master;
     return ctx;
   };
+
+  useEffect(() => {
+    const master = masterGainRef.current;
+    if (!master) return;
+    master.gain.value = SOUND_MASTER_GAIN_MAX * (soundVolume / 100);
+  }, [soundVolume]);
 
   const authHeaders = useMemo(() => {
     if (!authToken) return {};
@@ -806,7 +991,7 @@ function App() {
   }, [authToken]);
 
   const tone = (freq, durMs, { type = "square", gain = 0.1, slideTo = null } = {}) => {
-    if (!soundOn) return;
+    if (soundVolume <= 0) return;
     const ctx = ensureAudio();
     const master = masterGainRef.current;
     if (!ctx || !master) return;
@@ -828,7 +1013,7 @@ function App() {
   };
 
   const playSfx = (kind) => {
-    if (!soundOn) return;
+    if (soundVolume <= 0) return;
     if (kind === "ui") {
       tone(620, 50, { type: "triangle", gain: 0.05 });
       return;
@@ -894,18 +1079,6 @@ function App() {
       return;
     }
     tone(500, 60, { type: "triangle", gain: 0.05 });
-  };
-
-  const handleToggleSfx = () => {
-    setSoundOn((prev) => {
-      const next = !prev;
-      if (next) {
-        const ctx = ensureAudio();
-        if (ctx && ctx.state === "suspended") ctx.resume().catch(() => {});
-        setTimeout(() => playSfx("ui"), 0);
-      }
-      return next;
-    });
   };
 
   const markTutorialSeen = () => {
@@ -1141,9 +1314,8 @@ function App() {
 
   const storeAuth = (token, user) => {
     setAuthToken(token);
-    setAuthUser(user);
     localStorage.setItem(AUTH_TOKEN_KEY, token);
-    localStorage.setItem(AUTH_USER_KEY, JSON.stringify(user));
+    cacheAuthUser(user, { applyPrefs: true });
   };
 
   const clearAuth = () => {
@@ -1445,11 +1617,14 @@ function App() {
     setPvpBanBusy(false);
     setPvpRevealIndex(0);
     setPvpRatingFx(null);
+    setPvpShowdownMatchId("");
+    setPvpShowdownUntilMs(0);
     pvpMatchPhaseRef.current = "";
     pvpRatingBaseRef.current = null;
     pvpRatingBaseGamesRef.current = null;
     pvpRatingFxDoneRoomRef.current = "";
     pvpAuthRefreshDoneRoomRef.current = "";
+    pvpShowdownSeenRef.current = "";
   };
 
   const applyPvpMatch = (data) => {
@@ -1464,11 +1639,14 @@ function App() {
     setPvpBanBusy(false);
     setPvpRevealIndex(0);
     setPvpRatingFx(null);
+    setPvpShowdownMatchId("");
+    setPvpShowdownUntilMs(0);
     pvpMatchPhaseRef.current = "";
     pvpRatingBaseRef.current = Number(authUser?.rating ?? 1500);
     pvpRatingBaseGamesRef.current = Number(authUser?.rating_games ?? 0);
     pvpRatingFxDoneRoomRef.current = "";
     pvpAuthRefreshDoneRoomRef.current = "";
+    pvpShowdownSeenRef.current = "";
     if (data.ticketId) setPvpTicketId(data.ticketId);
     setRaceRoomCode(data.roomCode);
     setRacePlayerId(data.playerId);
@@ -1476,7 +1654,7 @@ function App() {
     initializePuzzle(data.puzzle, {
       resume: false,
       startTimer: false,
-      message: L("매칭 성공! 5초 카운트다운 후 시작됩니다.", "Match found! Starting after a 5-second countdown."),
+      message: L("5초 카운트다운 후 시작됩니다.", "Starting after a 5-second countdown."),
     });
     setPlayMode("pvp");
     startRacePolling(data.roomCode, data.playerId);
@@ -1566,7 +1744,7 @@ function App() {
       }
       setStatus(
         nextState === "matching"
-          ? L("매칭 성사! 수락 버튼을 눌러주세요.", "Match found! Press accept.")
+          ? L("수락 요청 도착. ACCEPT MATCH를 눌러주세요.", "Acceptance requested. Press ACCEPT MATCH.")
           : L("상대를 찾는 중...", "Searching for opponent...")
       );
       setPlayMode("pvp");
@@ -1691,8 +1869,7 @@ function App() {
               const meRes = await fetch(`${API_BASE}/auth/me`, { headers: { ...authHeaders } });
               const meData = await parseJsonSafe(meRes);
               if (meRes.ok && meData?.ok && meData?.user) {
-                setAuthUser(meData.user);
-                localStorage.setItem(AUTH_USER_KEY, JSON.stringify(meData.user));
+                cacheAuthUser(meData.user, { applyPrefs: true });
               }
             } catch {
               // ignore leave-penalty auth refresh errors
@@ -2156,7 +2333,17 @@ function App() {
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, w, h);
 
-    const palette = isDarkMode
+    const palette = uiStyleVariant === "excel"
+      ? {
+          empty: "rgba(255, 255, 255, 0.08)",
+          filled: "#fffae0",
+          filledBorder: "#b9aa63",
+          mark: "#1d4f96",
+          grid: "rgba(122, 143, 168, 0.9)",
+          gridStrong: "rgba(76, 99, 128, 0.95)",
+          border: "rgba(76, 99, 128, 0.95)",
+        }
+      : isDarkMode
       ? {
           empty: "#0f172a",
           filled: "#e2e8f0",
@@ -2205,7 +2392,7 @@ function App() {
     }
 
     ctx.strokeStyle = palette.grid;
-    ctx.lineWidth = 1;
+    ctx.lineWidth = uiStyleVariant === "excel" ? 1.15 : 1;
     for (let x = 0; x <= puzzle.width; x += 1) {
       const px = x * cellSize + 0.5;
       ctx.beginPath();
@@ -2222,7 +2409,7 @@ function App() {
     }
 
     ctx.strokeStyle = palette.gridStrong;
-    ctx.lineWidth = 2;
+    ctx.lineWidth = uiStyleVariant === "excel" ? 1.9 : 2;
     for (let x = 5; x < puzzle.width; x += 5) {
       const px = x * cellSize + 0.5;
       ctx.beginPath();
@@ -2241,7 +2428,7 @@ function App() {
     ctx.strokeStyle = palette.border;
     ctx.lineWidth = 1;
     ctx.strokeRect(0.5, 0.5, w - 1, h - 1);
-  }, [puzzle, cells, cellSize, isDarkMode]);
+  }, [puzzle, cells, cellSize, isDarkMode, uiStyleVariant]);
 
   useEffect(() => {
     const onWindowPointerMove = (event) => {
@@ -2427,8 +2614,7 @@ function App() {
         const data = await parseJsonSafe(res);
         if (cancelled) return;
         if (!res.ok || !data?.ok || !data?.user) throw new Error("auth_refresh_failed");
-        setAuthUser(data.user);
-        localStorage.setItem(AUTH_USER_KEY, JSON.stringify(data.user));
+        cacheAuthUser(data.user, { applyPrefs: true });
         pvpAuthRefreshDoneRoomRef.current = raceRoomCode;
       } catch {
         if (cancelled || attempt >= 4) return;
@@ -2508,6 +2694,19 @@ function App() {
     }
     pvpMatchPhaseRef.current = phase;
   }, [pvpMatchState]);
+
+  useEffect(() => {
+    if (!isModePvp || isInRaceRoom || !pvpSearching) return;
+    const matchId = String(pvpMatch?.matchId || "").trim();
+    if (!matchId) return;
+    const shouldShow = pvpMatchState === "ban" || (pvpMatchState === "accept" && pvpAllAccepted);
+    if (!shouldShow) return;
+    if (pvpShowdownSeenRef.current === matchId) return;
+    pvpShowdownSeenRef.current = matchId;
+    setPvpShowdownMatchId(matchId);
+    setPvpShowdownUntilMs(Date.now() + 5200);
+    playSfx("go");
+  }, [isModePvp, isInRaceRoom, pvpSearching, pvpMatch?.matchId, pvpMatchState, pvpAllAccepted]);
 
   useEffect(() => {
     if (!isModePvp || !pvpSearching || isInRaceRoom || pvpMatchState !== "reveal" || pvpOptions.length === 0) {
@@ -2624,8 +2823,14 @@ function App() {
     return () => document.removeEventListener("pointerdown", onDocPointerDown);
   }, [showEmojiPicker]);
 
+  const isExcelMode = uiStyleVariant === "excel";
+  const isDarkThemeActive = isDarkMode && !isExcelMode;
+  const brandTitle = "Nonogram Arena";
+  const modeTagText = L("로그인 필요", "Login Required");
+  const excelMainStyle = isExcelMode ? { "--excel-cell-size": `${cellSize}px` } : undefined;
+
   return (
-    <main className={`page ${isDarkMode ? "themeDark" : ""}`}>
+    <main className={`page ${isExcelMode ? "excelSkin" : ""} ${isDarkThemeActive ? "themeDark" : ""}`} style={excelMainStyle}>
       <div className="bgGlow bgGlowA" />
       <div className="bgGlow bgGlowB" />
       <motion.section
@@ -2637,25 +2842,12 @@ function App() {
         <div className="topBar">
           <button type="button" className="brandWrap" onClick={backToMenu}>
             <div className="logoPixel" aria-hidden="true" />
-            <h1 className="title">Nonogram Arena</h1>
+            <h1 className="title">{brandTitle}</h1>
           </button>
           {!isModeAuth && (
             <div className="topAuth">
-              <div className="langSwitch" role="group" aria-label="Language switch">
-                <button type="button" className={lang === "ko" ? "active" : ""} onClick={() => setLang("ko")}>
-                  KO
-                </button>
-                <button type="button" className={lang === "en" ? "active" : ""} onClick={() => setLang("en")}>
-                  EN
-                </button>
-              </div>
-              <button
-                type="button"
-                className="themeToggleBtn"
-                onClick={() => setIsDarkMode((prev) => !prev)}
-              >
-                {isDarkMode ? <Sun size={15} /> : <Moon size={15} />}
-                {isDarkMode ? L("라이트", "LIGHT") : L("다크", "DARK")}
+              <button type="button" className="settingsBtn" onClick={openSettingsModal}>
+                <Settings size={15} /> {L("설정", "Settings")}
               </button>
               {isLoggedIn ? (
                 <>
@@ -2681,6 +2873,20 @@ function App() {
             </div>
           )}
         </div>
+        {isExcelMode && (
+          <div className="excelSheetFrame" aria-hidden="true">
+            <div className="excelSheetCols">
+              {excelSheetCols.map((col) => (
+                <span key={`sheet-col-${col}`}>{col}</span>
+              ))}
+            </div>
+            <div className="excelSheetRows">
+              {excelSheetRows.map((row) => (
+                <span key={`sheet-row-${row}`}>{row}</span>
+              ))}
+            </div>
+          </div>
+        )}
 
         {isModeMenu && (
           <section className="menuStage">
@@ -2701,7 +2907,7 @@ function App() {
                 onClick={goMultiMode}
                 data-tutorial="menu-multi"
               >
-                {!isLoggedIn && <span className="modeTag">{L("로그인 필요", "Login Required")}</span>}
+                {!isLoggedIn && <span className="modeTag">{modeTagText}</span>}
                 <span className="modeName">MULTI PLAYER</span>
               </motion.button>
               <motion.button
@@ -2710,7 +2916,7 @@ function App() {
                 className="modeBtn modePvp"
                 onClick={goPvpMode}
               >
-                {!isLoggedIn && <span className="modeTag">{L("로그인 필요", "Login Required")}</span>}
+                {!isLoggedIn && <span className="modeTag">{modeTagText}</span>}
                 <span className="modeName">PVP MATCH</span>
               </motion.button>
               <motion.button
@@ -2725,19 +2931,21 @@ function App() {
             <button className="menuTutorialBtn" onClick={startTutorialMode}>
               {L("플레이 방법", "HOW TO PLAY")}
             </button>
-            <a
-              className="discordFab"
-              href="https://discord.gg/42Mqmy9Ka"
-              target="_blank"
-              rel="noopener noreferrer"
-              aria-label="Discord"
-              title="Discord"
-            >
-              <img
-                src="/whitediscord.png"
-                alt="Discord"
-              />
-            </a>
+            {!isExcelMode && (
+              <a
+                className="discordFab"
+                href="https://discord.gg/42Mqmy9Ka"
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label="Discord"
+                title="Discord"
+              >
+                <img
+                  src="/whitediscord.png"
+                  alt="Discord"
+                />
+              </a>
+            )}
             <div className="menuDust menuDustA" />
             <div className="menuDust menuDustB" />
             <div className="menuDust menuDustC" />
@@ -3202,9 +3410,6 @@ function App() {
                 </button>
               </>
             )}
-            <button className="singleSfxBtn" onClick={handleToggleSfx}>
-              {soundOn ? <Volume2 size={16} /> : <VolumeX size={16} />} SOUND {soundOn ? "ON" : "OFF"}
-            </button>
             <button className="singleHomeBtn" onClick={backToMenu} disabled={isInRaceRoom}>
               HOME
             </button>
@@ -3257,7 +3462,7 @@ function App() {
                   {L("랜덤 사이즈(5x5/10x10/15x15/20x20/25x25) 중 1개로 매칭됩니다.", "One random size is selected from 5x5/10x10/15x15/20x20/25x25.")}
                 </div>
                 <div className="pvpQueueState">
-                  {pvpServerState === "matching" && pvpMatchState === "accept" && L("매칭 성사 - 수락 대기", "Match found - waiting for accept")}
+                  {pvpServerState === "matching" && pvpMatchState === "accept" && L("수락 확인 단계", "Acceptance check")}
                   {pvpServerState === "matching" && pvpMatchState === "ban" && L("퍼즐 밴 단계", "Puzzle ban phase")}
                   {pvpServerState === "matching" && pvpMatchState === "reveal" && L("최종 퍼즐 추첨 중", "Final puzzle roulette")}
                   {pvpServerState === "matching" && !pvpMatchState && L("상대 탐색 중", "Searching opponent")}
@@ -3266,7 +3471,57 @@ function App() {
                   {pvpServerState === "idle" && L("대기 중", "Idle")}
                 </div>
 
-                {pvpMatchState === "accept" && (
+                {isPvpShowdownActive && (
+                  <div className="pvpShowdownCard">
+                    <div className="pvpShowdownPlayer left">
+                      <span className="pvpShowdownName">{pvpShowdownPlayers[0]?.nickname || "Player A"}</span>
+                      <span className="pvpShowdownStat">
+                        {Number.isFinite(Number(pvpShowdownPlayers[0]?.rating))
+                          ? `R ${Math.round(Number(pvpShowdownPlayers[0]?.rating))}`
+                          : "R -"}
+                      </span>
+                      <span className="pvpShowdownStat">
+                        {L(
+                          `등수 #${
+                            Number.isInteger(Number(pvpShowdownPlayers[0]?.ratingRank)) && Number(pvpShowdownPlayers[0]?.ratingRank) > 0
+                              ? Number(pvpShowdownPlayers[0]?.ratingRank)
+                              : "-"
+                          }`,
+                          `Rank #${
+                            Number.isInteger(Number(pvpShowdownPlayers[0]?.ratingRank)) && Number(pvpShowdownPlayers[0]?.ratingRank) > 0
+                              ? Number(pvpShowdownPlayers[0]?.ratingRank)
+                              : "-"
+                          }`
+                        )}
+                      </span>
+                    </div>
+                    <div className="pvpShowdownVs">VS</div>
+                    <div className="pvpShowdownPlayer right">
+                      <span className="pvpShowdownName">{pvpShowdownPlayers[1]?.nickname || "Player B"}</span>
+                      <span className="pvpShowdownStat">
+                        {Number.isFinite(Number(pvpShowdownPlayers[1]?.rating))
+                          ? `R ${Math.round(Number(pvpShowdownPlayers[1]?.rating))}`
+                          : "R -"}
+                      </span>
+                      <span className="pvpShowdownStat">
+                        {L(
+                          `등수 #${
+                            Number.isInteger(Number(pvpShowdownPlayers[1]?.ratingRank)) && Number(pvpShowdownPlayers[1]?.ratingRank) > 0
+                              ? Number(pvpShowdownPlayers[1]?.ratingRank)
+                              : "-"
+                          }`,
+                          `Rank #${
+                            Number.isInteger(Number(pvpShowdownPlayers[1]?.ratingRank)) && Number(pvpShowdownPlayers[1]?.ratingRank) > 0
+                              ? Number(pvpShowdownPlayers[1]?.ratingRank)
+                              : "-"
+                          }`
+                        )}
+                      </span>
+                    </div>
+                  </div>
+                )}
+
+                {!isPvpShowdownActive && pvpMatchState === "accept" && (
                   <div className="pvpStageCard">
                     <div className="pvpStageTitle">{L("수락을 눌러야 게임이 시작됩니다", "Press accept to start the game")}</div>
                     <div className="pvpGaugeWrap">
@@ -3291,7 +3546,7 @@ function App() {
                   </div>
                 )}
 
-                {pvpMatchState === "ban" && (
+                {!isPvpShowdownActive && pvpMatchState === "ban" && (
                   <div className="pvpStageCard">
                     <div className="pvpStageTitle">{L("5개 유형 중 1개를 밴하거나 스킵하세요", "Ban one of five types, or skip")}</div>
                     <div className="pvpGaugeWrap ban">
@@ -3332,7 +3587,7 @@ function App() {
                   </div>
                 )}
 
-                {pvpMatchState === "reveal" && (
+                {!isPvpShowdownActive && pvpMatchState === "reveal" && (
                   <div className="pvpStageCard">
                     <div className="pvpStageTitle">{L("밴 제외 유형 중 랜덤 추첨", "Random draw among unbanned types")}</div>
                     <div className="pvpRevealTrack">
@@ -3378,10 +3633,10 @@ function App() {
                   <button className="singleActionBtn" onClick={joinPvpQueue} disabled={isLoading || pvpSearching}>
                     {isLoading ? "MATCHING..." : pvpSearching ? "SEARCHING..." : "FIND OPPONENT"}
                   </button>
-                  <button className="singleHomeBtn" onClick={() => cancelPvpQueue()} disabled={!pvpSearching || isPvpCancelHomeLocked}>
+                  <button className="singleHomeBtn" onClick={() => cancelPvpQueue()} disabled={!pvpSearching || isPvpCancelHomeLocked || isPvpShowdownActive}>
                     CANCEL
                   </button>
-                  <button className="singleSfxBtn" onClick={backToMenu} disabled={isPvpCancelHomeLocked}>
+                  <button className="singleSfxBtn" onClick={backToMenu} disabled={isPvpCancelHomeLocked || isPvpShowdownActive}>
                     HOME
                   </button>
                 </div>
@@ -3402,9 +3657,6 @@ function App() {
             {!isInRaceRoom && (
               <div className="multiLobbyShell">
                 <div className="lobbyQuick">
-                  <button className="lobbyQuickBtn" onClick={handleToggleSfx}>
-                    {soundOn ? <Volume2 size={18} /> : <VolumeX size={18} />} {L("사운드 ON/OFF", "SOUND ON/OFF")}
-                  </button>
                   <button className="lobbyQuickBtn" onClick={backToMenu}>
                     <Home size={18} /> {L("메인", "HOME")}
                   </button>
@@ -3595,94 +3847,137 @@ function App() {
 
             <div className="raceBoardPane">
               <div className="boardWrap" onContextMenu={(e) => e.preventDefault()}>
-                <div
-                  className="nonogram"
-                  style={{
-                    "--cell-size": `${cellSize}px`,
-                    "--left-depth": maxRowHintDepth,
-                    "--top-depth": maxColHintDepth,
-                    "--board-w": puzzle.width,
-                    "--board-h": puzzle.height,
-                  }}
-                >
-                  <div className="corner" />
-                  <div className="colHints" style={{ gridTemplateColumns: `repeat(${puzzle.width}, var(--cell-size))` }}>
-                    {colHints.map((hint, colIdx) => (
-                      <div key={`col-${colIdx}`} className="colHintCol" style={{ gridTemplateRows: `repeat(${maxColHintDepth}, var(--cell-size))` }}>
-                        {Array.from({ length: maxColHintDepth }).map((_, depthIdx) => {
-                          const value = hint[hint.length - maxColHintDepth + depthIdx];
-                          const hintId = `c-${colIdx}-${depthIdx}`;
-                          const solvedByHint = solvedCols.has(colIdx) && value != null;
-                          return (
-                            <button
-                              key={hintId}
-                              type="button"
-                              className={`hintNum ${activeHints.has(hintId) ? "active" : ""} ${solvedByHint ? "solved" : ""}`}
-                              onClick={() => toggleHint(hintId)}
-                            >
-                              {value ?? ""}
-                            </button>
-                          );
-                        })}
-                      </div>
-                    ))}
-                  </div>
-                  <div className="rowHints" style={{ gridTemplateRows: `repeat(${puzzle.height}, var(--cell-size))` }}>
-                    {rowHints.map((hint, rowIdx) => (
+                <div className={`excelBoardScaffold ${isExcelMode ? "active" : ""}`}>
+                  {isExcelMode && (
+                    <div className="excelBoardHeaderRow" aria-hidden="true">
+                      <div className="excelBoardHeadCorner" />
                       <div
-                        key={`row-${rowIdx}`}
-                        className={`rowHintRow ${tutorialHighlightRows.includes(rowIdx) ? "tutorialHintPulse" : ""}`}
-                        style={{ gridTemplateColumns: `repeat(${maxRowHintDepth}, var(--cell-size))` }}
+                        className="excelBoardColLetters"
+                        style={{
+                          gridTemplateColumns: `repeat(${puzzle.width}, ${cellSize}px)`,
+                          marginLeft: `${maxRowHintDepth * cellSize}px`,
+                          width: `${puzzle.width * cellSize}px`,
+                        }}
                       >
-                        {Array.from({ length: maxRowHintDepth }).map((_, depthIdx) => {
-                          const value = hint[hint.length - maxRowHintDepth + depthIdx];
-                          const hintId = `r-${rowIdx}-${depthIdx}`;
-                          const solvedByHint = solvedRows.has(rowIdx) && value != null;
-                          return (
-                            <button
-                              key={hintId}
-                              type="button"
-                              className={`hintNum ${activeHints.has(hintId) ? "active" : ""} ${solvedByHint ? "solved" : ""}`}
-                              onClick={() => toggleHint(hintId)}
-                            >
-                              {value ?? ""}
-                            </button>
-                          );
-                        })}
+                        {excelBoardCols.map((label, idx) => (
+                          <span key={`board-col-${idx}`}>{label}</span>
+                        ))}
                       </div>
-                    ))}
-                  </div>
-                  <div
-                    ref={boardRef}
-                    className="board"
-                    style={{
-                      width: `${puzzle.width * cellSize}px`,
-                      height: `${puzzle.height * cellSize}px`,
-                      cursor: canInteractBoard ? "crosshair" : "not-allowed",
-                    }}
-                    onPointerDown={onBoardPointerDown}
-                    onContextMenu={(e) => e.preventDefault()}
-                  >
-                    <canvas ref={canvasRef} className="boardCanvas" />
-                    {isRaceCountdown && <div className="countdownOverlay">{countdownLeft ?? 0}</div>}
-                    {isRaceLobby && <div className="countdownOverlay wait">{L("READY 대기", "Waiting for READY")}</div>}
-                    {isRaceFinished && <div className="countdownOverlay result">{raceResultText}</div>}
-                    {showInactivityWarning && (
-                      <div className={`idleDangerOverlay ${inactivityLeftSec <= 3 ? "critical" : inactivityLeftSec <= 6 ? "hot" : ""}`}>
-                        <div className="idleDangerHead">
-                          <span>{L("위험", "DANGER")}</span>
-                          <b>{inactivityLeftSec}s</b>
-                        </div>
-                        <div className="idleDangerText">
-                          {L("입력이 없으면 자동 패배", "No input will cause auto-defeat")}
-                        </div>
-                        <div className="idleDangerBar">
-                          <span style={{ width: `${inactivityWarnPercent}%` }} />
-                        </div>
+                    </div>
+                  )}
+                  <div className={`excelBoardBodyRow ${isExcelMode ? "active" : ""}`}>
+                    {isExcelMode && (
+                      <div
+                        className="excelBoardRowNumbers"
+                        aria-hidden="true"
+                        style={{
+                          gridTemplateRows: `repeat(${puzzle.height}, ${cellSize}px)`,
+                          marginTop: `${maxColHintDepth * cellSize}px`,
+                          height: `${puzzle.height * cellSize}px`,
+                        }}
+                      >
+                        {excelBoardRows.map((label, idx) => (
+                          <span key={`board-row-${idx}`}>{label}</span>
+                        ))}
                       </div>
                     )}
+                    <div
+                      className="nonogram"
+                      style={{
+                        "--cell-size": `${cellSize}px`,
+                        "--left-depth": maxRowHintDepth,
+                        "--top-depth": maxColHintDepth,
+                        "--board-w": puzzle.width,
+                        "--board-h": puzzle.height,
+                      }}
+                    >
+                      <div className="corner" />
+                      <div className="colHints" style={{ gridTemplateColumns: `repeat(${puzzle.width}, var(--cell-size))` }}>
+                        {colHints.map((hint, colIdx) => (
+                          <div key={`col-${colIdx}`} className="colHintCol" style={{ gridTemplateRows: `repeat(${maxColHintDepth}, var(--cell-size))` }}>
+                            {Array.from({ length: maxColHintDepth }).map((_, depthIdx) => {
+                              const value = hint[hint.length - maxColHintDepth + depthIdx];
+                              const hintId = `c-${colIdx}-${depthIdx}`;
+                              const solvedByHint = solvedCols.has(colIdx) && value != null;
+                              return (
+                                <button
+                                  key={hintId}
+                                  type="button"
+                                  className={`hintNum ${activeHints.has(hintId) ? "active" : ""} ${solvedByHint ? "solved" : ""}`}
+                                  onClick={() => toggleHint(hintId)}
+                                >
+                                  {value ?? ""}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        ))}
+                      </div>
+                      <div className="rowHints" style={{ gridTemplateRows: `repeat(${puzzle.height}, var(--cell-size))` }}>
+                        {rowHints.map((hint, rowIdx) => (
+                          <div
+                            key={`row-${rowIdx}`}
+                            className={`rowHintRow ${tutorialHighlightRows.includes(rowIdx) ? "tutorialHintPulse" : ""}`}
+                            style={{ gridTemplateColumns: `repeat(${maxRowHintDepth}, var(--cell-size))` }}
+                          >
+                            {Array.from({ length: maxRowHintDepth }).map((_, depthIdx) => {
+                              const value = hint[hint.length - maxRowHintDepth + depthIdx];
+                              const hintId = `r-${rowIdx}-${depthIdx}`;
+                              const solvedByHint = solvedRows.has(rowIdx) && value != null;
+                              return (
+                                <button
+                                  key={hintId}
+                                  type="button"
+                                  className={`hintNum ${activeHints.has(hintId) ? "active" : ""} ${solvedByHint ? "solved" : ""}`}
+                                  onClick={() => toggleHint(hintId)}
+                                >
+                                  {value ?? ""}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        ))}
+                      </div>
+                      <div
+                        ref={boardRef}
+                        className="board"
+                        style={{
+                          width: `${puzzle.width * cellSize}px`,
+                          height: `${puzzle.height * cellSize}px`,
+                          cursor: canInteractBoard ? "crosshair" : "not-allowed",
+                        }}
+                        onPointerDown={onBoardPointerDown}
+                        onContextMenu={(e) => e.preventDefault()}
+                      >
+                        <canvas ref={canvasRef} className="boardCanvas" />
+                        {isRaceFinished && <div className="countdownOverlay result">{raceResultText}</div>}
+                        {showInactivityWarning && (
+                          <div className={`idleDangerOverlay ${inactivityLeftSec <= 3 ? "critical" : inactivityLeftSec <= 6 ? "hot" : ""}`}>
+                            <div className="idleDangerHead">
+                              <span>{L("위험", "DANGER")}</span>
+                              <b>{inactivityLeftSec}s</b>
+                            </div>
+                            <div className="idleDangerText">
+                              {L("입력이 없으면 자동 패배", "No input will cause auto-defeat")}
+                            </div>
+                            <div className="idleDangerBar">
+                              <span style={{ width: `${inactivityWarnPercent}%` }} />
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
                   </div>
                 </div>
+                {isRacePreStartMasked && (
+                  <div className="racePuzzleMask">
+                    {isRaceCountdown ? (
+                      <span className="racePuzzleMaskCount">{countdownLeft ?? 0}</span>
+                    ) : (
+                      <span className="racePuzzleMaskWait">{L("READY 대기", "Waiting for READY")}</span>
+                    )}
+                  </div>
+                )}
               </div>
               <div className="singleTools">
                 <button className="toolBtn toolUndo" onClick={undo} disabled={!canUndo || !canInteractBoard}>{L("되돌리기", "UNDO")}</button>
@@ -3996,126 +4291,262 @@ function App() {
           </div>
         )}
 
+        {showSettingsModal && (
+          <div className="modalBackdrop" onClick={() => setShowSettingsModal(false)}>
+            <div className="modalCard settingsModal" onClick={(e) => e.stopPropagation()}>
+              <h2>{L("설정", "Settings")}</h2>
+              <div className="settingsSection">
+                <div className="settingsLabel">{L("언어", "Language")}</div>
+                <div className="settingsChoices">
+                  <button
+                    type="button"
+                    className={`settingsChoice ${settingsDraft.lang === "ko" ? "active" : ""}`}
+                    onClick={() => setSettingsDraft((prev) => ({ ...prev, lang: "ko" }))}
+                  >
+                    KO
+                  </button>
+                  <button
+                    type="button"
+                    className={`settingsChoice ${settingsDraft.lang === "en" ? "active" : ""}`}
+                    onClick={() => setSettingsDraft((prev) => ({ ...prev, lang: "en" }))}
+                  >
+                    EN
+                  </button>
+                </div>
+              </div>
+
+              <div className="settingsSection">
+                <div className="settingsLabel">{L("테마", "Theme")}</div>
+                <div className="settingsChoices">
+                  <button
+                    type="button"
+                    className={`settingsChoice ${settingsDraft.theme === "light" ? "active" : ""}`}
+                    onClick={() => setSettingsDraft((prev) => ({ ...prev, theme: "light" }))}
+                  >
+                    <Sun size={14} /> {L("라이트", "Light")}
+                  </button>
+                  <button
+                    type="button"
+                    className={`settingsChoice ${settingsDraft.theme === "dark" ? "active" : ""}`}
+                    onClick={() => setSettingsDraft((prev) => ({ ...prev, theme: "dark" }))}
+                  >
+                    <Moon size={14} /> {L("다크", "Dark")}
+                  </button>
+                  <button
+                    type="button"
+                    className={`settingsChoice ${settingsDraft.theme === "excel" ? "active" : ""}`}
+                    onClick={() => setSettingsDraft((prev) => ({ ...prev, theme: "excel" }))}
+                  >
+                    EXCEL
+                  </button>
+                </div>
+                {settingsDraft.theme === "excel" && (
+                  <div className="settingsHint warn">
+                    {L(
+                      "엑셀 테마는 직장에서 사이트를 이용하려는 사용자를 위해 제작된 테마입니다. 일부 버튼 배치나 디자인이 다소 어색하거나 맞지 않게 보일 수 있습니다.",
+                      "Excel theme is made for office-friendly use. Some button placements or visuals may look slightly awkward by design."
+                    )}
+                  </div>
+                )}
+              </div>
+
+              <div className="settingsSection">
+                <div className="settingsLabel">{L("사운드", "Sound")}</div>
+                <div className="settingsRangeWrap">
+                  <span className="settingsRangeIcon">
+                    {Number(settingsDraft.soundVolume || 0) <= 0 ? <VolumeX size={15} /> : <Volume2 size={15} />}
+                  </span>
+                  <input
+                    className="settingsRange"
+                    type="range"
+                    min="0"
+                    max="100"
+                    step="1"
+                    value={Number(settingsDraft.soundVolume || 0)}
+                    onChange={(e) =>
+                      setSettingsDraft((prev) => ({
+                        ...prev,
+                        soundVolume: normalizeUiSoundVolume(e.target.value),
+                      }))
+                    }
+                  />
+                  <span className="settingsRangeValue">{Number(settingsDraft.soundVolume || 0)}%</span>
+                </div>
+              </div>
+              {!isLoggedIn && (
+                <div className="settingsHint">
+                  {L(
+                    "비로그인 상태에서는 설정값이 아이디에 저장되지 않습니다",
+                    "When logged out, settings are not saved to an account."
+                  )}
+                </div>
+              )}
+              {settingsError && <div className="modalError">{settingsError}</div>}
+              <div className="modalActions">
+                <button onClick={() => setShowSettingsModal(false)}>{L("취소", "Cancel")}</button>
+                <button onClick={saveSettings} disabled={settingsSaving}>
+                  {settingsSaving ? L("저장 중...", "Saving...") : L("저장", "Save")}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {shouldShowPuzzleBoard && !isInRaceRoom && (
           <div
             className="boardWrap"
             onContextMenu={(e) => e.preventDefault()}
             data-tutorial={isSingleSoloMode ? "single-board" : undefined}
           >
-            <div
-              className="nonogram"
-              style={{
-                "--cell-size": `${cellSize}px`,
-                "--left-depth": maxRowHintDepth,
-                "--top-depth": maxColHintDepth,
-                "--board-w": puzzle.width,
-                "--board-h": puzzle.height,
-              }}
-            >
-              <div className="corner" />
-
-              <div
-                className="colHints"
-                style={{
-                  gridTemplateColumns: `repeat(${puzzle.width}, var(--cell-size))`,
-                }}
-              >
-                {colHints.map((hint, colIdx) => (
+            <div className={`excelBoardScaffold ${isExcelMode ? "active" : ""}`}>
+              {isExcelMode && (
+                <div className="excelBoardHeaderRow" aria-hidden="true">
+                  <div className="excelBoardHeadCorner" />
                   <div
-                    key={`col-${colIdx}`}
-                    className="colHintCol"
-                    style={{ gridTemplateRows: `repeat(${maxColHintDepth}, var(--cell-size))` }}
+                    className="excelBoardColLetters"
+                    style={{
+                      gridTemplateColumns: `repeat(${puzzle.width}, ${cellSize}px)`,
+                      marginLeft: `${maxRowHintDepth * cellSize}px`,
+                      width: `${puzzle.width * cellSize}px`,
+                    }}
                   >
-                    {Array.from({ length: maxColHintDepth }).map((_, depthIdx) => {
-                      const value = hint[hint.length - maxColHintDepth + depthIdx];
-                      const hintId = `c-${colIdx}-${depthIdx}`;
-                      const solvedByHint = solvedCols.has(colIdx) && value != null;
-                      return (
-                        <button
-                          key={hintId}
-                          type="button"
-                          className={`hintNum ${activeHints.has(hintId) ? "active" : ""} ${solvedByHint ? "solved" : ""}`}
-                          onClick={() => toggleHint(hintId)}
-                        >
-                          {value ?? ""}
-                        </button>
-                      );
-                    })}
+                    {excelBoardCols.map((label, idx) => (
+                      <span key={`solo-col-${idx}`}>{label}</span>
+                    ))}
                   </div>
-                ))}
-              </div>
-
-              <div
-                className="rowHints"
-                style={{ gridTemplateRows: `repeat(${puzzle.height}, var(--cell-size))` }}
-              >
-                {rowHints.map((hint, rowIdx) => (
+                </div>
+              )}
+              <div className={`excelBoardBodyRow ${isExcelMode ? "active" : ""}`}>
+                {isExcelMode && (
                   <div
-                    key={`row-${rowIdx}`}
-                    className={`rowHintRow ${tutorialHighlightRows.includes(rowIdx) ? "tutorialHintPulse" : ""}`}
-                    style={{ gridTemplateColumns: `repeat(${maxRowHintDepth}, var(--cell-size))` }}
+                    className="excelBoardRowNumbers"
+                    aria-hidden="true"
+                    style={{
+                      gridTemplateRows: `repeat(${puzzle.height}, ${cellSize}px)`,
+                      marginTop: `${maxColHintDepth * cellSize}px`,
+                      height: `${puzzle.height * cellSize}px`,
+                    }}
                   >
-                    {Array.from({ length: maxRowHintDepth }).map((_, depthIdx) => {
-                      const value = hint[hint.length - maxRowHintDepth + depthIdx];
-                      const hintId = `r-${rowIdx}-${depthIdx}`;
-                      const solvedByHint = solvedRows.has(rowIdx) && value != null;
-                      return (
-                        <button
-                          key={hintId}
-                          type="button"
-                          className={`hintNum ${activeHints.has(hintId) ? "active" : ""} ${solvedByHint ? "solved" : ""}`}
-                          onClick={() => toggleHint(hintId)}
-                        >
-                          {value ?? ""}
-                        </button>
-                      );
-                    })}
-                  </div>
-                ))}
-              </div>
-
-              <div
-                ref={boardRef}
-                className="board"
-                style={{
-                  width: `${puzzle.width * cellSize}px`,
-                  height: `${puzzle.height * cellSize}px`,
-                  cursor: canInteractBoard ? "crosshair" : "not-allowed",
-                }}
-                onPointerDown={onBoardPointerDown}
-                onContextMenu={(e) => e.preventDefault()}
-              >
-                <canvas ref={canvasRef} className="boardCanvas" />
-                {isModeTutorial && tutorialHighlightCells.length > 0 && (
-                  <div className="tutorialGuideLayer" aria-hidden="true">
-                    {tutorialHighlightCells.map((index) => {
-                      const x = index % puzzle.width;
-                      const y = Math.floor(index / puzzle.width);
-                      return (
-                        <span
-                          key={`guide-${index}`}
-                          className="tutorialGuideCell"
-                          style={{
-                            left: `${x * cellSize}px`,
-                            top: `${y * cellSize}px`,
-                            width: `${cellSize}px`,
-                            height: `${cellSize}px`,
-                          }}
-                        />
-                      );
-                    })}
+                    {excelBoardRows.map((label, idx) => (
+                      <span key={`solo-row-${idx}`}>{label}</span>
+                    ))}
                   </div>
                 )}
-                {isRaceCountdown && (
-                  <div className="countdownOverlay">{countdownLeft ?? 0}</div>
-                )}
-                {isRaceLobby && <div className="countdownOverlay wait">{L("READY 대기", "Waiting for READY")}</div>}
-                {isRaceFinished && <div className="countdownOverlay result">{raceResultText}</div>}
+                <div
+                  className="nonogram"
+                  style={{
+                    "--cell-size": `${cellSize}px`,
+                    "--left-depth": maxRowHintDepth,
+                    "--top-depth": maxColHintDepth,
+                    "--board-w": puzzle.width,
+                    "--board-h": puzzle.height,
+                  }}
+                >
+                  <div className="corner" />
+
+                  <div
+                    className="colHints"
+                    style={{
+                      gridTemplateColumns: `repeat(${puzzle.width}, var(--cell-size))`,
+                    }}
+                  >
+                    {colHints.map((hint, colIdx) => (
+                      <div
+                        key={`col-${colIdx}`}
+                        className="colHintCol"
+                        style={{ gridTemplateRows: `repeat(${maxColHintDepth}, var(--cell-size))` }}
+                      >
+                        {Array.from({ length: maxColHintDepth }).map((_, depthIdx) => {
+                          const value = hint[hint.length - maxColHintDepth + depthIdx];
+                          const hintId = `c-${colIdx}-${depthIdx}`;
+                          const solvedByHint = solvedCols.has(colIdx) && value != null;
+                          return (
+                            <button
+                              key={hintId}
+                              type="button"
+                              className={`hintNum ${activeHints.has(hintId) ? "active" : ""} ${solvedByHint ? "solved" : ""}`}
+                              onClick={() => toggleHint(hintId)}
+                            >
+                              {value ?? ""}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    ))}
+                  </div>
+
+                  <div
+                    className="rowHints"
+                    style={{ gridTemplateRows: `repeat(${puzzle.height}, var(--cell-size))` }}
+                  >
+                    {rowHints.map((hint, rowIdx) => (
+                      <div
+                        key={`row-${rowIdx}`}
+                        className={`rowHintRow ${tutorialHighlightRows.includes(rowIdx) ? "tutorialHintPulse" : ""}`}
+                        style={{ gridTemplateColumns: `repeat(${maxRowHintDepth}, var(--cell-size))` }}
+                      >
+                        {Array.from({ length: maxRowHintDepth }).map((_, depthIdx) => {
+                          const value = hint[hint.length - maxRowHintDepth + depthIdx];
+                          const hintId = `r-${rowIdx}-${depthIdx}`;
+                          const solvedByHint = solvedRows.has(rowIdx) && value != null;
+                          return (
+                            <button
+                              key={hintId}
+                              type="button"
+                              className={`hintNum ${activeHints.has(hintId) ? "active" : ""} ${solvedByHint ? "solved" : ""}`}
+                              onClick={() => toggleHint(hintId)}
+                            >
+                              {value ?? ""}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    ))}
+                  </div>
+
+                  <div
+                    ref={boardRef}
+                    className="board"
+                    style={{
+                      width: `${puzzle.width * cellSize}px`,
+                      height: `${puzzle.height * cellSize}px`,
+                      cursor: canInteractBoard ? "crosshair" : "not-allowed",
+                    }}
+                    onPointerDown={onBoardPointerDown}
+                    onContextMenu={(e) => e.preventDefault()}
+                  >
+                    <canvas ref={canvasRef} className="boardCanvas" />
+                    {isModeTutorial && tutorialHighlightCells.length > 0 && (
+                      <div className="tutorialGuideLayer" aria-hidden="true">
+                        {tutorialHighlightCells.map((index) => {
+                          const x = index % puzzle.width;
+                          const y = Math.floor(index / puzzle.width);
+                          return (
+                            <span
+                              key={`guide-${index}`}
+                              className="tutorialGuideCell"
+                              style={{
+                                left: `${x * cellSize}px`,
+                                top: `${y * cellSize}px`,
+                                width: `${cellSize}px`,
+                                height: `${cellSize}px`,
+                              }}
+                            />
+                          );
+                        })}
+                      </div>
+                    )}
+                    {isRaceCountdown && (
+                      <div className="countdownOverlay">{countdownLeft ?? 0}</div>
+                    )}
+                    {isRaceLobby && <div className="countdownOverlay wait">{L("READY 대기", "Waiting for READY")}</div>}
+                    {isRaceFinished && <div className="countdownOverlay result">{raceResultText}</div>}
+                  </div>
+                </div>
               </div>
             </div>
           </div>
         )}
-
       </motion.section>
     </main>
   );

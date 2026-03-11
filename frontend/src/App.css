@@ -27,6 +27,767 @@
   font-family: "Rajdhani", "Pretendard", "Noto Sans KR", sans-serif;
 }
 
+.page.excelSkin {
+  --excel-cell-size: 24px;
+  --excel-col-header-h: var(--excel-cell-size);
+  --excel-row-header-w: calc(var(--excel-cell-size) * 2);
+  background:
+    linear-gradient(0deg, rgba(183, 198, 214, 0.22) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(183, 198, 214, 0.22) 1px, transparent 1px),
+    linear-gradient(180deg, #edf2f7 0%, #e6edf5 100%);
+  background-size: var(--excel-cell-size) var(--excel-cell-size), var(--excel-cell-size) var(--excel-cell-size), auto;
+  font-family: "Segoe UI", "Malgun Gothic", "Noto Sans KR", sans-serif;
+}
+
+.page.excelSkin .panel {
+  width: 100vw;
+  min-height: 100vh;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  padding-bottom: 0;
+}
+
+.page.excelSkin .topBar {
+  min-height: 62px;
+  border-bottom: 1px solid #1c5d3f;
+  background: linear-gradient(180deg, #1f7a4f 0%, #1b6d47 100%);
+}
+
+.page.excelSkin .panel > :not(.excelSheetFrame):not(.modalBackdrop) {
+  position: relative;
+  z-index: 1;
+}
+
+.page.excelSkin .modalBackdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+}
+
+.page.excelSkin .excelSheetFrame {
+  position: absolute;
+  inset: 62px 0 0 0;
+  z-index: 0;
+  pointer-events: none;
+  overflow: hidden;
+  background:
+    linear-gradient(0deg, rgba(194, 208, 223, 0.52) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(194, 208, 223, 0.52) 1px, transparent 1px),
+    #f8fbff;
+  background-size: var(--excel-cell-size) var(--excel-cell-size), var(--excel-cell-size) var(--excel-cell-size), auto;
+  background-position: var(--excel-row-header-w) var(--excel-col-header-h), var(--excel-row-header-w) var(--excel-col-header-h), 0 0;
+}
+
+.page.excelSkin .excelSheetFrame::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: var(--excel-row-header-w);
+  height: var(--excel-col-header-h);
+  border-right: 1px solid #c7d3e2;
+  border-bottom: 1px solid #c7d3e2;
+  background: #eef3f9;
+}
+
+.page.excelSkin .excelSheetCols {
+  position: absolute;
+  left: var(--excel-row-header-w);
+  right: 0;
+  top: 0;
+  height: var(--excel-col-header-h);
+  display: flex;
+  align-items: stretch;
+  border-bottom: 1px solid #c7d3e2;
+  background: #eef3f9;
+}
+
+.page.excelSkin .excelSheetCols span {
+  flex: 0 0 var(--excel-cell-size);
+  display: grid;
+  place-items: center;
+  border-right: 1px solid #d6e0eb;
+  color: #4a5e78;
+  font-size: 0.7rem;
+  font-weight: 700;
+}
+
+.page.excelSkin .excelSheetRows {
+  position: absolute;
+  left: 0;
+  top: var(--excel-col-header-h);
+  bottom: 0;
+  width: var(--excel-row-header-w);
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  border-right: 1px solid #c7d3e2;
+  background: #eef3f9;
+}
+
+.page.excelSkin .excelSheetRows span {
+  flex: 0 0 var(--excel-cell-size);
+  display: grid;
+  place-items: center;
+  border-bottom: 1px solid #d6e0eb;
+  color: #4a5e78;
+  font-size: 0.7rem;
+  font-weight: 700;
+}
+
+.page.excelSkin .controls.singleTopControls,
+.page.excelSkin .multiLobbyShell,
+.page.excelSkin .pvpQueuePanel,
+.page.excelSkin .raceMatchLayout,
+.page.excelSkin .rankingScreen,
+.page.excelSkin .hallScreen,
+.page.excelSkin .tutorialStage,
+.page.excelSkin .boardWrap,
+.page.excelSkin .singleBottomBar,
+.page.excelSkin .status,
+.page.excelSkin .mobilePaintToggle,
+.page.excelSkin .raceStateBox {
+  margin-left: calc(var(--excel-row-header-w) - 1px);
+  margin-right: 0;
+}
+
+.page.excelSkin .controls.singleTopControls,
+.page.excelSkin .multiLobbyShell,
+.page.excelSkin .pvpQueuePanel,
+.page.excelSkin .raceMatchLayout,
+.page.excelSkin .rankingScreen,
+.page.excelSkin .hallScreen,
+.page.excelSkin .tutorialStage,
+.page.excelSkin .raceStateBox {
+  margin-top: calc(var(--excel-col-header-h) - 1px);
+}
+
+.page.excelSkin .controls,
+.page.excelSkin .singleTools,
+.page.excelSkin .gameTools,
+.page.excelSkin .lobbyQuick,
+.page.excelSkin .lobbyActions,
+.page.excelSkin .pvpQueueActions,
+.page.excelSkin .raceActions,
+.page.excelSkin .rankingActions,
+.page.excelSkin .hallActions {
+  gap: 0;
+}
+
+.page.excelSkin .singleTopControls {
+  margin: var(--excel-col-header-h) 0 var(--excel-cell-size);
+  justify-content: flex-start;
+}
+
+.page.excelSkin .singleBottomBar {
+  margin-top: var(--excel-cell-size);
+}
+
+.page.excelSkin .bgGlow,
+.page.excelSkin .menuDust {
+  display: none;
+}
+
+.page.excelSkin .title {
+  color: #f3faf6;
+  font-size: clamp(1.2rem, 1.6vw, 1.6rem);
+  letter-spacing: 0.01em;
+  text-transform: none;
+  font-weight: 700;
+}
+
+.page.excelSkin .logoPixel {
+  width: 34px;
+  height: 34px;
+  border-width: 1px;
+  border-color: #d2e8dc;
+  border-radius: 4px;
+  background:
+    linear-gradient(130deg, #0f5d3f 0 52%, #ffffff 52% 56%, #0f5d3f 56% 100%);
+}
+
+.page.excelSkin .guestIcon {
+  color: #d7eadf;
+}
+
+.page.excelSkin .settingsBtn,
+.page.excelSkin .topAuth .ghostBtn,
+.page.excelSkin .topAuth .primaryBtn,
+.page.excelSkin .singleActionBtn,
+.page.excelSkin .singleHomeBtn,
+.page.excelSkin .singleSfxBtn,
+.page.excelSkin .toolBtn,
+.page.excelSkin .lobbyQuickBtn,
+.page.excelSkin .joinBtn,
+.page.excelSkin .roomBtn {
+  border: 1px solid #aabacd;
+  border-radius: 2px;
+  background: linear-gradient(180deg, #fdfefe 0%, #eef3f9 100%);
+  color: #20374f;
+  box-shadow: none;
+}
+
+.page.excelSkin .settingsBtn {
+  border-color: #c5e1d2;
+  background: linear-gradient(180deg, #f6fff9 0%, #e8f7ef 100%);
+  color: #1b5c3c;
+}
+
+.page.excelSkin .excelChrome {
+  border-bottom: 1px solid #c9d5e4;
+  background: #ffffff;
+}
+
+.page.excelSkin .excelChromeTabs {
+  min-height: 34px;
+  display: flex;
+  align-items: flex-end;
+  gap: 1rem;
+  padding: 0 1rem;
+  border-bottom: 1px solid #d4deea;
+  background: #f7f9fc;
+  color: #2d4058;
+  font-size: 0.8rem;
+}
+
+.page.excelSkin .excelChromeTabs span {
+  display: inline-flex;
+  align-items: center;
+  min-height: 33px;
+  border-bottom: 2px solid transparent;
+  font-weight: 600;
+}
+
+.page.excelSkin .excelChromeTabs span.active {
+  border-bottom-color: #1f7a4f;
+  color: #18563a;
+  font-weight: 800;
+}
+
+.page.excelSkin .excelChromeRibbon {
+  min-height: 56px;
+  display: flex;
+  align-items: stretch;
+  gap: 0.45rem;
+  padding: 0.35rem 0.8rem;
+  border-bottom: 1px solid #d4deea;
+  background: #fbfcfe;
+}
+
+.page.excelSkin .excelChromeRibbon .excelGroup {
+  min-width: 102px;
+  border: 1px solid #e0e8f1;
+  border-radius: 4px;
+  padding: 0.38rem 0.45rem;
+  display: inline-flex;
+  align-items: flex-end;
+  background: #fff;
+}
+
+.page.excelSkin .excelChromeRibbon .excelGroup small {
+  color: #5a708a;
+  font-size: 0.7rem;
+  font-weight: 700;
+}
+
+.page.excelSkin .excelChromeFormula {
+  min-height: 32px;
+  display: grid;
+  grid-template-columns: 70px 36px 1fr;
+  gap: 0.38rem;
+  align-items: center;
+  padding: 0.2rem 0.75rem;
+  border-bottom: 1px solid #d4deea;
+  background: #ffffff;
+}
+
+.page.excelSkin .excelChromeFormula .nameBox,
+.page.excelSkin .excelChromeFormula .fx,
+.page.excelSkin .excelChromeFormula .formulaBar {
+  min-height: 24px;
+  border: 1px solid #d5deea;
+  border-radius: 2px;
+  background: #fff;
+  color: #2f4762;
+  font-size: 0.76rem;
+  display: inline-flex;
+  align-items: center;
+  padding: 0 0.38rem;
+}
+
+.page.excelSkin .excelChromeFormula .fx {
+  justify-content: center;
+  font-weight: 900;
+  color: #4c647f;
+}
+
+.page.excelSkin .modeBtn,
+.page.excelSkin .lobbyCardBtn {
+  border-radius: 2px;
+  border: 2px solid #aebfd2;
+  background: linear-gradient(180deg, #fcfdff 0%, #edf2f8 100%);
+  box-shadow: 0 2px 0 #c7d3e2;
+}
+
+.page.excelSkin .modeSingle,
+.page.excelSkin .lobbyCardBtn.create {
+  border-left: 8px solid #2b8a5c;
+}
+
+.page.excelSkin .modeMulti,
+.page.excelSkin .lobbyCardBtn.join {
+  border-left: 8px solid #2e6ea5;
+}
+
+.page.excelSkin .modePvp {
+  border-left: 8px solid #7a5f1d;
+}
+
+.page.excelSkin .modeRank {
+  border-left: 8px solid #5b4389;
+}
+
+.page.excelSkin .modeTag {
+  border-radius: 2px;
+  border: 1px solid #d9b46b;
+  background: #ffefc9;
+  color: #6a4d10;
+}
+
+.page.excelSkin input,
+.page.excelSkin select,
+.page.excelSkin textarea {
+  border: 1px solid #b9c8d8;
+  border-radius: 2px;
+  background: #fff;
+}
+
+.page.excelSkin .lobbyTableWrap,
+.page.excelSkin .rankingTableWrap,
+.page.excelSkin .hallTableWrap,
+.page.excelSkin .hallStreakWrap,
+.page.excelSkin .raceResultTableWrap {
+  border-radius: 0;
+  border: 1px solid #bccadb;
+  background: rgba(247, 251, 255, 0.78);
+}
+
+.page.excelSkin .lobbyTable th,
+.page.excelSkin .rankingTable th,
+.page.excelSkin .hallTable th,
+.page.excelSkin .hallStreakTable th,
+.page.excelSkin .raceResultTable th {
+  background: #edf3f9;
+  color: #2c445f;
+  border-bottom: 1px solid #c5d4e5;
+}
+
+.page.excelSkin .lobbyTable td,
+.page.excelSkin .rankingTable td,
+.page.excelSkin .hallTable td,
+.page.excelSkin .hallStreakTable td,
+.page.excelSkin .raceResultTable td {
+  border-bottom: 1px solid #d4e0ec;
+}
+
+.page.excelSkin .boardWrap {
+  position: relative;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  padding: 0;
+  overflow: visible;
+  justify-content: flex-start;
+  margin-top: -1px;
+}
+
+.page.excelSkin .hintNum {
+  border-radius: 0;
+  border: none;
+  background: transparent;
+  color: #2f4866;
+  font-weight: 700;
+  width: var(--cell-size);
+  height: var(--cell-size);
+  min-width: var(--cell-size);
+  min-height: var(--cell-size);
+  padding: 0;
+  margin: 0;
+  display: grid;
+  place-items: center;
+  text-align: center;
+  line-height: 1;
+  font-size: calc(var(--cell-size) * 0.52);
+}
+
+.page.excelSkin .hintNum.active {
+  background: #fffae0;
+  color: #5d4f17;
+  border: 1px solid #d4c98d;
+}
+
+.page.excelSkin .hintNum.solved {
+  background: transparent;
+  color: #58687b;
+  text-decoration: line-through;
+}
+
+.page.excelSkin .hintNum.active,
+.page.excelSkin .hintNum.active.solved {
+  background: #fffae0;
+  background-image: none;
+  color: #5d4f17;
+  border: 1px solid #d4c98d;
+  box-shadow: inset 0 0 0 999px #fffae0;
+  text-decoration: none;
+}
+
+.page.excelSkin .board {
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+  background: transparent;
+}
+
+.page.excelSkin .nonogram {
+  background: transparent;
+}
+
+.page.excelSkin .menuStage {
+  position: relative;
+  overflow: hidden;
+  border-top: none;
+  background: transparent;
+  padding: calc(var(--excel-col-header-h) + var(--excel-cell-size) - 1px) 1rem var(--excel-cell-size) calc(var(--excel-row-header-w) - 1px);
+}
+
+.page.excelSkin .corner,
+.page.excelSkin .colHints,
+.page.excelSkin .rowHints {
+  border: none;
+}
+
+.page.excelSkin .corner {
+  background: transparent;
+}
+
+.page.excelSkin .excelBoardScaffold.active {
+  display: block;
+}
+
+.page.excelSkin .excelBoardHeaderRow {
+  display: none;
+}
+
+.page.excelSkin .excelBoardHeadCorner {
+  border: 1px solid #c4cfdd;
+  background: #eef2f7;
+}
+
+.page.excelSkin .excelBoardColLetters {
+  display: grid;
+  border: 1px solid #c4cfdd;
+  border-radius: 0;
+  background: #f1f5fa;
+}
+
+.page.excelSkin .excelBoardColLetters span {
+  border-right: 1px solid #d3dde9;
+  display: grid;
+  place-items: center;
+  min-height: 24px;
+  font-size: 0.72rem;
+  color: #4c5f76;
+  font-weight: 700;
+}
+
+.page.excelSkin .excelBoardColLetters span:last-child {
+  border-right: 0;
+}
+
+.page.excelSkin .excelBoardBodyRow.active {
+  display: block;
+}
+
+.page.excelSkin .excelBoardRowNumbers {
+  display: none;
+}
+
+.page.excelSkin .excelBoardRowNumbers span {
+  border-bottom: 1px solid #d3dde9;
+  display: grid;
+  place-items: center;
+  font-size: 0.72rem;
+  color: #4c5f76;
+  font-weight: 700;
+}
+
+.page.excelSkin .excelBoardRowNumbers span:last-child {
+  border-bottom: 0;
+}
+
+.page.excelSkin button:not(.hintNum) {
+  border: 1px solid #b9c8da;
+  border-radius: 0;
+  background: rgba(255, 255, 255, 0.16);
+  box-shadow: none;
+  min-height: var(--excel-cell-size);
+  padding: 0 calc(var(--excel-cell-size) * 0.5);
+  color: #2b4561;
+  font-weight: 700;
+}
+
+.page.excelSkin button:not(.hintNum):hover:enabled {
+  background: rgba(255, 255, 255, 0.44);
+}
+
+.page.excelSkin .settingsModal .settingsChoice {
+  border: 1px solid #9fb3c9;
+  border-radius: 4px;
+  background: #f7fbff;
+  color: #21415f;
+  box-shadow: none;
+}
+
+.page.excelSkin .settingsModal .settingsChoice:hover:enabled {
+  background: #ebf4ff;
+  border-color: #7f9fbe;
+}
+
+.page.excelSkin .settingsModal .settingsChoice.active,
+.page.excelSkin .settingsModal .settingsChoice.active:hover:enabled {
+  border-color: #1a6a43;
+  background: linear-gradient(180deg, #2b8a5c 0%, #206e49 100%);
+  color: #ffffff;
+}
+
+.page.excelSkin .modeBtn,
+.page.excelSkin .lobbyCardBtn {
+  min-height: calc(var(--excel-cell-size) * 4);
+  min-width: calc(var(--excel-cell-size) * 10);
+  border: 1px solid #b9c8da;
+  background: rgba(255, 255, 255, 0.14);
+  box-shadow: none;
+}
+
+.page.excelSkin .singleActionBtn,
+.page.excelSkin .singleSfxBtn,
+.page.excelSkin .singleHomeBtn,
+.page.excelSkin .toolBtn,
+.page.excelSkin .joinActionBtn,
+.page.excelSkin .lobbyQuickBtn {
+  min-height: calc(var(--excel-cell-size) * 2);
+  border: 1px solid #b9c8da;
+  background: rgba(255, 255, 255, 0.14);
+}
+
+.page.excelSkin .singleActionBtn {
+  min-width: calc(var(--excel-cell-size) * 8);
+}
+
+.page.excelSkin .singleSfxBtn {
+  min-width: calc(var(--excel-cell-size) * 6);
+}
+
+.page.excelSkin .singleHomeBtn {
+  min-width: calc(var(--excel-cell-size) * 5);
+}
+
+.page.excelSkin .excelSheetOverlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.page.excelSkin .excelSheetTopHead {
+  position: absolute;
+  left: 48px;
+  right: 0;
+  top: 0;
+  height: 30px;
+  display: grid;
+  grid-template-columns: repeat(24, minmax(0, 1fr));
+  border-bottom: 1px solid #c7d3e2;
+  background: #eff4fa;
+}
+
+.page.excelSkin .excelSheetTopHead span {
+  display: grid;
+  place-items: center;
+  font-size: 0.72rem;
+  color: #4b5f78;
+  font-weight: 700;
+  border-right: 1px solid #d4deea;
+}
+
+.page.excelSkin .excelSheetLeftHead {
+  position: absolute;
+  left: 0;
+  top: 30px;
+  bottom: 0;
+  width: 48px;
+  display: grid;
+  grid-template-rows: repeat(32, minmax(0, 1fr));
+  border-right: 1px solid #c7d3e2;
+  background: #eff4fa;
+}
+
+.page.excelSkin .excelSheetLeftHead span {
+  display: grid;
+  place-items: center;
+  font-size: 0.7rem;
+  color: #4b5f78;
+  font-weight: 700;
+  border-bottom: 1px solid #d4deea;
+}
+
+.page.excelSkin .modeChooser,
+.page.excelSkin .menuTutorialBtn {
+  position: relative;
+  z-index: 2;
+}
+
+.page.excelSkin .modeChooser {
+  width: min(980px, calc(100% - 72px));
+  display: grid;
+  grid-template-columns: repeat(2, minmax(260px, 1fr));
+  gap: 0.5rem;
+}
+
+.page.excelSkin .modeBtn {
+  min-width: 0;
+  min-height: 76px;
+  width: 100%;
+  justify-items: start;
+  padding: 0.65rem 0.9rem;
+  border: 1px solid #c2cfdf;
+  box-shadow: none;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.page.excelSkin .modeName {
+  font-size: 1.08rem;
+  text-shadow: none;
+  color: #173a5a;
+}
+
+.page.excelSkin .modeSingle,
+.page.excelSkin .modeMulti,
+.page.excelSkin .modePvp,
+.page.excelSkin .modeRank {
+  background: linear-gradient(180deg, #ffffff 0%, #f4f8fc 100%);
+}
+
+.page.excelSkin .modeSingle {
+  border-left: 4px solid #2b8a5c;
+}
+
+.page.excelSkin .modeMulti {
+  border-left: 4px solid #2e6ea5;
+}
+
+.page.excelSkin .modePvp {
+  border-left: 4px solid #7a5f1d;
+}
+
+.page.excelSkin .modeRank {
+  border-left: 4px solid #5b4389;
+}
+
+.page.excelSkin .menuTutorialBtn {
+  margin-top: 0.5rem;
+  min-height: 34px;
+  border: 1px solid #c2cfdf;
+  border-radius: 2px;
+  background: #f2f7fc;
+  color: #2b4867;
+  font-weight: 700;
+  letter-spacing: 0;
+}
+
+.page.excelSkin .singleTopControls select {
+  min-height: 40px;
+  min-width: 180px;
+  border-width: 1px;
+  border-radius: 2px;
+  font-size: 0.95rem;
+}
+
+.page.excelSkin .singleActionBtn,
+.page.excelSkin .singleSfxBtn,
+.page.excelSkin .singleHomeBtn {
+  min-height: 40px;
+  border-width: 1px;
+  border-radius: 2px;
+  font-size: 0.9rem;
+  min-width: 140px;
+}
+
+.page.excelSkin .singleBottomBar {
+  border-top: 1px solid #cdd9e7;
+  background: rgba(245, 249, 253, 0.55);
+}
+
+.page.excelSkin .singleTimer {
+  font-size: 1.12rem;
+  letter-spacing: 0.01em;
+}
+
+.page.excelSkin .toolBtn {
+  min-height: 38px;
+  font-size: 0.9rem;
+}
+
+.page.excelSkin .raceInfoPane,
+.page.excelSkin .raceSidePlayers,
+.page.excelSkin .chatBox,
+.page.excelSkin .pvpQueuePanel,
+.page.excelSkin .pvpStageCard,
+.page.excelSkin .raceStateBox {
+  border-radius: 0;
+  border: 1px solid #c9d5e3;
+  background: rgba(255, 255, 255, 0.14);
+  box-shadow: none;
+}
+
+.page.excelSkin .pvpShowdownCard,
+.page.excelSkin .pvpShowdownPlayer {
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.page.excelSkin .status {
+  border: 1px solid #c9d5e3;
+  background: rgba(255, 255, 255, 0.14);
+}
+
+.page.excelSkin .racePuzzleMask {
+  border: 1px solid #b8c9dc;
+  background: rgba(241, 246, 253, 0.95);
+}
+
+.page.excelSkin .racePuzzleMaskCount {
+  color: #27486a;
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.75);
+}
+
+.page.excelSkin .racePuzzleMaskWait {
+  color: #2e4e70;
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.75);
+}
+
+.page.excelSkin .lobbyTableWrap,
+.page.excelSkin .rankingTableWrap,
+.page.excelSkin .hallTableWrap,
+.page.excelSkin .hallStreakWrap,
+.page.excelSkin .raceResultTableWrap {
+  background: rgba(255, 255, 255, 0.14);
+}
+
 .panel {
   width: min(1280px, 100%);
   border: 1px solid #cfdae6;
@@ -112,6 +873,19 @@
   gap: 0.55rem;
   flex-wrap: wrap;
   justify-content: flex-end;
+}
+
+.settingsBtn {
+  min-height: 42px;
+  border: 2px solid #2a7bb2;
+  border-radius: 10px;
+  background: #f4fbff;
+  color: #1f6ea6;
+  font-size: 0.9rem;
+  font-weight: 900;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.32rem;
 }
 
 .langSwitch {
@@ -244,6 +1018,43 @@
   color: #dceafd;
 }
 
+.page.themeDark .settingsLabel {
+  color: #d5e8ff;
+}
+
+.page.themeDark .settingsChoice {
+  border-color: #3f5876;
+  background: #12233a;
+  color: #d8e9ff;
+}
+
+.page.themeDark .settingsChoice.active {
+  border-color: #70a7dd;
+  background: linear-gradient(180deg, #204267 0%, #183654 100%);
+  color: #f0f7ff;
+}
+
+.page.themeDark .settingsRangeIcon,
+.page.themeDark .settingsRangeValue {
+  color: #d8e9ff;
+}
+
+.page.themeDark .settingsRange {
+  accent-color: #7fb7eb;
+}
+
+.page.themeDark .settingsHint {
+  border-color: #3a587a;
+  background: #132843;
+  color: #cfe3ff;
+}
+
+.page.themeDark .settingsHint.warn {
+  border-color: #7d6a33;
+  background: #2b2411;
+  color: #ffe9ad;
+}
+
 .page.themeDark .policyBody {
   border-color: #30465f;
   background: #0a1526;
@@ -363,6 +1174,12 @@
 .page.themeDark .topAuth .primaryBtn {
   border-color: #2f73a8;
   background: linear-gradient(180deg, #2a84c4 0%, #1f5f98 100%);
+}
+
+.page.themeDark .settingsBtn {
+  border-color: #2f73a8;
+  background: #0d1a2d;
+  color: #d4e8ff;
 }
 
 .page.themeDark .userChip {
@@ -513,6 +1330,26 @@
   background: #0c1a2d;
 }
 
+.page.themeDark .pvpShowdownCard {
+  border-color: #31557d;
+  background: radial-gradient(circle at 50% 42%, #182c47 0%, #10233c 58%, #0d1d32 100%);
+}
+
+.page.themeDark .pvpShowdownPlayer {
+  border-color: #3a608a;
+  background: #132945;
+}
+
+.page.themeDark .pvpShowdownName,
+.page.themeDark .pvpShowdownVs {
+  color: #e1efff;
+  text-shadow: 0 2px 12px rgba(104, 170, 235, 0.35);
+}
+
+.page.themeDark .pvpShowdownStat {
+  color: #aed2f8;
+}
+
 .page.themeDark .pvpAcceptPlayer,
 .page.themeDark .pvpBanCard,
 .page.themeDark .pvpRevealItem {
@@ -640,6 +1477,21 @@
 
 .page.themeDark .countdownOverlay.result {
   color: #5ee5a8;
+}
+
+.page.themeDark .racePuzzleMask {
+  border-color: #3f5c7f;
+  background: rgba(9, 18, 31, 0.92);
+}
+
+.page.themeDark .racePuzzleMaskCount {
+  color: #e8f2ff;
+  text-shadow: 0 2px 14px rgba(97, 156, 229, 0.4);
+}
+
+.page.themeDark .racePuzzleMaskWait {
+  color: #d3e7ff;
+  text-shadow: 0 2px 12px rgba(97, 156, 229, 0.35);
 }
 
 .page.themeDark .hallHero {
@@ -958,6 +1810,85 @@
   font-size: 1rem;
   font-weight: 900;
   color: #163a60;
+}
+
+.pvpShowdownCard {
+  position: relative;
+  overflow: hidden;
+  border: 2px solid #1d4f79;
+  border-radius: 12px;
+  background: radial-gradient(circle at 50% 45%, #ffffff 0%, #e7f3ff 58%, #d8eaff 100%);
+  padding: 0.75rem 0.85rem;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.pvpShowdownCard::before {
+  content: "";
+  position: absolute;
+  inset: -2px;
+  background: linear-gradient(110deg, rgba(255, 255, 255, 0) 18%, rgba(255, 255, 255, 0.62) 48%, rgba(255, 255, 255, 0) 82%);
+  transform: translateX(-120%);
+  animation: pvpShowdownSweep 1.05s ease-out;
+  pointer-events: none;
+}
+
+.pvpShowdownPlayer {
+  border: 2px solid #2b628f;
+  border-radius: 10px;
+  background: #f6fbff;
+  padding: 0.45rem 0.55rem;
+  display: grid;
+  gap: 0.15rem;
+}
+
+.pvpShowdownPlayer.right {
+  text-align: right;
+}
+
+.pvpShowdownName {
+  font-size: 1.12rem;
+  font-weight: 900;
+  color: #113254;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pvpShowdownStat {
+  font-size: 0.8rem;
+  font-weight: 800;
+  color: #25507a;
+}
+
+.pvpShowdownVs {
+  font-size: 2.1rem;
+  font-weight: 900;
+  color: #0f3d66;
+  letter-spacing: 0.04em;
+  text-shadow: 0 3px 14px rgba(26, 94, 152, 0.22);
+  animation: pvpVsPulse 0.72s ease-in-out infinite;
+}
+
+@keyframes pvpVsPulse {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.08);
+  }
+}
+
+@keyframes pvpShowdownSweep {
+  from {
+    transform: translateX(-120%);
+  }
+  to {
+    transform: translateX(120%);
+  }
 }
 
 .pvpGaugeWrap {
@@ -2400,6 +3331,92 @@
   margin: 0;
 }
 
+.settingsModal {
+  width: min(520px, calc(100vw - 24px));
+}
+
+.settingsSection {
+  display: grid;
+  gap: 0.3rem;
+}
+
+.settingsLabel {
+  font-size: 0.9rem;
+  font-weight: 900;
+  color: #244668;
+}
+
+.settingsChoices {
+  display: flex;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+}
+
+.settingsRangeWrap {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.settingsRangeIcon {
+  color: #214a73;
+  display: inline-flex;
+  align-items: center;
+}
+
+.settingsRange {
+  width: 100%;
+  accent-color: #2a7bb2;
+  padding: 0;
+}
+
+.settingsRangeValue {
+  min-width: 46px;
+  text-align: right;
+  font-size: 0.84rem;
+  font-weight: 900;
+  color: #1f3c5b;
+}
+
+.settingsChoice {
+  min-width: 108px;
+  min-height: 38px;
+  border-radius: 10px;
+  border: 1px solid #aabed5;
+  background: #f5f9ff;
+  color: #1f3c5b;
+  font-size: 0.88rem;
+  font-weight: 800;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.32rem;
+}
+
+.settingsChoice.active {
+  border-color: #1e6cab;
+  background: linear-gradient(180deg, #e0f2ff 0%, #d6e9ff 100%);
+  color: #103a62;
+}
+
+.settingsHint {
+  border: 1px solid #bfd3e6;
+  background: #f4f9ff;
+  color: #2a4f76;
+  border-radius: 8px;
+  font-size: 0.82rem;
+  font-weight: 700;
+  padding: 0.4rem 0.5rem;
+}
+
+.settingsHint.warn {
+  border-color: #d9c58b;
+  background: #fff9e7;
+  color: #644f18;
+}
+
+
 .raceResultModal {
   width: min(620px, calc(100vw - 24px));
 }
@@ -2562,6 +3579,7 @@ button:disabled {
 
 .boardWrap {
   --board-cursor: crosshair;
+  position: relative;
   margin-top: 0.72rem;
   overflow: auto;
   border: 1px solid #b6c8dd;
@@ -2695,6 +3713,35 @@ button:disabled {
   font-size: 34px;
   color: #084a35;
   animation: none;
+}
+
+.racePuzzleMask {
+  position: absolute;
+  inset: 0;
+  z-index: 11;
+  display: grid;
+  place-items: center;
+  pointer-events: auto;
+  border: 1px solid #9bb3cd;
+  background: rgba(236, 244, 253, 0.95);
+  backdrop-filter: blur(1px);
+}
+
+.racePuzzleMaskCount {
+  font-size: 88px;
+  font-weight: 900;
+  color: #123253;
+  line-height: 1;
+  text-shadow: 0 3px 16px rgba(255, 255, 255, 0.72);
+  animation: countdownBeat 0.9s ease-in-out infinite;
+}
+
+.racePuzzleMaskWait {
+  font-size: 32px;
+  font-weight: 900;
+  color: #1a3b5d;
+  letter-spacing: 0.02em;
+  text-shadow: 0 2px 10px rgba(255, 255, 255, 0.72);
 }
 
 .idleDangerOverlay {
@@ -3234,6 +4281,25 @@ button:disabled {
   .pvpBanCard,
   .pvpRevealItem {
     min-height: 60px;
+  }
+
+  .pvpShowdownCard {
+    grid-template-columns: 1fr;
+    gap: 0.35rem;
+    text-align: center;
+  }
+
+  .pvpShowdownPlayer,
+  .pvpShowdownPlayer.right {
+    text-align: left;
+  }
+
+  .pvpShowdownName {
+    font-size: 0.98rem;
+  }
+
+  .pvpShowdownVs {
+    font-size: 1.6rem;
   }
 
   .joinActionBtn {
