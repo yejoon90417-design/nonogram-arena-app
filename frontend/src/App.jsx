@@ -1004,6 +1004,7 @@ function App() {
   const [profileDraftAvatarKey, setProfileDraftAvatarKey] = useState(DEFAULT_PROFILE_AVATAR_KEY);
   const [profileAvatarTab, setProfileAvatarTab] = useState("default"); // default | special
   const [profilePickerOpen, setProfilePickerOpen] = useState(false);
+  const [publicProfileAvatarCache, setPublicProfileAvatarCache] = useState({});
   const [pvpTicketId, setPvpTicketId] = useState("");
   const [pvpSearching, setPvpSearching] = useState(false);
   const [pvpQueueSize, setPvpQueueSize] = useState(0);
@@ -1530,6 +1531,13 @@ function App() {
     void openPublicProfile(userId, sourceOverride);
   };
 
+  const getDisplayedRaceProfileAvatarKey = (player) => {
+    const serverKey = normalizeProfileAvatarKey(player?.profileAvatarKey || DEFAULT_PROFILE_AVATAR_KEY);
+    const cachedKey = normalizeProfileAvatarKey(publicProfileAvatarCache[Number(player?.userId || 0)] || "");
+    if (serverKey !== DEFAULT_PROFILE_AVATAR_KEY) return serverKey;
+    return cachedKey || serverKey;
+  };
+
   const saveProfileAvatarSelection = async () => {
     if (!isLoggedIn || profileModalMode !== "self") return;
     setProfileModalSaving(true);
@@ -1625,6 +1633,55 @@ function App() {
     script.crossOrigin = "anonymous";
     document.head.appendChild(script);
   }, [playMode]);
+
+  useEffect(() => {
+    const players = Array.isArray(raceState?.players) ? raceState.players : [];
+    if (!players.length) return;
+    const targetIds = Array.from(
+      new Set(
+        players
+          .map((player) => Number(player?.userId || 0))
+          .filter((userId) => Number.isInteger(userId) && userId > 0 && userId !== Number(authUser?.id || 0))
+      )
+    ).filter((userId) => !publicProfileAvatarCache[userId]);
+    if (!targetIds.length) return;
+
+    let cancelled = false;
+    void (async () => {
+      const nextEntries = await Promise.all(
+        targetIds.map(async (userId) => {
+          try {
+            const res = await fetch(`${API_BASE}/profiles/${userId}`, { headers: { ...authHeaders } });
+            if (!res.ok) return null;
+            const data = await parseJsonSafe(res);
+            const avatarKey = normalizeProfileAvatarKey(data?.profile?.profile_avatar_key || "");
+            if (!avatarKey) return null;
+            return [userId, avatarKey];
+          } catch {
+            return null;
+          }
+        })
+      );
+      if (cancelled) return;
+      setPublicProfileAvatarCache((prev) => {
+        let changed = false;
+        const next = { ...prev };
+        for (const entry of nextEntries) {
+          if (!entry) continue;
+          const [userId, avatarKey] = entry;
+          if (next[userId] !== avatarKey) {
+            next[userId] = avatarKey;
+            changed = true;
+          }
+        }
+        return changed ? next : prev;
+      });
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [raceState?.players, authToken, authUser?.id, publicProfileAvatarCache]);
 
   useEffect(() => {
     localStorage.setItem(LANG_KEY, lang);
@@ -6246,7 +6303,7 @@ function App() {
                         onClick={() => handleOpenUserProfile(p.userId, p)}
                       >
                         <span className="raceProgressIdentity">
-                          <ProfileAvatar avatarKey={p.profileAvatarKey} nickname={p.nickname} size="sm" />
+                          <ProfileAvatar avatarKey={getDisplayedRaceProfileAvatarKey(p)} nickname={p.nickname} size="sm" />
                           <span>{p.nickname}</span>
                         </span>
                         <span>{percent}%</span>
@@ -6254,7 +6311,7 @@ function App() {
                     ) : (
                       <div key={p.playerId} className="raceProgressRow">
                         <span className="raceProgressIdentity">
-                          <ProfileAvatar avatarKey={p.profileAvatarKey} nickname={p.nickname} size="sm" />
+                          <ProfileAvatar avatarKey={getDisplayedRaceProfileAvatarKey(p)} nickname={p.nickname} size="sm" />
                           <span>{p.nickname}</span>
                         </span>
                         <span>{percent}%</span>
