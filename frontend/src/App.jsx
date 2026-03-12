@@ -279,7 +279,7 @@ function normalizeUiTheme(raw) {
 }
 
 function normalizeUiStyleVariant(raw) {
-  return String(raw || "").toLowerCase() === "excel" ? "excel" : "default";
+  return "default";
 }
 
 function getTierInfoByRating(ratingRaw, rankRaw = null) {
@@ -1357,7 +1357,7 @@ function App() {
     setSettingsError("");
     setSettingsDraft({
       lang,
-      theme: uiStyleVariant === "excel" ? "excel" : isDarkMode ? "dark" : "light",
+      theme: isDarkMode ? "dark" : "light",
       soundVolume,
     });
     setShowSettingsModal(true);
@@ -1365,7 +1365,7 @@ function App() {
 
   const saveSettings = async () => {
     const nextUiTheme = settingsDraft.theme === "dark" ? "dark" : "light";
-    const nextStyleVariant = settingsDraft.theme === "excel" ? "excel" : "default";
+    const nextStyleVariant = "default";
     const payload = {
       ui_lang: normalizeUiLang(settingsDraft.lang),
       ui_theme: normalizeUiTheme(nextUiTheme),
@@ -6763,22 +6763,7 @@ function App() {
                   >
                     <Moon size={14} /> {L("다크", "Dark")}
                   </button>
-                  <button
-                    type="button"
-                    className={`settingsChoice ${settingsDraft.theme === "excel" ? "active" : ""}`}
-                    onClick={() => setSettingsDraft((prev) => ({ ...prev, theme: "excel" }))}
-                  >
-                    EXCEL
-                  </button>
                 </div>
-                {settingsDraft.theme === "excel" && (
-                  <div className="settingsHint warn">
-                    {L(
-                      "엑셀 테마는 직장에서 사이트를 이용하려는 사용자를 위해 제작된 테마입니다. 일부 버튼 배치나 디자인이 다소 어색하거나 맞지 않게 보일 수 있습니다.",
-                      "Excel theme is made for office-friendly use. Some button placements or visuals may look slightly awkward by design."
-                    )}
-                  </div>
-                )}
               </div>
 
               <div className="settingsSection">

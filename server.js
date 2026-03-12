@@ -65,6 +65,19 @@ const PVP_BOT_RETRY_MAX_MS = Math.max(
 );
 const PVP_BOT_POOL_MIN = 15;
 const PVP_BOT_EXCLUDE_EASY = process.env.PVP_BOT_EXCLUDE_EASY !== "false";
+const PVP_BOT_LADDER_ENABLED = process.env.PVP_BOT_LADDER_ENABLED !== "false";
+const PVP_BOT_LADDER_INTERVAL_MS = Math.max(
+  10000,
+  Number(process.env.PVP_BOT_LADDER_INTERVAL_MS || 420000)
+);
+const PVP_BOT_LADDER_RECENT_PAIR_TTL_MS = Math.max(
+  PVP_BOT_LADDER_INTERVAL_MS * 4,
+  Number(process.env.PVP_BOT_LADDER_RECENT_PAIR_TTL_MS || 1000 * 60 * 20)
+);
+const PVP_BOT_LADDER_RECENT_PAIR_LIMIT = Math.max(
+  4,
+  Number(process.env.PVP_BOT_LADDER_RECENT_PAIR_LIMIT || 24)
+);
 const REPLAY_FRAME_MIN_INTERVAL_MS = Math.max(80, Number(process.env.REPLAY_FRAME_MIN_INTERVAL_MS || 140));
 const REPLAY_MAX_FRAMES = Math.max(200, Number(process.env.REPLAY_MAX_FRAMES || 2400));
 const PVP_FAKE_QUEUE_ENABLED = process.env.PVP_FAKE_QUEUE_ENABLED !== "false";
@@ -281,6 +294,9 @@ for (let i = 0; i < 256; i += 1) {
 }
 let pvpFakeQueueCurrent = 0;
 let pvpFakeQueueUpdatedAt = 0;
+let pvpBotLadderTimer = null;
+let pvpBotLadderRunning = false;
+const pvpBotLadderRecentPairs = [];
 
 app.use(cors());
 app.use((req, res, next) => {
@@ -1543,6 +1559,283 @@ function getWinStreakBonus(nextStreak) {
     if (streak >= minStreak) return Number(bonus || 0);
   }
   return 0;
+}
+
+function buildBotPairKey(aUserId, bUserId) {
+  const a = Number(aUserId);
+  const b = Number(bUserId);
+  if (!Number.isInteger(a) || !Number.isInteger(b)) return "";
+  return a < b ? `${a}:${b}` : `${b}:${a}`;
+}
+
+function pruneRecentBotPairs(now = Date.now()) {
+  for (let i = pvpBotLadderRecentPairs.length - 1; i >= 0; i -= 1) {
+    const item = pvpBotLadderRecentPairs[i];
+    if (!item || now - Number(item.at || 0) > PVP_BOT_LADDER_RECENT_PAIR_TTL_MS) {
+      pvpBotLadderRecentPairs.splice(i, 1);
+    }
+  }
+  while (pvpBotLadderRecentPairs.length > PVP_BOT_LADDER_RECENT_PAIR_LIMIT) {
+    pvpBotLadderRecentPairs.shift();
+  }
+}
+
+function hasRecentBotPair(aUserId, bUserId, now = Date.now()) {
+  pruneRecentBotPairs(now);
+  const key = buildBotPairKey(aUserId, bUserId);
+  if (!key) return false;
+  return pvpBotLadderRecentPairs.some((item) => item.key === key);
+}
+
+function markRecentBotPair(aUserId, bUserId, now = Date.now()) {
+  const key = buildBotPairKey(aUserId, bUserId);
+  if (!key) return;
+  pvpBotLadderRecentPairs.push({ key, at: now });
+  pruneRecentBotPairs(now);
+}
+
+function pickWeightedBotCandidate(candidates, excludeIds = []) {
+  if (!Array.isArray(candidates) || candidates.length === 0) return null;
+  const excludeSet = new Set((excludeIds || []).map((x) => Number(x)));
+  const pool = candidates.filter((item) => !excludeSet.has(Number(item?.id)));
+  if (!pool.length) return null;
+  const total = pool.reduce((acc, item) => acc + Math.max(1, normalizeBotSpawnWeight(item?.bot_spawn_weight) || 1), 0);
+  if (total <= 0) return randomFrom(pool);
+  let x = Math.random() * total;
+  for (const item of pool) {
+    x -= Math.max(1, normalizeBotSpawnWeight(item?.bot_spawn_weight) || 1);
+    if (x <= 0) return item;
+  }
+  return pool[pool.length - 1];
+}
+
+async function fetchAutomatedBotLadderCandidates() {
+  const { rows } = await pool.query(
+    `SELECT id, username, nickname, profile_avatar_key, bot_skill, bot_spawn_weight,
+            rating, rating_games, rating_wins, rating_losses, win_streak_current, win_streak_best
+     FROM users
+     WHERE is_bot = true
+       AND placement_done = true
+       AND COALESCE(placement_version, 0) = $1
+       AND rating > 0
+     ORDER BY rating DESC, rating_games DESC, id ASC`,
+    [CURRENT_PLACEMENT_VERSION]
+  );
+  return rows.map((row) => ({
+    id: Number(row.id),
+    username: String(row.username || ""),
+    nickname: String(row.nickname || `bot-${row.id}`),
+    profile_avatar_key: normalizeProfileAvatarKey(row.profile_avatar_key),
+    bot_skill: normalizeBotDifficulty(row.bot_skill),
+    bot_spawn_weight: normalizeBotSpawnWeight(row.bot_spawn_weight),
+    rating: normalizeRatingValue(row.rating),
+    rating_games: Number(row.rating_games || 0),
+    rating_wins: Number(row.rating_wins || 0),
+    rating_losses: Number(row.rating_losses || 0),
+    win_streak_current: Number(row.win_streak_current || 0),
+    win_streak_best: Number(row.win_streak_best || 0),
+  }));
+}
+
+function chooseAutomatedBotLadderPair(bots, now = Date.now()) {
+  if (!Array.isArray(bots) || bots.length < 2) return null;
+  const ticketLikeAt = now - Math.max(PVP_BOT_LADDER_INTERVAL_MS * 2, 1000 * 60);
+  const normalized = bots.map((bot) => ({
+    ...bot,
+    createdAt: ticketLikeAt,
+  }));
+  const anchor = pickWeightedBotCandidate(normalized);
+  if (!anchor) return null;
+
+  const strictPool = normalized.filter((candidate) => {
+    if (Number(candidate.id) === Number(anchor.id)) return false;
+    if (!canTierMatch(anchor, candidate, now)) return false;
+    return !hasRecentBotPair(anchor.id, candidate.id, now);
+  });
+  const relaxedPool = normalized.filter((candidate) => {
+    if (Number(candidate.id) === Number(anchor.id)) return false;
+    return canTierMatch(anchor, candidate, now);
+  });
+  const fallbackPool = normalized.filter((candidate) => Number(candidate.id) !== Number(anchor.id));
+  const opponent =
+    pickWeightedBotCandidate(strictPool, [anchor.id]) ||
+    pickWeightedBotCandidate(relaxedPool, [anchor.id]) ||
+    pickWeightedBotCandidate(fallbackPool, [anchor.id]);
+  if (!opponent) return null;
+  return [anchor, opponent];
+}
+
+async function runAutomatedBotLadderMatch(now = Date.now()) {
+  if (!PVP_BOT_LADDER_ENABLED || pvpBotLadderRunning) return null;
+  pvpBotLadderRunning = true;
+  try {
+    const busyBotIds = new Set();
+    for (const room of raceRooms.values()) {
+      for (const p of room.players.values()) {
+        if (p?.isBot && Number.isInteger(Number(p.userId))) busyBotIds.add(Number(p.userId));
+      }
+    }
+    for (const match of pvpMatches.values()) {
+      if (!match || match.state === "cancelled") continue;
+      for (const p of match.players || []) {
+        if (p?.isBot && Number.isInteger(Number(p.userId))) busyBotIds.add(Number(p.userId));
+      }
+    }
+
+    const candidates = (await fetchAutomatedBotLadderCandidates()).filter(
+      (bot) => Number.isInteger(bot.id) && !busyBotIds.has(bot.id)
+    );
+    if (candidates.length < 2) return null;
+
+    const pair = chooseAutomatedBotLadderPair(candidates, now);
+    if (!pair) return null;
+    const [botA, botB] = pair;
+    const sizeOptions = getPvpSizeOptionsForTickets(botA, botB);
+    const pickedSize = randomFrom(sizeOptions);
+    if (!Array.isArray(pickedSize) || pickedSize.length !== 2) return null;
+    const [width, height] = pickedSize.map((v) => Number(v));
+    const puzzle = await fetchRandomPuzzleForSize(width, height);
+    if (!puzzle) return null;
+
+    const aSec = pickBotTargetSec(width, height, botA.bot_skill);
+    const bSec = pickBotTargetSec(width, height, botB.bot_skill);
+    let winner = botA;
+    let loser = botB;
+    let winnerSec = aSec;
+    let loserSec = bSec;
+    if (bSec < aSec || (bSec === aSec && Math.random() < 0.5)) {
+      winner = botB;
+      loser = botA;
+      winnerSec = bSec;
+      loserSec = aSec;
+    }
+
+    const winnerRating = normalizeRatingValue(winner.rating);
+    const loserRating = normalizeRatingValue(loser.rating);
+    const ratingDiff = loserRating - winnerRating;
+    const winnerDeltaBase = Math.max(12, Math.min(48, Math.round(RATING_WIN_BASE + ratingDiff / 130)));
+    const loserDelta = Math.max(6, Math.min(28, Math.round(RATING_LOSS_BASE + (winnerRating - loserRating) / 220)));
+    const winnerNextStreak = Math.max(0, Number(winner.win_streak_current || 0)) + 1;
+    const winnerStreakBonus = getWinStreakBonus(winnerNextStreak);
+    const winnerDelta = Math.max(1, winnerDeltaBase + winnerStreakBonus);
+    const winnerNext = Math.max(0, Math.min(5000, winnerRating + winnerDelta));
+    const loserNext = Math.max(0, Math.min(5000, loserRating - loserDelta));
+
+    const roomCode = `B${randomCode()}${randomCode()}`.slice(0, 12);
+    const roomCreatedAtMs = now - randomInt(8000, 18000);
+    const gameStartAtMs = roomCreatedAtMs + randomInt(1500, 5000);
+    const finishedAtMs = gameStartAtMs + loserSec * 1000;
+    const winnerPlayerId = `bot-${winner.id}`;
+    const loserPlayerId = `bot-${loser.id}`;
+    const rankings = [
+      { rank: 1, playerId: winnerPlayerId, nickname: winner.nickname, elapsedSec: winnerSec, status: "finished" },
+      { rank: 2, playerId: loserPlayerId, nickname: loser.nickname, elapsedSec: loserSec, status: "finished" },
+    ];
+    const playersPayload = [
+      {
+        userId: winner.id,
+        playerId: winnerPlayerId,
+        nickname: winner.nickname,
+        isBot: true,
+        elapsedSec: winnerSec,
+        rank: 1,
+        status: "finished",
+        outcome: "win",
+        disconnectedAt: null,
+      },
+      {
+        userId: loser.id,
+        playerId: loserPlayerId,
+        nickname: loser.nickname,
+        isBot: true,
+        elapsedSec: loserSec,
+        rank: 2,
+        status: "finished",
+        outcome: "loss",
+        disconnectedAt: null,
+      },
+    ];
+
+    await pool.query("BEGIN");
+    try {
+      await pool.query(
+        `UPDATE users
+         SET rating = $2,
+             rating_games = rating_games + 1,
+             rating_wins = rating_wins + 1,
+             win_streak_current = $3,
+             win_streak_best = GREATEST(win_streak_best, $3)
+         WHERE id = $1`,
+        [winner.id, winnerNext, winnerNextStreak]
+      );
+      await pool.query(
+        `UPDATE users
+         SET rating = $2,
+             rating_games = rating_games + 1,
+             rating_losses = rating_losses + 1,
+             win_streak_current = 0
+         WHERE id = $1`,
+        [loser.id, loserNext]
+      );
+      await pool.query(
+        `INSERT INTO race_match_logs (
+          room_code, game_start_at_ms, room_created_at_ms, mode, puzzle_id, width, height,
+          winner_user_id, winner_nickname, player_count, participants, rankings_json, players_json, finished_at_ms
+        ) VALUES (
+          $1, $2, $3, $4, $5, $6, $7,
+          $8, $9, $10, $11, $12::jsonb, $13::jsonb, $14
+        )
+        ON CONFLICT (room_code, game_start_at_ms) DO NOTHING`,
+        [
+          roomCode,
+          gameStartAtMs,
+          roomCreatedAtMs,
+          "pvp_bot_auto",
+          Number(puzzle.id),
+          width,
+          height,
+          winner.id,
+          winner.nickname,
+          2,
+          `${winner.nickname}, ${loser.nickname}`,
+          JSON.stringify(rankings),
+          JSON.stringify(playersPayload),
+          finishedAtMs,
+        ]
+      );
+      await pool.query("COMMIT");
+    } catch (err) {
+      await pool.query("ROLLBACK");
+      throw err;
+    }
+
+    markRecentBotPair(botA.id, botB.id, now);
+    console.log(
+      `[auto-bot-match] ${winner.nickname} beat ${loser.nickname} (${width}x${height}, +${winnerDelta}/-${loserDelta})`
+    );
+    return {
+      winner: winner.nickname,
+      loser: loser.nickname,
+      width,
+      height,
+      winnerDelta,
+      loserDelta,
+    };
+  } finally {
+    pvpBotLadderRunning = false;
+  }
+}
+
+function startPvpBotLadderLoop() {
+  if (!PVP_BOT_LADDER_ENABLED) return;
+  if (pvpBotLadderTimer) return;
+  pvpBotLadderTimer = setInterval(async () => {
+    try {
+      await runAutomatedBotLadderMatch(Date.now());
+    } catch (err) {
+      console.error("auto bot match failed:", err.message || err);
+    }
+  }, PVP_BOT_LADDER_INTERVAL_MS);
 }
 
 function isUserInAnyRoom(userId) {
@@ -4543,6 +4836,7 @@ app.post("/verify", async (req, res) => {
 async function startServer() {
   await ensureAuthTables();
   await ensureBotUsers();
+  startPvpBotLadderLoop();
   app.listen(PORT, () => {
     console.log(`server listening on http://localhost:${PORT}`);
   });
