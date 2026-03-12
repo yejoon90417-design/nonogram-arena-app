@@ -68,9 +68,12 @@ const PVP_BOT_EXCLUDE_EASY = process.env.PVP_BOT_EXCLUDE_EASY !== "false";
 const REPLAY_FRAME_MIN_INTERVAL_MS = Math.max(80, Number(process.env.REPLAY_FRAME_MIN_INTERVAL_MS || 140));
 const REPLAY_MAX_FRAMES = Math.max(200, Number(process.env.REPLAY_MAX_FRAMES || 2400));
 const PVP_FAKE_QUEUE_ENABLED = process.env.PVP_FAKE_QUEUE_ENABLED !== "false";
+const CURRENT_PLACEMENT_VERSION = Math.max(1, Number(process.env.PLACEMENT_VERSION || 1));
 const PVP_FAKE_QUEUE_MIN = Math.max(0, Number(process.env.PVP_FAKE_QUEUE_MIN || 0));
 const PVP_FAKE_QUEUE_MAX = Math.max(PVP_FAKE_QUEUE_MIN, Number(process.env.PVP_FAKE_QUEUE_MAX || 6));
 const PVP_FAKE_QUEUE_UPDATE_MS = Math.max(1200, Number(process.env.PVP_FAKE_QUEUE_UPDATE_MS || 3200));
+const PLACEMENT_TIME_LIMIT_SEC = 300;
+const PLACEMENT_STAGE_COUNT = 5;
 const PVP_SIZE_OPTIONS = [
   [5, 5],
   [10, 10],
@@ -78,7 +81,104 @@ const PVP_SIZE_OPTIONS = [
   [20, 20],
   [25, 25],
 ];
+const PVP_SIZE_OPTIONS_LOW_TIER = [
+  [5, 5],
+  [10, 10],
+  [15, 15],
+];
+const PVP_SIZE_OPTIONS_HIGH_TIER = [
+  [10, 10],
+  [15, 15],
+  [20, 20],
+  [25, 25],
+];
 const HALL_TOP_LIMIT = 3;
+const DEFAULT_PROFILE_AVATAR_KEY = "default-user";
+const LEGACY_SPECIAL_AVATAR_KEY_MAP = {
+  "default-rank-1": "special-rating-1",
+  "default-rank-2": "special-rating-2",
+  "default-rank-3": "special-rating-3",
+};
+const SPECIAL_PROFILE_AVATAR_KEYS = [
+  "special-rating-1",
+  "special-rating-2",
+  "special-rating-3",
+  "special-streak-1",
+  "special-streak-2",
+  "special-streak-3",
+];
+const DEFAULT_PROFILE_AVATAR_KEYS = [
+  "default-user",
+  "default-ember",
+  "default-rose",
+  "default-mint",
+  "default-violet",
+  "default-cobalt",
+  "default-sky",
+  "default-ocean",
+  "default-forest",
+  "default-sage",
+  "default-lavender",
+  "default-orchid",
+  "default-plum",
+  "default-crimson",
+  "default-coral",
+  "default-peach",
+  "default-sand",
+  "default-lemon",
+  "default-lime",
+  "default-teal",
+  "default-aqua",
+  "default-azure",
+  "default-navy",
+  "default-slate",
+  "default-silverline",
+  "default-goldline",
+  "default-bronzeline",
+  "default-berry",
+  "default-fuchsia",
+  "default-ruby",
+  "default-ice",
+  "default-cloud",
+  "default-night",
+  "default-spring",
+  "default-sunset",
+  "default-dawn",
+  "default-trophy",
+  "default-lock",
+  "default-sun",
+  "default-moon",
+  "default-settings",
+  "default-home",
+  "default-sound",
+  "default-undo",
+  "default-redo",
+  "default-eraser",
+  "default-honey",
+  "default-tiger",
+  "default-rabbit",
+  "default-dog",
+  "default-wolf",
+  "default-koala",
+  "default-monkey",
+  "default-chick",
+  "default-owl",
+  "default-turtle",
+  "default-crab",
+  "default-mushroom",
+  "default-cactus",
+  "default-pizza",
+  "default-burger",
+  "default-donut",
+  "default-ball",
+  "default-dice",
+  "default-headphone",
+  "default-book",
+  "default-pencil",
+  "default-lightbulb",
+  "default-magnet",
+  "default-anchor",
+];
 const PVP_BOT_NAME_POOL = [
   "Mina", "Jisoo", "Hana", "Yuna", "Sora", "Aria", "Noah", "Liam",
   "Ava", "Ella", "Sena", "Haru", "Minji", "Yejin", "Rina", "Nari",
@@ -153,17 +253,20 @@ const BOT_SOLVE_TIME_RANGE_SEC = {
   },
 };
 const ELO_DEFAULT_RATING = 1500;
-const ELO_PLACEMENT_GAMES = 20;
-const ELO_K_PLACEMENT = 40;
-const ELO_K_NORMAL = 24;
-const ELO_MIN_WIN_DELTA = Math.max(1, Number(process.env.ELO_MIN_WIN_DELTA || 5));
-const ELO_MIN_LOSS_DELTA = Math.max(1, Number(process.env.ELO_MIN_LOSS_DELTA || 5));
-const LEAVE_ROOM_PENALTY_RATING = Math.max(1, Number(process.env.LEAVE_ROOM_PENALTY_RATING || 30));
+const RATING_WIN_BASE = Math.max(1, Number(process.env.RATING_WIN_BASE || 30));
+const RATING_LOSS_BASE = Math.max(1, Number(process.env.RATING_LOSS_BASE || 18));
 const WIN_STREAK_BONUS_TABLE = [
   [5, 10],
   [4, 7],
   [3, 5],
   [2, 3],
+];
+const TIER_BANDS = [
+  { key: "bronze", min: 0, max: 999 },
+  { key: "silver", min: 1000, max: 1499 },
+  { key: "gold", min: 1500, max: 1999 },
+  { key: "diamond", min: 2000, max: 2499 },
+  { key: "master", min: 2500, max: Number.POSITIVE_INFINITY },
 ];
 const SESSION_TTL_MS = 1000 * 60 * 60 * 24 * 30;
 const POPCOUNT = new Uint8Array(256);
@@ -397,6 +500,32 @@ function normalizeUiSoundVolume(raw, legacyOn = undefined) {
   return 100;
 }
 
+function parseHallAvatarKey(raw) {
+  const value = String(raw || "").trim().toLowerCase();
+  const match = value.match(/^hall\-(5x5|10x10|15x15|20x20|25x25)\-([123])$/);
+  if (!match) return null;
+  return {
+    key: value,
+    sizeKey: match[1],
+    rank: Number(match[2]),
+  };
+}
+
+function buildHallAvatarKey(sizeKey, rank) {
+  return `hall-${sizeKey}-${rank}`;
+}
+
+function normalizeProfileAvatarKey(raw) {
+  const value = String(raw || "").trim().toLowerCase();
+  const normalized = LEGACY_SPECIAL_AVATAR_KEY_MAP[value] || value;
+  if (!normalized) return DEFAULT_PROFILE_AVATAR_KEY;
+  if (DEFAULT_PROFILE_AVATAR_KEYS.includes(normalized)) return normalized;
+  if (SPECIAL_PROFILE_AVATAR_KEYS.includes(normalized)) return normalized;
+  const hall = parseHallAvatarKey(normalized);
+  if (hall) return hall.key;
+  return DEFAULT_PROFILE_AVATAR_KEY;
+}
+
 function normalizeRoomTitle(raw) {
   const s = String(raw || "").trim();
   if (!s) return "Race Room";
@@ -471,7 +600,10 @@ async function getAuthUserFromReq(req) {
   const tokenHash = hashToken(token);
   const { rows } = await pool.query(
     `SELECT u.id, u.username, u.nickname, u.rating, u.rating_games, u.rating_wins, u.rating_losses,
-            u.win_streak_current, u.win_streak_best, u.ui_lang, u.ui_theme, u.ui_sound_on, u.ui_sound_volume
+            u.win_streak_current, u.win_streak_best, u.profile_avatar_key,
+            u.ui_lang, u.ui_theme, u.ui_sound_on, u.ui_sound_volume,
+            u.placement_done, u.placement_rating, u.placement_tier_key, u.placement_version,
+            u.placement_completed_at_ms, u.placement_solved_sequential, u.placement_elapsed_sec
      FROM user_sessions s
      JOIN users u ON u.id = s.user_id
      WHERE s.token_hash = $1
@@ -481,6 +613,203 @@ async function getAuthUserFromReq(req) {
   );
   if (!rows.length) return null;
   return { ...rows[0], token, tokenHash };
+}
+
+function sanitizeSelectedAvatarKey(selectedKeyRaw, unlockedSpecialAvatarKeys = []) {
+  const selectedKey = normalizeProfileAvatarKey(selectedKeyRaw);
+  if (DEFAULT_PROFILE_AVATAR_KEYS.includes(selectedKey)) return selectedKey;
+  return unlockedSpecialAvatarKeys.includes(selectedKey) ? selectedKey : DEFAULT_PROFILE_AVATAR_KEY;
+}
+
+async function fetchUnlockedHallAvatarRewards(userId) {
+  if (!Number.isInteger(Number(userId)) || Number(userId) <= 0) return [];
+  const { rows } = await pool.query(
+    `WITH ranked AS (
+       SELECT
+         h.user_id,
+         h.width,
+         h.height,
+         h.elapsed_sec,
+         h.finished_at_ms,
+         ROW_NUMBER() OVER (
+           PARTITION BY h.width, h.height
+           ORDER BY h.elapsed_sec ASC, h.game_start_at_ms ASC, h.id ASC
+         ) AS rank_pos
+       FROM hall_replay_records h
+       WHERE h.elapsed_sec > 0
+     )
+     SELECT width, height, elapsed_sec, finished_at_ms, rank_pos
+     FROM ranked
+     WHERE user_id = $1
+       AND rank_pos <= 3
+     ORDER BY width ASC, height ASC, rank_pos ASC`,
+    [Number(userId)]
+  );
+  return rows.map((row) => {
+    const sizeKey = `${Number(row.width)}x${Number(row.height)}`;
+    const rank = Number(row.rank_pos);
+    return {
+      key: buildHallAvatarKey(sizeKey, rank),
+      sizeKey,
+      rank,
+      elapsedSec: Number(row.elapsed_sec),
+      finishedAtMs: Number(row.finished_at_ms || 0),
+    };
+  });
+}
+
+async function fetchUnlockedSpecialAvatarRewards(userId) {
+  const numericUserId = Number(userId);
+  if (!Number.isInteger(numericUserId) || numericUserId <= 0) return [];
+  const rewards = [...(await fetchUnlockedHallAvatarRewards(numericUserId))];
+
+  const { rows: ratingRows } = await pool.query(
+    `SELECT ranked.rank_pos
+     FROM (
+       SELECT
+         u.id,
+         ROW_NUMBER() OVER (
+           ORDER BY u.rating DESC, u.rating_wins DESC, u.rating_games DESC, u.id ASC
+         ) AS rank_pos
+       FROM users u
+     ) ranked
+     WHERE ranked.id = $1
+       AND ranked.rank_pos <= 3
+     LIMIT 1`,
+    [numericUserId]
+  );
+  if (ratingRows.length) {
+    const rank = Number(ratingRows[0].rank_pos || 0);
+    if (rank >= 1 && rank <= 3) {
+      rewards.push({ key: `special-rating-${rank}`, rank, category: "rating" });
+    }
+  }
+
+  const { rows: streakRows } = await pool.query(
+    `SELECT ranked.rank_pos, ranked.win_streak_best
+     FROM (
+       SELECT
+         u.id,
+         u.win_streak_best,
+         ROW_NUMBER() OVER (
+           ORDER BY u.win_streak_best DESC, u.rating DESC, u.id ASC
+         ) AS rank_pos
+       FROM users u
+       WHERE u.is_bot = false
+         AND u.win_streak_best > 0
+     ) ranked
+     WHERE ranked.id = $1
+       AND ranked.rank_pos <= 3
+     LIMIT 1`,
+    [numericUserId]
+  );
+  if (streakRows.length) {
+    const rank = Number(streakRows[0].rank_pos || 0);
+    if (rank >= 1 && rank <= 3) {
+      rewards.push({
+        key: `special-streak-${rank}`,
+        rank,
+        category: "streak",
+        winStreakBest: Number(streakRows[0].win_streak_best || 0),
+      });
+    }
+  }
+
+  return rewards;
+}
+
+async function fetchUserRatingRank(userId) {
+  if (!Number.isInteger(Number(userId)) || Number(userId) <= 0) return null;
+  const { rows } = await pool.query(
+    `SELECT ranked.rank_pos
+     FROM (
+       SELECT id, ROW_NUMBER() OVER (
+         ORDER BY
+           CASE WHEN placement_done = true AND COALESCE(placement_version, 0) = ${CURRENT_PLACEMENT_VERSION} THEN rating ELSE 0 END DESC,
+           rating_wins DESC,
+           rating_games DESC,
+           id ASC
+       ) AS rank_pos
+       FROM users
+     ) AS ranked
+     WHERE ranked.id = $1
+     LIMIT 1`,
+    [Number(userId)]
+  );
+  return rows.length ? Number(rows[0].rank_pos) : null;
+}
+
+async function buildUserProfilePayload(userId, { includeUsername = false } = {}) {
+  if (!Number.isInteger(Number(userId)) || Number(userId) <= 0) return null;
+  const { rows } = await pool.query(
+    `SELECT id, username, nickname, is_bot, rating, rating_games, rating_wins, rating_losses,
+            win_streak_current, win_streak_best, profile_avatar_key,
+            placement_done, placement_rating, placement_tier_key, placement_version,
+            placement_completed_at_ms, placement_solved_sequential, placement_elapsed_sec
+     FROM users
+     WHERE id = $1
+     LIMIT 1`,
+    [Number(userId)]
+  );
+  if (!rows.length) return null;
+  const user = rows[0];
+  const hallRewards = await fetchUnlockedHallAvatarRewards(user.id);
+  const specialRewards = await fetchUnlockedSpecialAvatarRewards(user.id);
+  const unlockedHallAvatarKeys = hallRewards.map((reward) => reward.key);
+  const unlockedSpecialAvatarKeys = specialRewards.map((reward) => reward.key);
+  const ratingRank = await fetchUserRatingRank(user.id);
+  const games = Number(user.rating_games || 0);
+  const wins = Number(user.rating_wins || 0);
+  const placementActive = hasActivePlacement(user);
+  return {
+    id: Number(user.id),
+    username: includeUsername ? String(user.username || "") : undefined,
+    nickname: String(user.nickname || ""),
+    isBot: user.is_bot === true,
+    rating: getDisplayRating(user),
+    ratingRank,
+    rating_games: games,
+    rating_wins: wins,
+    rating_losses: Number(user.rating_losses || 0),
+    win_streak_current: Number(user.win_streak_current || 0),
+    win_streak_best: Number(user.win_streak_best || 0),
+    winRate: games > 0 ? Math.round((wins / games) * 100) : 0,
+    profile_avatar_key: sanitizeSelectedAvatarKey(user.profile_avatar_key, unlockedSpecialAvatarKeys),
+    hallRewards,
+    specialRewards,
+    unlockedHallAvatarKeys,
+    unlockedSpecialAvatarKeys,
+    placement_done: placementActive,
+    placement_rating: placementActive ? Number(user.placement_rating || 0) : null,
+    placement_tier_key: placementActive ? String(user.placement_tier_key || "") : "",
+    placement_version: Number(user.placement_version || 0),
+    placement_completed_at_ms: placementActive ? Number(user.placement_completed_at_ms || 0) : null,
+    placement_solved_sequential: placementActive ? Number(user.placement_solved_sequential || 0) : 0,
+    placement_elapsed_sec: placementActive ? Number(user.placement_elapsed_sec || 0) : 0,
+  };
+}
+
+function propagateProfileAvatarSelection(userId, profileAvatarKey) {
+  const nextAvatarKey = normalizeProfileAvatarKey(profileAvatarKey);
+  for (const room of raceRooms.values()) {
+    for (const player of room.players.values()) {
+      if (Number(player.userId) === Number(userId)) {
+        player.profileAvatarKey = nextAvatarKey;
+      }
+    }
+  }
+  for (const ticket of pvpQueueTickets.values()) {
+    if (Number(ticket.userId) === Number(userId)) {
+      ticket.profileAvatarKey = nextAvatarKey;
+    }
+  }
+  for (const match of pvpMatches.values()) {
+    for (const player of match.players) {
+      if (Number(player.userId) === Number(userId)) {
+        player.profileAvatarKey = nextAvatarKey;
+      }
+    }
+  }
 }
 
 async function requireAuth(req, res, next) {
@@ -517,10 +846,18 @@ async function ensureAuthTables() {
       ADD COLUMN IF NOT EXISTS is_bot BOOLEAN NOT NULL DEFAULT false,
       ADD COLUMN IF NOT EXISTS bot_skill VARCHAR(16),
       ADD COLUMN IF NOT EXISTS bot_spawn_weight INTEGER NOT NULL DEFAULT 3,
+      ADD COLUMN IF NOT EXISTS profile_avatar_key VARCHAR(64) NOT NULL DEFAULT '${DEFAULT_PROFILE_AVATAR_KEY}',
       ADD COLUMN IF NOT EXISTS ui_lang VARCHAR(8) NOT NULL DEFAULT 'ko',
       ADD COLUMN IF NOT EXISTS ui_theme VARCHAR(8) NOT NULL DEFAULT 'light',
       ADD COLUMN IF NOT EXISTS ui_sound_on BOOLEAN NOT NULL DEFAULT true,
-      ADD COLUMN IF NOT EXISTS ui_sound_volume INTEGER;
+      ADD COLUMN IF NOT EXISTS ui_sound_volume INTEGER,
+      ADD COLUMN IF NOT EXISTS placement_done BOOLEAN NOT NULL DEFAULT false,
+      ADD COLUMN IF NOT EXISTS placement_rating INTEGER,
+      ADD COLUMN IF NOT EXISTS placement_tier_key VARCHAR(32),
+      ADD COLUMN IF NOT EXISTS placement_version INTEGER NOT NULL DEFAULT 0,
+      ADD COLUMN IF NOT EXISTS placement_completed_at_ms BIGINT,
+      ADD COLUMN IF NOT EXISTS placement_solved_sequential INTEGER NOT NULL DEFAULT 0,
+      ADD COLUMN IF NOT EXISTS placement_elapsed_sec INTEGER NOT NULL DEFAULT 0;
   `);
   await pool.query(`UPDATE users SET ui_lang = 'ko' WHERE ui_lang IS NULL OR ui_lang NOT IN ('ko', 'en')`);
   await pool.query(`UPDATE users SET ui_theme = 'light' WHERE ui_theme IS NULL OR ui_theme NOT IN ('light', 'dark')`);
@@ -535,7 +872,25 @@ async function ensureAuthTables() {
   await pool.query(
     `UPDATE users
      SET ui_sound_volume = GREATEST(0, LEAST(100, ui_sound_volume)),
-         ui_sound_on = (GREATEST(0, LEAST(100, ui_sound_volume)) > 0)`
+        ui_sound_on = (GREATEST(0, LEAST(100, ui_sound_volume)) > 0)`
+  );
+  await pool.query(
+    `UPDATE users
+     SET profile_avatar_key = $1
+     WHERE profile_avatar_key IS NULL OR profile_avatar_key = ''`,
+    [DEFAULT_PROFILE_AVATAR_KEY]
+  );
+  await pool.query(
+    `UPDATE users
+       SET placement_tier_key = CASE
+       WHEN placement_done = true AND COALESCE(placement_version, 0) = ${CURRENT_PLACEMENT_VERSION} AND placement_rating IS NOT NULL AND placement_rating >= 2500 THEN 'master'
+       WHEN placement_done = true AND COALESCE(placement_version, 0) = ${CURRENT_PLACEMENT_VERSION} AND placement_rating IS NOT NULL AND placement_rating >= 2000 THEN 'diamond'
+       WHEN placement_done = true AND COALESCE(placement_version, 0) = ${CURRENT_PLACEMENT_VERSION} AND placement_rating IS NOT NULL AND placement_rating >= 1500 THEN 'gold'
+       WHEN placement_done = true AND COALESCE(placement_version, 0) = ${CURRENT_PLACEMENT_VERSION} AND placement_rating IS NOT NULL AND placement_rating >= 1000 THEN 'silver'
+       WHEN placement_done = true AND COALESCE(placement_version, 0) = ${CURRENT_PLACEMENT_VERSION} AND placement_rating IS NOT NULL THEN 'bronze'
+       ELSE ''
+     END
+     WHERE placement_tier_key IS NULL`
   );
   await pool.query(
     `CREATE INDEX IF NOT EXISTS idx_users_rating_desc ON users (rating DESC, rating_games DESC, id ASC);`
@@ -716,13 +1071,178 @@ function normalizeBotSpawnWeight(raw) {
 function normalizeRatingValue(raw) {
   const n = Number(raw);
   if (!Number.isFinite(n)) return ELO_DEFAULT_RATING;
-  return Math.max(100, Math.round(n));
+  return Math.max(0, Math.round(n));
 }
 
 function normalizeRatingRank(raw) {
   const n = Number(raw);
   if (!Number.isInteger(n) || n <= 0) return null;
   return n;
+}
+
+function hasActivePlacement(user) {
+  if (!user || typeof user !== "object") return false;
+  return user.placement_done === true && Number(user.placement_version || 0) === CURRENT_PLACEMENT_VERSION;
+}
+
+function getDisplayRating(user) {
+  if (!user || typeof user !== "object") return 0;
+  return hasActivePlacement(user) ? normalizeRatingValue(user.rating) : 0;
+}
+
+function evaluatePlacementResult(rawResults, elapsedSecRaw, currentStageProgressRaw = 0) {
+  const elapsedSec = Math.max(1, Math.min(PLACEMENT_TIME_LIMIT_SEC, Math.floor(Number(elapsedSecRaw || 0))));
+  const currentStageProgress = Math.max(0, Math.min(1, Number(currentStageProgressRaw || 0)));
+  const results = Array.isArray(rawResults) ? rawResults : [];
+  let solvedSequential = 0;
+  for (const row of results) {
+    if (String(row?.status || "") === "solved") solvedSequential += 1;
+    else break;
+  }
+
+  let minRating = 0;
+  let maxRating = 999;
+  if (solvedSequential >= 5) {
+    minRating = 2200;
+    maxRating = 2499;
+  } else if (solvedSequential === 4) {
+    minRating = 2000;
+    maxRating = 2299;
+  } else if (solvedSequential === 3) {
+    minRating = 1500;
+    maxRating = 1999;
+  } else if (solvedSequential === 2) {
+    minRating = 1000;
+    maxRating = 1499;
+  } else if (solvedSequential === 1) {
+    minRating = 500;
+    maxRating = 999;
+  } else {
+    minRating = 0;
+    maxRating = 699;
+  }
+
+  const timeScore = Math.max(0, Math.min(1, (PLACEMENT_TIME_LIMIT_SEC - elapsedSec) / PLACEMENT_TIME_LIMIT_SEC));
+  const performance = Math.max(0, Math.min(1, 0.7 + 0.3 * Math.sqrt(timeScore)));
+  const currentStage = results[solvedSequential];
+  const hasPendingCurrent = currentStage && String(currentStage.status || "") === "pending";
+  const stageProgress = hasPendingCurrent ? currentStageProgress : 0;
+  const stageBonusCap =
+    solvedSequential >= 3 ? 220 : solvedSequential === 2 ? 140 : solvedSequential === 1 ? 100 : 70;
+  const stageProgressBonus = Math.round(stageBonusCap * Math.pow(stageProgress, 0.9));
+  const rating = Math.round(
+    Math.max(0, Math.min(2499, minRating + (maxRating - minRating) * performance + stageProgressBonus))
+  );
+  return {
+    rating,
+    tierKey: getTierByRating(rating).key,
+    solvedSequential,
+    elapsedSec,
+  };
+}
+
+function buildClientUser(user) {
+  const placementActive = hasActivePlacement(user);
+  return {
+    id: user.id,
+    username: user.username,
+    nickname: user.nickname,
+    rating: getDisplayRating(user),
+    rating_games: user.rating_games,
+    rating_wins: user.rating_wins,
+    rating_losses: user.rating_losses,
+    win_streak_current: user.win_streak_current,
+    win_streak_best: user.win_streak_best,
+    profile_avatar_key: user.profile_avatar_key,
+    ui_lang: user.ui_lang,
+    ui_theme: user.ui_theme,
+    ui_sound_on: user.ui_sound_on,
+    ui_sound_volume: user.ui_sound_volume,
+    placement_done: placementActive,
+    placement_rating: placementActive ? Number(user.placement_rating || 0) : null,
+    placement_tier_key: placementActive ? String(user.placement_tier_key || "") : "",
+    placement_version: Number(user.placement_version || 0),
+    placement_completed_at_ms: placementActive ? Number(user.placement_completed_at_ms || 0) : null,
+    placement_solved_sequential: placementActive ? Number(user.placement_solved_sequential || 0) : 0,
+    placement_elapsed_sec: placementActive ? Number(user.placement_elapsed_sec || 0) : 0,
+  };
+}
+
+async function persistPlacementResultForUser(userId, rawResults, elapsedSecRaw, currentStageProgressRaw = 0) {
+  const placement = evaluatePlacementResult(rawResults, elapsedSecRaw, currentStageProgressRaw);
+  const completedAtMs = Date.now();
+  const { rows } = await pool.query(
+    `UPDATE users
+     SET placement_done = true,
+         placement_rating = $2,
+         placement_tier_key = $3,
+         placement_version = $4,
+         placement_completed_at_ms = $5,
+         placement_solved_sequential = $6,
+         placement_elapsed_sec = $7,
+         rating = $2
+     WHERE id = $1
+     RETURNING id, username, nickname, rating, rating_games, rating_wins, rating_losses,
+               win_streak_current, win_streak_best, profile_avatar_key,
+               ui_lang, ui_theme, ui_sound_on, ui_sound_volume,
+               placement_done, placement_rating, placement_tier_key, placement_version,
+               placement_completed_at_ms, placement_solved_sequential, placement_elapsed_sec`,
+    [
+      Number(userId),
+      placement.rating,
+      placement.tierKey,
+      CURRENT_PLACEMENT_VERSION,
+      completedAtMs,
+      placement.solvedSequential,
+      placement.elapsedSec,
+    ]
+  );
+  return {
+    placement: {
+      ...placement,
+      completedAtMs,
+    },
+    user: rows[0] || null,
+  };
+}
+
+function getTierByRating(rawRating) {
+  const rating = normalizeRatingValue(rawRating);
+  for (const band of TIER_BANDS) {
+    if (rating >= band.min && rating <= band.max) return band;
+  }
+  return TIER_BANDS[TIER_BANDS.length - 1];
+}
+
+function getTierIndexByRating(rawRating) {
+  const tier = getTierByRating(rawRating);
+  return Math.max(
+    0,
+    TIER_BANDS.findIndex((b) => b.key === tier.key)
+  );
+}
+
+function getAllowedTierGap(ticket, now = Date.now()) {
+  const createdAt = Number(ticket?.createdAt || now);
+  const waitedMs = Math.max(0, now - createdAt);
+  if (waitedMs < 20000) return 0;
+  if (waitedMs < 50000) return 1;
+  return 2;
+}
+
+function canTierMatch(ticketA, ticketB, now = Date.now()) {
+  const aTier = getTierIndexByRating(ticketA?.rating);
+  const bTier = getTierIndexByRating(ticketB?.rating);
+  const gap = Math.abs(aTier - bTier);
+  return gap <= getAllowedTierGap(ticketA, now) && gap <= getAllowedTierGap(ticketB, now);
+}
+
+function tierMatchScore(ticketA, ticketB) {
+  const aTier = getTierIndexByRating(ticketA?.rating);
+  const bTier = getTierIndexByRating(ticketB?.rating);
+  const tierGap = Math.abs(aTier - bTier);
+  const ratingGap = Math.abs(normalizeRatingValue(ticketA?.rating) - normalizeRatingValue(ticketB?.rating));
+  return tierGap * 10000 + ratingGap;
 }
 
 function pickRandomBotSpawnWeight() {
@@ -856,6 +1376,15 @@ function pvpSizeKey(width, height) {
   return `${width}x${height}`;
 }
 
+function getPvpSizeOptionsForTickets(ticketA, ticketB) {
+  const tierA = String(getTierByRating(ticketA?.rating)?.key || "");
+  const tierB = String(getTierByRating(ticketB?.rating)?.key || "");
+  const bothGoldOrHigher =
+    ["gold", "diamond", "master"].includes(tierA) &&
+    ["gold", "diamond", "master"].includes(tierB);
+  return bothGoldOrHigher ? PVP_SIZE_OPTIONS_HIGH_TIER : PVP_SIZE_OPTIONS_LOW_TIER;
+}
+
 function createPvpBotTicket(botUser, now = Date.now()) {
   const shortId = crypto.randomBytes(5).toString("hex");
   const userId = Number(botUser?.id);
@@ -865,6 +1394,7 @@ function createPvpBotTicket(botUser, now = Date.now()) {
   const botSpawnWeight = normalizeBotSpawnWeight(botUser?.bot_spawn_weight) || 3;
   const rating = normalizeRatingValue(botUser?.rating);
   const ratingRank = normalizeRatingRank(botUser?.rating_rank);
+  const profileAvatarKey = normalizeProfileAvatarKey(botUser?.profile_avatar_key);
   return {
     ticketId: `bot-ticket-${shortId}`,
     userId,
@@ -872,6 +1402,7 @@ function createPvpBotTicket(botUser, now = Date.now()) {
     nickname,
     rating,
     ratingRank,
+    profileAvatarKey,
     botSkill,
     botSpawnWeight,
     state: "bot",
@@ -901,7 +1432,7 @@ function pickWeightedBotTicket(candidates) {
   return weighted[weighted.length - 1].ticket;
 }
 
-async function fetchAvailablePvpBotTicket(now = Date.now()) {
+async function fetchAvailablePvpBotTicket(now = Date.now(), targetTicket = null) {
   if (!pvpBotEnabledRuntime) return null;
   const { rows } = await pool.query(
     `WITH ranked AS (
@@ -909,16 +1440,24 @@ async function fetchAvailablePvpBotTicket(now = Date.now()) {
          u.id,
          u.username,
          u.nickname,
+         u.profile_avatar_key,
          u.bot_skill,
          u.bot_spawn_weight,
          u.is_bot,
-         u.rating,
-         ROW_NUMBER() OVER (ORDER BY u.rating DESC, u.rating_wins DESC, u.rating_games DESC, u.id ASC) AS rating_rank
+         CASE WHEN u.placement_done = true AND COALESCE(u.placement_version, 0) = ${CURRENT_PLACEMENT_VERSION} THEN u.rating ELSE 0 END AS rating,
+         ROW_NUMBER() OVER (
+           ORDER BY
+             CASE WHEN u.placement_done = true AND COALESCE(u.placement_version, 0) = ${CURRENT_PLACEMENT_VERSION} THEN u.rating ELSE 0 END DESC,
+             u.rating_wins DESC,
+             u.rating_games DESC,
+             u.id ASC
+         ) AS rating_rank
        FROM users u
      )
-     SELECT id, username, nickname, bot_skill, bot_spawn_weight, rating, rating_rank
+     SELECT id, username, nickname, bot_skill, bot_spawn_weight, rating, rating_rank, profile_avatar_key
      FROM ranked
-     WHERE is_bot = true`
+     WHERE is_bot = true
+       AND rating > 0`
   );
   if (!rows.length) return null;
 
@@ -944,6 +1483,10 @@ async function fetchAvailablePvpBotTicket(now = Date.now()) {
     if (ticket) candidates.push(ticket);
   }
   if (!candidates.length) return null;
+  if (targetTicket) {
+    const preferred = candidates.filter((bot) => canTierMatch(targetTicket, bot, now));
+    if (preferred.length) return pickWeightedBotTicket(preferred);
+  }
   return pickWeightedBotTicket(candidates);
 }
 
@@ -955,8 +1498,14 @@ async function fetchUserRatingSnapshot(userId) {
      FROM (
        SELECT
          u.id,
-         u.rating,
-         ROW_NUMBER() OVER (ORDER BY u.rating DESC, u.rating_wins DESC, u.rating_games DESC, u.id ASC) AS rank_pos
+         CASE WHEN u.placement_done = true AND COALESCE(u.placement_version, 0) = ${CURRENT_PLACEMENT_VERSION} THEN u.rating ELSE 0 END AS rating,
+         ROW_NUMBER() OVER (
+           ORDER BY
+             CASE WHEN u.placement_done = true AND COALESCE(u.placement_version, 0) = ${CURRENT_PLACEMENT_VERSION} THEN u.rating ELSE 0 END DESC,
+             u.rating_wins DESC,
+             u.rating_games DESC,
+             u.id ASC
+         ) AS rank_pos
        FROM users u
      ) ranked
      WHERE ranked.id = $1
@@ -985,28 +1534,6 @@ function pickBotTargetSec(width, height, rawDifficulty = "normal") {
     return randomInt(Number(minSec), Number(maxSec));
   }
   return randomInt(120, 420);
-}
-
-function eloExpected(myRating, opponentRating) {
-  return 1 / (1 + 10 ** ((opponentRating - myRating) / 400));
-}
-
-function eloKFactor(games) {
-  const n = Number(games || 0);
-  return n < ELO_PLACEMENT_GAMES ? ELO_K_PLACEMENT : ELO_K_NORMAL;
-}
-
-function eloSignedDelta(expected, score, k) {
-  const raw = Math.round(Number(k) * (Number(score) - Number(expected)));
-  if (score >= 1) return Math.max(ELO_MIN_WIN_DELTA, raw);
-  if (score <= 0) return Math.min(-ELO_MIN_LOSS_DELTA, raw);
-  return raw;
-}
-
-function eloNextRating(currentRating, expected, score, k) {
-  const base = Number.isFinite(Number(currentRating)) ? Number(currentRating) : ELO_DEFAULT_RATING;
-  const delta = eloSignedDelta(expected, score, k);
-  return Math.max(100, Math.min(4000, Math.round(base + delta)));
 }
 
 function getWinStreakBonus(nextStreak) {
@@ -1090,6 +1617,7 @@ function buildPvpMatchPublicState(match, viewerUserId) {
       nickname: p.nickname,
       rating: normalizeRatingValue(p.rating),
       ratingRank: normalizeRatingRank(p.ratingRank),
+      profileAvatarKey: normalizeProfileAvatarKey(p.profileAvatarKey),
       accepted: p.accepted === true,
       acceptedAt: p.acceptedAt || null,
       banSubmitted: p.banSubmitted === true,
@@ -1576,41 +2104,7 @@ function shouldFinishRace(room) {
 }
 
 async function applyLeaveRoomPenaltyIfNeeded(room, player) {
-  if (!room || !player) return { applied: false, points: 0 };
-  if (room.state === "lobby" || room.state === "finished") return { applied: false, points: 0 };
-  if (room.mode !== "pvp_ranked" && room.mode !== "pvp_bot") return { applied: false, points: 0 };
-  if (player.isBot === true) return { applied: false, points: 0 };
-  // Don't penalize players who already finished (or effectively solved) this round.
-  if (Number.isInteger(Number(player.elapsedSec))) return { applied: false, points: 0 };
-  if (
-    Number.isFinite(Number(room.totalAnswerCells)) &&
-    Number(room.totalAnswerCells) > 0 &&
-    Number.isFinite(Number(player.correctAnswerCells)) &&
-    Number(player.correctAnswerCells) >= Number(room.totalAnswerCells)
-  ) {
-    return { applied: false, points: 0 };
-  }
-  const userId = Number(player.userId);
-  if (!Number.isInteger(userId)) return { applied: false, points: 0 };
-  if (player.leavePenaltyAppliedAt) return { applied: false, points: 0 };
-
-  const { rowCount } = await pool.query(
-    `UPDATE users
-     SET rating = GREATEST(100, rating - $2),
-         rating_games = rating_games + 1,
-         rating_losses = rating_losses + 1,
-         win_streak_current = 0
-     WHERE id = $1`,
-    [userId, LEAVE_ROOM_PENALTY_RATING]
-  );
-  if (!rowCount) return { applied: false, points: 0 };
-
-  player.leavePenaltyAppliedAt = new Date().toISOString();
-  return {
-    applied: true,
-    points: LEAVE_ROOM_PENALTY_RATING,
-    userId,
-  };
+  return { applied: false, points: 0 };
 }
 
 async function applyRatedResultIfNeeded(room) {
@@ -1651,15 +2145,16 @@ async function applyRatedResultIfNeeded(room) {
       return;
     }
 
-    const expectedWinner = eloExpected(Number(winner.rating), Number(loser.rating));
-    const expectedLoser = eloExpected(Number(loser.rating), Number(winner.rating));
-    const winnerK = eloKFactor(Number(winner.rating_games));
-    const loserK = eloKFactor(Number(loser.rating_games));
-    const winnerBaseNext = eloNextRating(Number(winner.rating), expectedWinner, 1, winnerK);
-    const loserNext = eloNextRating(Number(loser.rating), expectedLoser, 0, loserK);
+    const winnerRating = normalizeRatingValue(winner.rating);
+    const loserRating = normalizeRatingValue(loser.rating);
+    const ratingDiff = loserRating - winnerRating;
+    const winnerDeltaBase = Math.max(12, Math.min(48, Math.round(RATING_WIN_BASE + ratingDiff / 130)));
+    const loserDelta = Math.max(6, Math.min(28, Math.round(RATING_LOSS_BASE + (winnerRating - loserRating) / 220)));
     const winnerNextStreak = Math.max(0, Number(winner.win_streak_current || 0)) + 1;
     const winnerStreakBonus = getWinStreakBonus(winnerNextStreak);
-    const winnerNext = Math.max(100, Math.min(4000, winnerBaseNext + winnerStreakBonus));
+    const winnerDelta = Math.max(1, winnerDeltaBase + winnerStreakBonus);
+    const winnerNext = Math.max(0, Math.min(5000, winnerRating + winnerDelta));
+    const loserNext = Math.max(0, Math.min(5000, loserRating - loserDelta));
 
     await client.query(
       `UPDATE users
@@ -1686,8 +2181,8 @@ async function applyRatedResultIfNeeded(room) {
     room.ratedResult = {
       winnerUserId,
       loserUserId,
-      winnerDelta: winnerNext - Number(winner.rating),
-      loserDelta: loserNext - Number(loser.rating),
+      winnerDelta: winnerNext - winnerRating,
+      loserDelta: loserNext - loserRating,
       winnerStreak: winnerNextStreak,
       winnerStreakBonus,
       appliedAt: Date.now(),
@@ -2036,7 +2531,9 @@ function roomPublicState(room) {
   const players = Array.from(room.players.values())
     .map((p) => ({
       playerId: p.playerId,
+      userId: Number(p.userId),
       nickname: p.nickname,
+      profileAvatarKey: normalizeProfileAvatarKey(p.profileAvatarKey),
       joinedAt: p.joinedAt,
       finishedAt: p.finishedAt,
       elapsedSec: p.elapsedSec,
@@ -2234,12 +2731,15 @@ app.post("/auth/signup", async (req, res) => {
       `INSERT INTO users (username, nickname, password_hash)
        VALUES ($1, $2, $3)
        RETURNING id, username, nickname, rating, rating_games, rating_wins, rating_losses,
-                 win_streak_current, win_streak_best, ui_lang, ui_theme, ui_sound_on, ui_sound_volume`,
+                 win_streak_current, win_streak_best, profile_avatar_key,
+                 ui_lang, ui_theme, ui_sound_on, ui_sound_volume,
+                 placement_done, placement_rating, placement_tier_key, placement_version,
+                 placement_completed_at_ms, placement_solved_sequential, placement_elapsed_sec`,
       [username, nickname, passwordHash]
     );
     const user = rows[0];
     const token = await createSessionForUser(user.id);
-    return res.json({ ok: true, token, user });
+    return res.json({ ok: true, token, user: buildClientUser(user) });
   } catch (err) {
     if (String(err.message || "").includes("users_username_key")) {
       return res.status(409).json({ ok: false, error: "username already exists" });
@@ -2260,7 +2760,10 @@ app.post("/auth/login", async (req, res) => {
   try {
     const { rows } = await pool.query(
       `SELECT id, username, nickname, password_hash, rating, rating_games, rating_wins, rating_losses,
-              win_streak_current, win_streak_best, ui_lang, ui_theme, ui_sound_on, ui_sound_volume
+              win_streak_current, win_streak_best, profile_avatar_key,
+              ui_lang, ui_theme, ui_sound_on, ui_sound_volume,
+              placement_done, placement_rating, placement_tier_key, placement_version,
+              placement_completed_at_ms, placement_solved_sequential, placement_elapsed_sec
        FROM users
        WHERE username = $1
          AND is_bot = false
@@ -2278,21 +2781,7 @@ app.post("/auth/login", async (req, res) => {
     return res.json({
       ok: true,
       token,
-      user: {
-        id: user.id,
-        username: user.username,
-        nickname: user.nickname,
-        rating: user.rating,
-        rating_games: user.rating_games,
-        rating_wins: user.rating_wins,
-        rating_losses: user.rating_losses,
-        win_streak_current: user.win_streak_current,
-        win_streak_best: user.win_streak_best,
-        ui_lang: user.ui_lang,
-        ui_theme: user.ui_theme,
-        ui_sound_on: user.ui_sound_on,
-        ui_sound_volume: user.ui_sound_volume,
-      },
+      user: buildClientUser(user),
     });
   } catch (err) {
     return res.status(500).json({ ok: false, error: err.message });
@@ -2302,21 +2791,7 @@ app.post("/auth/login", async (req, res) => {
 app.get("/auth/me", requireAuth, async (req, res) => {
   return res.json({
     ok: true,
-    user: {
-      id: req.authUser.id,
-      username: req.authUser.username,
-      nickname: req.authUser.nickname,
-      rating: req.authUser.rating,
-      rating_games: req.authUser.rating_games,
-      rating_wins: req.authUser.rating_wins,
-      rating_losses: req.authUser.rating_losses,
-      win_streak_current: req.authUser.win_streak_current,
-      win_streak_best: req.authUser.win_streak_best,
-      ui_lang: req.authUser.ui_lang,
-      ui_theme: req.authUser.ui_theme,
-      ui_sound_on: req.authUser.ui_sound_on,
-      ui_sound_volume: req.authUser.ui_sound_volume,
-    },
+    user: buildClientUser(req.authUser),
   });
 });
 
@@ -2337,13 +2812,16 @@ const updateAuthPreferences = async (req, res) => {
            ui_sound_volume = $5
        WHERE id = $1
        RETURNING id, username, nickname, rating, rating_games, rating_wins, rating_losses,
-                 win_streak_current, win_streak_best, ui_lang, ui_theme, ui_sound_on, ui_sound_volume`,
+                 win_streak_current, win_streak_best, profile_avatar_key,
+                 ui_lang, ui_theme, ui_sound_on, ui_sound_volume,
+                 placement_done, placement_rating, placement_tier_key, placement_version,
+                 placement_completed_at_ms, placement_solved_sequential, placement_elapsed_sec`,
       [Number(req.authUser.id), uiLang, uiTheme, uiSoundOn, uiSoundVolume]
     );
     if (!rows.length) {
       return res.status(404).json({ ok: false, error: "User not found" });
     }
-    return res.json({ ok: true, user: rows[0] });
+    return res.json({ ok: true, user: buildClientUser(rows[0]) });
   } catch (err) {
     return res.status(500).json({ ok: false, error: err.message });
   }
@@ -2353,6 +2831,96 @@ app.put("/auth/preferences", requireAuth, updateAuthPreferences);
 // Compatibility routes for older/broken clients sending a different path or method.
 app.put("/auth", requireAuth, updateAuthPreferences);
 app.post("/auth/preferences", requireAuth, updateAuthPreferences);
+
+app.get("/profile/me", requireAuth, async (req, res) => {
+  try {
+    const profile = await buildUserProfilePayload(req.authUser.id, { includeUsername: true });
+    if (!profile) {
+      return res.status(404).json({ ok: false, error: "User not found" });
+    }
+    return res.json({ ok: true, profile });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+app.put("/profile/me", requireAuth, async (req, res) => {
+  const requestedKey = normalizeProfileAvatarKey(req.body?.profileAvatarKey);
+  try {
+    const currentProfile = await buildUserProfilePayload(req.authUser.id, { includeUsername: true });
+    if (!currentProfile) {
+      return res.status(404).json({ ok: false, error: "User not found" });
+    }
+    const isDefault = DEFAULT_PROFILE_AVATAR_KEYS.includes(requestedKey);
+    const isUnlockedSpecial = Array.isArray(currentProfile.unlockedSpecialAvatarKeys)
+      && currentProfile.unlockedSpecialAvatarKeys.includes(requestedKey);
+    if (!isDefault && !isUnlockedSpecial) {
+      return res.status(403).json({ ok: false, error: "Avatar is locked" });
+    }
+    const { rows } = await pool.query(
+      `UPDATE users
+       SET profile_avatar_key = $2
+       WHERE id = $1
+       RETURNING id, username, nickname, rating, rating_games, rating_wins, rating_losses,
+                 win_streak_current, win_streak_best, profile_avatar_key,
+                 ui_lang, ui_theme, ui_sound_on, ui_sound_volume,
+                 placement_done, placement_rating, placement_tier_key, placement_version,
+                 placement_completed_at_ms, placement_solved_sequential, placement_elapsed_sec`,
+      [Number(req.authUser.id), requestedKey]
+    );
+    if (!rows.length) {
+      return res.status(404).json({ ok: false, error: "User not found" });
+    }
+    propagateProfileAvatarSelection(req.authUser.id, requestedKey);
+    const profile = await buildUserProfilePayload(req.authUser.id, { includeUsername: true });
+    return res.json({ ok: true, user: buildClientUser(rows[0]), profile });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+app.post("/placement/complete", requireAuth, async (req, res) => {
+  const results = Array.isArray(req.body?.results) ? req.body.results : null;
+  const elapsedSec = Number(req.body?.elapsedSec);
+  const currentStageProgress = Number(req.body?.currentStageProgress ?? 0);
+  if (!results || !Number.isFinite(elapsedSec)) {
+    return res.status(400).json({ ok: false, error: "results and elapsedSec are required" });
+  }
+  try {
+    const persisted = await persistPlacementResultForUser(
+      req.authUser.id,
+      results,
+      elapsedSec,
+      currentStageProgress
+    );
+    if (!persisted.user) {
+      return res.status(404).json({ ok: false, error: "User not found" });
+    }
+    return res.json({
+      ok: true,
+      placement: persisted.placement,
+      user: buildClientUser(persisted.user),
+    });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+app.get("/profiles/:userId", async (req, res) => {
+  const userId = Number(req.params.userId);
+  if (!Number.isInteger(userId) || userId <= 0) {
+    return res.status(400).json({ ok: false, error: "Invalid userId" });
+  }
+  try {
+    const profile = await buildUserProfilePayload(userId, { includeUsername: false });
+    if (!profile) {
+      return res.status(404).json({ ok: false, error: "Profile not found" });
+    }
+    return res.json({ ok: true, profile });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: err.message });
+  }
+});
 
 app.post("/auth/logout", requireAuth, async (req, res) => {
   try {
@@ -2368,28 +2936,51 @@ app.get("/ratings/leaderboard", async (req, res) => {
   const offsetRaw = Number(req.query?.offset);
   const limit = Number.isInteger(limitRaw) ? Math.max(1, Math.min(200, limitRaw)) : 100;
   const offset = Number.isInteger(offsetRaw) ? Math.max(0, offsetRaw) : 0;
+  const legacyView = String(req.query?.view || "").trim().toLowerCase() === "legacy";
   try {
     const authUser = await getAuthUserFromReq(req);
-    const { rows } = await pool.query(
-      `SELECT id, username, nickname, is_bot, rating, rating_games, rating_wins, rating_losses,
-              win_streak_current, win_streak_best
-       FROM users
-       ORDER BY rating DESC, rating_wins DESC, rating_games DESC, id ASC
-       LIMIT $1 OFFSET $2`,
-      [limit, offset]
-    );
+    const listSql = legacyView
+      ? `SELECT id, username, nickname, is_bot, rating, rating_games, rating_wins, rating_losses,
+                win_streak_current, win_streak_best, profile_avatar_key, placement_done
+         FROM users
+         ORDER BY rating DESC, rating_wins DESC, rating_games DESC, id ASC
+         LIMIT $1 OFFSET $2`
+      : `SELECT id, username, nickname, is_bot,
+                CASE WHEN placement_done = true AND COALESCE(placement_version, 0) = ${CURRENT_PLACEMENT_VERSION} THEN rating ELSE 0 END AS rating,
+                rating_games, rating_wins, rating_losses,
+                win_streak_current, win_streak_best, profile_avatar_key, placement_done
+         FROM users
+         ORDER BY
+           CASE WHEN placement_done = true AND COALESCE(placement_version, 0) = ${CURRENT_PLACEMENT_VERSION} THEN rating ELSE 0 END DESC,
+           rating_wins DESC,
+           rating_games DESC,
+           id ASC
+         LIMIT $1 OFFSET $2`;
+    const { rows } = await pool.query(listSql, [limit, offset]);
     let myRank = null;
     if (authUser && Number.isInteger(Number(authUser.id))) {
-      const { rows: rankRows } = await pool.query(
-        `SELECT ranked.rank_pos
-         FROM (
-           SELECT id, ROW_NUMBER() OVER (ORDER BY rating DESC, rating_wins DESC, rating_games DESC, id ASC) AS rank_pos
-           FROM users
-         ) AS ranked
-         WHERE ranked.id = $1
-         LIMIT 1`,
-        [Number(authUser.id)]
-      );
+      const rankSql = legacyView
+        ? `SELECT ranked.rank_pos
+           FROM (
+             SELECT id, ROW_NUMBER() OVER (ORDER BY rating DESC, rating_wins DESC, rating_games DESC, id ASC) AS rank_pos
+             FROM users
+           ) AS ranked
+           WHERE ranked.id = $1
+           LIMIT 1`
+        : `SELECT ranked.rank_pos
+           FROM (
+             SELECT id, ROW_NUMBER() OVER (
+               ORDER BY
+                 CASE WHEN placement_done = true AND COALESCE(placement_version, 0) = ${CURRENT_PLACEMENT_VERSION} THEN rating ELSE 0 END DESC,
+                 rating_wins DESC,
+                 rating_games DESC,
+                 id ASC
+             ) AS rank_pos
+             FROM users
+           ) AS ranked
+           WHERE ranked.id = $1
+           LIMIT 1`;
+      const { rows: rankRows } = await pool.query(rankSql, [Number(authUser.id)]);
       if (rankRows.length) {
         myRank = Number(rankRows[0].rank_pos);
       }
@@ -2402,6 +2993,7 @@ app.get("/ratings/leaderboard", async (req, res) => {
       myRank,
       myUserId: authUser ? Number(authUser.id) : null,
       totalUsers,
+      view: legacyView ? "legacy" : "current",
     });
   } catch (err) {
     return res.status(500).json({ ok: false, error: err.message });
@@ -2852,6 +3444,7 @@ function isPvpTicketMatchEligible(ticket, now = Date.now()) {
 function createPvpMatch(ticketA, ticketB) {
   const now = Date.now();
   const matchId = randomPlayerId();
+  const sizeOptions = getPvpSizeOptionsForTickets(ticketA, ticketB);
   const players = [ticketA, ticketB].map((ticket) => {
     const isBot = ticket?.isBot === true;
     const botDifficulty = isBot ? normalizeBotDifficulty(ticket?.botSkill) : null;
@@ -2865,6 +3458,7 @@ function createPvpMatch(ticketA, ticketB) {
       nickname: ticket.nickname,
       rating: ticketRating,
       ratingRank: ticketRank,
+      profileAvatarKey: normalizeProfileAvatarKey(ticket?.profileAvatarKey),
       ticketId: ticket.ticketId,
       isBot,
       botDifficulty,
@@ -2895,7 +3489,7 @@ function createPvpMatch(ticketA, ticketB) {
     puzzleId: null,
     puzzlePreview: null,
     players,
-    options: PVP_SIZE_OPTIONS.map(([width, height]) => ({
+    options: sizeOptions.map(([width, height]) => ({
       sizeKey: pvpSizeKey(width, height),
       width,
       height,
@@ -2923,7 +3517,7 @@ function createPvpMatch(ticketA, ticketB) {
 }
 
 function maybeMatchWaitingTicketsWithHuman(now = Date.now()) {
-  const eligibleIds = [];
+  const eligible = [];
   for (const ticketId of pvpWaitingOrder) {
     const ticket = pvpQueueTickets.get(ticketId);
     if (!ticket) continue;
@@ -2937,48 +3531,47 @@ function maybeMatchWaitingTicketsWithHuman(now = Date.now()) {
       continue;
     }
     if (!isPvpTicketMatchEligible(ticket, now)) continue;
-    eligibleIds.push(ticketId);
+    eligible.push({ ticketId, ticket });
   }
 
-  if (eligibleIds.length < 2) return;
+  if (eligible.length < 2) return;
 
-  // Shuffle once so pairings are random.
-  for (let i = eligibleIds.length - 1; i > 0; i -= 1) {
-    const j = randomInt(0, i);
-    const tmp = eligibleIds[i];
-    eligibleIds[i] = eligibleIds[j];
-    eligibleIds[j] = tmp;
-  }
+  // Older waiting tickets get matched first.
+  eligible.sort((a, b) => Number(a.ticket.createdAt || 0) - Number(b.ticket.createdAt || 0));
 
   const used = new Set();
-  for (let i = 0; i < eligibleIds.length; i += 1) {
-    const aId = eligibleIds[i];
-    if (used.has(aId)) continue;
+  for (let i = 0; i < eligible.length; i += 1) {
+    const aEntry = eligible[i];
+    if (!aEntry) continue;
+    const aId = aEntry.ticketId;
     const a = pvpQueueTickets.get(aId);
-    if (!a || a.state !== "waiting") continue;
+    if (!a || a.state !== "waiting" || used.has(aId)) continue;
 
-    let bId = null;
-    for (let j = i + 1; j < eligibleIds.length; j += 1) {
-      const candidateId = eligibleIds[j];
-      if (used.has(candidateId)) continue;
-      const b = pvpQueueTickets.get(candidateId);
+    let best = null;
+    for (let j = i + 1; j < eligible.length; j += 1) {
+      const bEntry = eligible[j];
+      if (!bEntry) continue;
+      const bId = bEntry.ticketId;
+      if (used.has(bId) || bId === aId) continue;
+      const b = pvpQueueTickets.get(bId);
       if (!b || b.state !== "waiting") continue;
       if (a.userId === b.userId) continue;
-      bId = candidateId;
-      break;
+      if (!canTierMatch(a, b, now)) continue;
+      const score = tierMatchScore(a, b);
+      if (!best || score < best.score) {
+        best = { bId, score };
+      }
     }
-    if (!bId) continue;
+    if (!best) continue;
 
-    const b = pvpQueueTickets.get(bId);
+    const b = pvpQueueTickets.get(best.bId);
     if (!b || b.state !== "waiting") continue;
-
     const idxA = pvpWaitingOrder.indexOf(aId);
     if (idxA >= 0) pvpWaitingOrder.splice(idxA, 1);
-    const idxB = pvpWaitingOrder.indexOf(bId);
+    const idxB = pvpWaitingOrder.indexOf(best.bId);
     if (idxB >= 0) pvpWaitingOrder.splice(idxB, 1);
-
     used.add(aId);
-    used.add(bId);
+    used.add(best.bId);
     createPvpMatch(a, b);
   }
 }
@@ -3013,7 +3606,7 @@ async function maybeMatchWaitingTicketsWithBot(now = Date.now()) {
     }
     const idx = pvpWaitingOrder.indexOf(ticketId);
     if (idx >= 0) pvpWaitingOrder.splice(idx, 1);
-    const botTicket = await fetchAvailablePvpBotTicket(now);
+    const botTicket = await fetchAvailablePvpBotTicket(now, ticket);
     if (!botTicket) {
       pvpWaitingOrder.push(ticketId);
       ticket.botNextAttemptAt = now + randomInt(PVP_BOT_RETRY_MIN_MS, PVP_BOT_RETRY_MAX_MS);
@@ -3026,6 +3619,12 @@ async function maybeMatchWaitingTicketsWithBot(now = Date.now()) {
 app.post("/pvp/queue/join", requireAuth, async (req, res) => {
   cleanupPvpQueue(Date.now());
 
+  const placementDone = hasActivePlacement(req.authUser);
+  const placementRating = Number(req.authUser.placement_rating);
+  if (!placementDone || !Number.isFinite(placementRating) || placementRating < 0) {
+    return res.status(403).json({ ok: false, error: "Placement required" });
+  }
+
   if (isUserInAnyRoom(req.authUser.id)) {
     return res.status(400).json({ ok: false, error: "You are already in a room" });
   }
@@ -3036,11 +3635,12 @@ app.post("/pvp/queue/join", requireAuth, async (req, res) => {
     const existing = pvpQueueTickets.get(existingTicketId);
     if (existing) {
       existing.updatedAt = now;
+      existing.profileAvatarKey = normalizeProfileAvatarKey(req.authUser.profile_avatar_key);
       const hasRating = Number.isFinite(Number(existing.rating));
       const hasRank = Number.isInteger(Number(existing.ratingRank)) && Number(existing.ratingRank) > 0;
       if (!hasRating || !hasRank) {
         const existingSnapshot = await fetchUserRatingSnapshot(existing.userId);
-        existing.rating = normalizeRatingValue(existingSnapshot?.rating ?? req.authUser.rating);
+        existing.rating = normalizeRatingValue(existingSnapshot?.rating ?? getDisplayRating(req.authUser));
         existing.ratingRank = normalizeRatingRank(existingSnapshot?.rank);
       }
       const payload = await buildPvpStatusPayload(existing, req.authUser.id);
@@ -3059,15 +3659,16 @@ app.post("/pvp/queue/join", requireAuth, async (req, res) => {
   const myTicketId = randomPlayerId();
   const matchEligibleAt = now + randomInt(PVP_MATCH_DELAY_MIN_MS, PVP_MATCH_DELAY_MAX_MS);
   const ratingSnapshot = await fetchUserRatingSnapshot(req.authUser.id);
-  const myRating = normalizeRatingValue(ratingSnapshot?.rating ?? req.authUser.rating);
+  const myRating = normalizeRatingValue(ratingSnapshot?.rating ?? getDisplayRating(req.authUser));
   const myRatingRank = normalizeRatingRank(ratingSnapshot?.rank);
-  const myTicket = {
-    ticketId: myTicketId,
-    userId: req.authUser.id,
-    nickname: req.authUser.nickname,
-    rating: myRating,
-    ratingRank: myRatingRank,
-    state: "waiting",
+    const myTicket = {
+      ticketId: myTicketId,
+      userId: req.authUser.id,
+      nickname: req.authUser.nickname,
+      rating: myRating,
+      ratingRank: myRatingRank,
+      profileAvatarKey: normalizeProfileAvatarKey(req.authUser.profile_avatar_key),
+      state: "waiting",
     createdAt: now,
     updatedAt: now,
     matchId: null,
@@ -3284,6 +3885,7 @@ app.post("/race/create", requireAuth, async (req, res) => {
       playerId,
       userId: req.authUser.id,
       nickname,
+      profileAvatarKey: normalizeProfileAvatarKey(req.authUser.profile_avatar_key),
       joinedAt: nowIso,
       finishedAt: null,
       elapsedSec: null,
@@ -3355,6 +3957,7 @@ app.post("/race/join", requireAuth, async (req, res) => {
       playerId,
       userId: req.authUser.id,
       nickname,
+      profileAvatarKey: normalizeProfileAvatarKey(req.authUser.profile_avatar_key),
       joinedAt: new Date().toISOString(),
       finishedAt: null,
       elapsedSec: null,
@@ -3626,6 +4229,7 @@ app.post("/race/chat", requireAuth, (req, res) => {
   room.chatMessages.push({
     id: crypto.randomBytes(8).toString("hex"),
     playerId: player.playerId,
+    userId: Number(player.userId),
     nickname: player.nickname,
     text,
     createdAt: new Date().toISOString(),
@@ -3763,36 +4367,12 @@ app.post("/race/leave", async (req, res) => {
   }
 
   const leavePenalty = await applyLeaveRoomPenaltyIfNeeded(room, player);
-  if (leavePenalty.applied) {
-    room.ratedResultApplied = true;
-    room.ratedResultApplying = false;
-    room.ratedResult = {
-      type: "leave_penalty",
-      loserUserId: leavePenalty.userId,
-      loserDelta: -leavePenalty.points,
-      appliedAt: Date.now(),
-    };
-  }
 
   if (!player.disconnectedAt) {
     player.disconnectedAt = new Date().toISOString();
   }
-  player.loseReason = player.loseReason || (leavePenalty.applied ? "left_penalty" : "left");
+  player.loseReason = player.loseReason || "left";
   player.isReady = false;
-
-  if (leavePenalty.applied && (room.mode === "pvp_ranked" || room.mode === "pvp_bot")) {
-    if (!room.winnerPlayerId) {
-      const alive = Array.from(room.players.values()).filter(
-        (p) =>
-          p.playerId !== player.playerId &&
-          !p.disconnectedAt &&
-          !Number.isInteger(p.elapsedSec) &&
-          !p.loseReason
-      );
-      if (alive.length === 1) room.winnerPlayerId = alive[0].playerId;
-    }
-    room.state = "finished";
-  }
 
   if (!room.winnerPlayerId) {
     const alive = Array.from(room.players.values()).filter(

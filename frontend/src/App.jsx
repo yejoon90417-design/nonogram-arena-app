@@ -19,12 +19,15 @@ const API_BASE = normalizeApiBase(import.meta.env.VITE_API_BASE_URL);
 const MAX_HISTORY = 200;
 const AUTH_TOKEN_KEY = "nonogram-auth-token";
 const AUTH_USER_KEY = "nonogram-auth-user";
+const PROFILE_AVATAR_LOCAL_OVERRIDES_KEY = "nonogram-local-profile-avatar-overrides";
 const LANG_KEY = "nonogram-ui-lang";
 const THEME_KEY = "nonogram-ui-theme";
 const STYLE_VARIANT_KEY = "nonogram-ui-style-variant";
 const SOUND_KEY = "nonogram-ui-sound";
 const TUTORIAL_SEEN_KEY = "nonogram-tutorial-seen-v1";
 const PVP_SIZE_KEYS = ["5x5", "10x10", "15x15", "20x20", "25x25"];
+const PVP_SIZE_KEYS_LOW_TIER = ["5x5", "10x10", "15x15"];
+const PVP_SIZE_KEYS_GOLD_PLUS = ["10x10", "15x15", "20x20", "25x25"];
 const PVP_REVEAL_RESULT_HOLD_MS = 1600;
 const SOUND_MASTER_GAIN_MAX = 0.34;
 const ADSENSE_SCRIPT_ID = "adsense-auto-script";
@@ -34,10 +37,206 @@ const MODE_TO_PATH = {
   single: "/single",
   multi: "/multi",
   pvp: "/pvp",
+  placement_test: "/placement",
   auth: "/auth",
   tutorial: "/tutorial",
   ranking: "/ranking",
+  legacy_ranking: "/ranking-legacy",
   replay_hall: "/hall",
+};
+const PLACEMENT_TIME_LIMIT_SEC = 300;
+const PLACEMENT_STAGES = [
+  { key: "s1", sizeKey: "5x5", labelKo: "1번 퍼즐", labelEn: "Puzzle 1" },
+  { key: "s2", sizeKey: "10x10", labelKo: "2번 퍼즐", labelEn: "Puzzle 2" },
+  { key: "s3", sizeKey: "10x10", labelKo: "3번 퍼즐", labelEn: "Puzzle 3" },
+  { key: "s4", sizeKey: "15x15", labelKo: "4번 퍼즐", labelEn: "Puzzle 4" },
+  { key: "s5", sizeKey: "15x15", labelKo: "5번 퍼즐", labelEn: "Puzzle 5" },
+];
+const TIER_IMAGE_MAP = {
+  bronze: "/tiers/bronze.png",
+  silver: "/tiers/silver.png",
+  gold: "/tiers/gold.png",
+  diamond: "/tiers/diamond.png",
+  master: "/tiers/master.png",
+  challenger: "/tiers/master.png",
+};
+const DEFAULT_PROFILE_AVATAR_KEY = "default-user";
+const DEFAULT_PROFILE_AVATAR_OPTIONS = [
+  { key: "default-user", labelKo: "스마일", labelEn: "Smile", emoji: "😎", colorA: "#8dc8ff", colorB: "#31568e" },
+  { key: "default-ember", labelKo: "불꽃", labelEn: "Fire", emoji: "🔥", colorA: "#ffb26b", colorB: "#b24a1f" },
+  { key: "default-rose", labelKo: "장미", labelEn: "Rose", emoji: "🌹", colorA: "#ff9cc4", colorB: "#a33d67" },
+  { key: "default-mint", labelKo: "클로버", labelEn: "Clover", emoji: "🍀", colorA: "#91efc3", colorB: "#2d7c59" },
+  { key: "default-violet", labelKo: "유니콘", labelEn: "Unicorn", emoji: "🦄", colorA: "#c4a7ff", colorB: "#6540ab" },
+  { key: "default-cobalt", labelKo: "보석", labelEn: "Gem", emoji: "💎", colorA: "#8cb3ff", colorB: "#29478f" },
+  { key: "default-sky", labelKo: "구름", labelEn: "Cloud", emoji: "☁️", colorA: "#9fe6ff", colorB: "#347aa0" },
+  { key: "default-ocean", labelKo: "파도", labelEn: "Wave", emoji: "🌊", colorA: "#79d4ff", colorB: "#1e4f8a" },
+  { key: "default-forest", labelKo: "숲", labelEn: "Forest", emoji: "🌲", colorA: "#7fd48c", colorB: "#275c39" },
+  { key: "default-sage", labelKo: "잎", labelEn: "Leaf", emoji: "🌿", colorA: "#b9ddc3", colorB: "#4b6d55" },
+  { key: "default-lavender", labelKo: "나비", labelEn: "Butterfly", emoji: "🦋", colorA: "#d4c2ff", colorB: "#7053b0" },
+  { key: "default-orchid", labelKo: "벚꽃", labelEn: "Blossom", emoji: "🌸", colorA: "#f4b8ff", colorB: "#9545a3" },
+  { key: "default-plum", labelKo: "포도", labelEn: "Grape", emoji: "🍇", colorA: "#c999d8", colorB: "#63356f" },
+  { key: "default-crimson", labelKo: "하트", labelEn: "Heart", emoji: "❤️", colorA: "#ff8da1", colorB: "#8b2239" },
+  { key: "default-coral", labelKo: "물고기", labelEn: "Fish", emoji: "🐠", colorA: "#ffaf93", colorB: "#a34934" },
+  { key: "default-peach", labelKo: "복숭아", labelEn: "Peach", emoji: "🍑", colorA: "#ffd2a8", colorB: "#ad6a3f" },
+  { key: "default-sand", labelKo: "별", labelEn: "Star", emoji: "⭐", colorA: "#ead4aa", colorB: "#907247" },
+  { key: "default-lemon", labelKo: "레몬", labelEn: "Lemon", emoji: "🍋", colorA: "#fff08a", colorB: "#9a7e23" },
+  { key: "default-lime", labelKo: "개구리", labelEn: "Frog", emoji: "🐸", colorA: "#d5ff7e", colorB: "#6c8e18" },
+  { key: "default-teal", labelKo: "문어", labelEn: "Octopus", emoji: "🐙", colorA: "#84f0dc", colorB: "#1e7d72" },
+  { key: "default-aqua", labelKo: "돌고래", labelEn: "Dolphin", emoji: "🐬", colorA: "#8cf6ff", colorB: "#1c7c88" },
+  { key: "default-azure", labelKo: "고양이", labelEn: "Cat", emoji: "🐱", colorA: "#9ec8ff", colorB: "#2859a2" },
+  { key: "default-navy", labelKo: "펭귄", labelEn: "Penguin", emoji: "🐧", colorA: "#7c98cb", colorB: "#22385e" },
+  { key: "default-slate", labelKo: "곰", labelEn: "Bear", emoji: "🐻", colorA: "#c1ccda", colorB: "#516074" },
+  { key: "default-silverline", labelKo: "로봇", labelEn: "Robot", emoji: "🤖", colorA: "#dfe5ef", colorB: "#6a7788" },
+  { key: "default-goldline", labelKo: "왕관", labelEn: "Crown", emoji: "👑", colorA: "#ffe18d", colorB: "#a57217" },
+  { key: "default-bronzeline", labelKo: "방패", labelEn: "Shield", emoji: "🛡️", colorA: "#e5b28a", colorB: "#8b512f" },
+  { key: "default-berry", labelKo: "딸기", labelEn: "Strawberry", emoji: "🍓", colorA: "#f2a4d6", colorB: "#8e3f71" },
+  { key: "default-fuchsia", labelKo: "무지개", labelEn: "Rainbow", emoji: "🌈", colorA: "#ff9cf8", colorB: "#9a2da1" },
+  { key: "default-ruby", labelKo: "체리", labelEn: "Cherry", emoji: "🍒", colorA: "#ff9e9e", colorB: "#932d44" },
+  { key: "default-ice", labelKo: "눈꽃", labelEn: "Snow", emoji: "❄️", colorA: "#d8fbff", colorB: "#4e87a6" },
+  { key: "default-cloud", labelKo: "퍼즐", labelEn: "Puzzle", emoji: "🧩", colorA: "#edf2f7", colorB: "#778396" },
+  { key: "default-night", labelKo: "달", labelEn: "Moon", emoji: "🌙", colorA: "#8da0c8", colorB: "#2c3553" },
+  { key: "default-spring", labelKo: "꽃", labelEn: "Flower", emoji: "🌻", colorA: "#baf6b0", colorB: "#4f8a43" },
+  { key: "default-sunset", labelKo: "태양", labelEn: "Sun", emoji: "☀️", colorA: "#ffc28b", colorB: "#bf5f33" },
+  { key: "default-dawn", labelKo: "로켓", labelEn: "Rocket", emoji: "🚀", colorA: "#ffd7a8", colorB: "#996548" },
+  { key: "default-trophy", labelKo: "트로피", labelEn: "Trophy", emoji: "🏆", colorA: "#ffd873", colorB: "#8e6320" },
+  { key: "default-lock", labelKo: "잠금", labelEn: "Lock", emoji: "🔒", colorA: "#b7c2cf", colorB: "#475769" },
+  { key: "default-sun", labelKo: "번개", labelEn: "Bolt", emoji: "⚡", colorA: "#ffcf73", colorB: "#b86c21" },
+  { key: "default-moon", labelKo: "별밤", labelEn: "Night Sky", emoji: "✨", colorA: "#a9b8ff", colorB: "#4c569c" },
+  { key: "default-settings", labelKo: "게임", labelEn: "Gamepad", emoji: "🎮", colorA: "#9fe0ff", colorB: "#2b6d8d" },
+  { key: "default-home", labelKo: "집", labelEn: "Home", emoji: "🏠", colorA: "#8df0c1", colorB: "#2d7756" },
+  { key: "default-sound", labelKo: "음표", labelEn: "Note", emoji: "🎵", colorA: "#f6a0ef", colorB: "#8a3c91" },
+  { key: "default-undo", labelKo: "타겟", labelEn: "Target", emoji: "🎯", colorA: "#9ad6ff", colorB: "#2667a0" },
+  { key: "default-redo", labelKo: "여우", labelEn: "Fox", emoji: "🦊", colorA: "#ffb28e", colorB: "#a24d34" },
+  { key: "default-eraser", labelKo: "판다", labelEn: "Panda", emoji: "🐼", colorA: "#d3dae7", colorB: "#546173" },
+  { key: "default-honey", labelKo: "꿀", labelEn: "Honey", emoji: "🍯", colorA: "#ffd979", colorB: "#aa6a18" },
+  { key: "default-tiger", labelKo: "호랑이", labelEn: "Tiger", emoji: "🐯", colorA: "#ffc48a", colorB: "#aa5c1d" },
+  { key: "default-rabbit", labelKo: "토끼", labelEn: "Rabbit", emoji: "🐰", colorA: "#ffd3e7", colorB: "#b65f88" },
+  { key: "default-dog", labelKo: "강아지", labelEn: "Dog", emoji: "🐶", colorA: "#ffd9b0", colorB: "#a46c3c" },
+  { key: "default-wolf", labelKo: "늑대", labelEn: "Wolf", emoji: "🐺", colorA: "#c8d3e7", colorB: "#5b6b84" },
+  { key: "default-koala", labelKo: "코알라", labelEn: "Koala", emoji: "🐨", colorA: "#d6dde7", colorB: "#687485" },
+  { key: "default-monkey", labelKo: "원숭이", labelEn: "Monkey", emoji: "🐵", colorA: "#e6c5a1", colorB: "#8b5f36" },
+  { key: "default-chick", labelKo: "병아리", labelEn: "Chick", emoji: "🐤", colorA: "#fff0a0", colorB: "#a98422" },
+  { key: "default-owl", labelKo: "부엉이", labelEn: "Owl", emoji: "🦉", colorA: "#d6c4aa", colorB: "#7a5c35" },
+  { key: "default-turtle", labelKo: "거북이", labelEn: "Turtle", emoji: "🐢", colorA: "#b4eb8a", colorB: "#4b8134" },
+  { key: "default-crab", labelKo: "게", labelEn: "Crab", emoji: "🦀", colorA: "#ffb79b", colorB: "#ab4e38" },
+  { key: "default-mushroom", labelKo: "버섯", labelEn: "Mushroom", emoji: "🍄", colorA: "#ffd5c7", colorB: "#9b493d" },
+  { key: "default-cactus", labelKo: "선인장", labelEn: "Cactus", emoji: "🌵", colorA: "#b6e99a", colorB: "#487d33" },
+  { key: "default-pizza", labelKo: "피자", labelEn: "Pizza", emoji: "🍕", colorA: "#ffd59e", colorB: "#ae6631" },
+  { key: "default-burger", labelKo: "버거", labelEn: "Burger", emoji: "🍔", colorA: "#f2cc8d", colorB: "#8c5c2c" },
+  { key: "default-donut", labelKo: "도넛", labelEn: "Donut", emoji: "🍩", colorA: "#ffbfda", colorB: "#a44a78" },
+  { key: "default-ball", labelKo: "공", labelEn: "Ball", emoji: "⚽", colorA: "#d9e5ef", colorB: "#55677a" },
+  { key: "default-dice", labelKo: "주사위", labelEn: "Dice", emoji: "🎲", colorA: "#ecf2f9", colorB: "#6d7d8f" },
+  { key: "default-headphone", labelKo: "헤드폰", labelEn: "Headphone", emoji: "🎧", colorA: "#bdd5ff", colorB: "#4c63a7" },
+  { key: "default-book", labelKo: "책", labelEn: "Book", emoji: "📚", colorA: "#ffc56b", colorB: "#8c4f1f" },
+  { key: "default-pencil", labelKo: "연필", labelEn: "Pencil", emoji: "✏️", colorA: "#ffd98f", colorB: "#8a6831" },
+  { key: "default-lightbulb", labelKo: "전구", labelEn: "Bulb", emoji: "💡", colorA: "#fff08b", colorB: "#a0821c" },
+  { key: "default-magnet", labelKo: "자석", labelEn: "Magnet", emoji: "🧲", colorA: "#ffb4b4", colorB: "#9c4052" },
+  { key: "default-anchor", labelKo: "앵커", labelEn: "Anchor", emoji: "⚓", colorA: "#c6d5e6", colorB: "#516a86" },
+];
+const HALL_PROFILE_AVATAR_OPTIONS = PVP_SIZE_KEYS.flatMap((sizeKey) =>
+  [1, 2, 3].map((rank) => ({
+    key: `hall-${sizeKey}-${rank}`,
+    sizeKey,
+    rank,
+    group: "hall",
+    labelKo: `${sizeKey} ${rank}위`,
+    labelEn: `${sizeKey} Rank ${rank}`,
+    unlockHintKo: `${sizeKey} 명예의 전당 ${rank}위`,
+    unlockHintEn: `${sizeKey} Hall of Fame Rank ${rank}`,
+    imageSrc: `/profile/hall/${sizeKey}-${rank}.png`,
+  }))
+);
+const LEGACY_SPECIAL_AVATAR_KEY_MAP = {
+  "default-rank-1": "special-rating-1",
+  "default-rank-2": "special-rating-2",
+  "default-rank-3": "special-rating-3",
+};
+const RATING_SPECIAL_PROFILE_AVATAR_OPTIONS = [1, 2, 3].map((rank) => ({
+  key: `special-rating-${rank}`,
+  rank,
+  group: "rating",
+  labelKo: `레이팅 ${rank}위`,
+  labelEn: `Rating #${rank}`,
+  unlockHintKo: `레이팅 랭킹 ${rank}위`,
+  unlockHintEn: `Rating leaderboard #${rank}`,
+  imageSrc: `/profile/special/rating-${rank}.png`,
+}));
+const STREAK_SPECIAL_PROFILE_AVATAR_OPTIONS = [1, 2, 3].map((rank) => ({
+  key: `special-streak-${rank}`,
+  rank,
+  group: "streak",
+  labelKo: `최다 연승 ${rank}위`,
+  labelEn: `Win Streak #${rank}`,
+  unlockHintKo: `최다 연승 랭킹 ${rank}위`,
+  unlockHintEn: `Best win streak #${rank}`,
+  imageSrc: `/profile/special/streak-${rank}.png`,
+}));
+const SPECIAL_PROFILE_AVATAR_OPTIONS = [
+  ...HALL_PROFILE_AVATAR_OPTIONS,
+  ...RATING_SPECIAL_PROFILE_AVATAR_OPTIONS,
+  ...STREAK_SPECIAL_PROFILE_AVATAR_OPTIONS,
+];
+const PLACEMENT_REVEAL_TEST_PRESETS = [
+  { key: "bronze", rating: 820, solvedSequential: 1, elapsedSec: 292 },
+  { key: "silver", rating: 1280, solvedSequential: 2, elapsedSec: 268 },
+  { key: "gold", rating: 1760, solvedSequential: 3, elapsedSec: 241 },
+  { key: "diamond", rating: 2140, solvedSequential: 4, elapsedSec: 222 },
+  { key: "master", rating: 2580, solvedSequential: 5, elapsedSec: 208 },
+];
+const PVP_RESULT_FX_TEST_PRESETS = [
+  { key: "bronze_win", labelKo: "브론즈 승리", labelEn: "Bronze Win", from: 742, to: 781, outcome: "win" },
+  { key: "silver_win", labelKo: "실버 승리", labelEn: "Silver Win", from: 1164, to: 1198, outcome: "win" },
+  { key: "gold_win", labelKo: "골드 승리", labelEn: "Gold Win", from: 1738, to: 1766, outcome: "win" },
+  { key: "diamond_win", labelKo: "다이아 승리", labelEn: "Diamond Win", from: 2180, to: 2211, outcome: "win" },
+  { key: "promotion", labelKo: "승급 테스트", labelEn: "Promotion Test", from: 1492, to: 1524, outcome: "win" },
+  { key: "demotion", labelKo: "강등 테스트", labelEn: "Demotion Test", from: 1512, to: 1481, outcome: "loss" },
+];
+const MATCH_SIM_PROFILE_PRESETS = [
+  { key: "bronze", rating: 820 },
+  { key: "silver", rating: 1240 },
+  { key: "gold", rating: 1760 },
+  { key: "diamond", rating: 2180 },
+  { key: "master", rating: 2630 },
+];
+const MATCH_SIM_MAX_WAIT_SEC = 50;
+const MATCH_SIM_RECENT_IDS = ["h_silver_2", "h_gold_2"];
+const MATCH_FLOW_TEST_BASE_RATING = 585;
+const MATCH_FLOW_TEST_OPPONENT = {
+  nickname: "ghost",
+  rating: 612,
+  ratingRank: 84,
+};
+const MATCH_SIM_POOL = [
+  { id: "h_bronze_1", nickname: "Damon", rating: 862, isBot: false },
+  { id: "h_bronze_2", nickname: "ghost", rating: 944, isBot: false },
+  { id: "h_silver_1", nickname: "yukis", rating: 1188, isBot: false },
+  { id: "h_silver_2", nickname: "소나", rating: 1364, isBot: false },
+  { id: "h_gold_1", nickname: "vexxxx", rating: 1682, isBot: false },
+  { id: "h_gold_2", nickname: "김득완", rating: 1811, isBot: false },
+  { id: "h_diamond_1", nickname: "greeedy", rating: 2094, isBot: false },
+  { id: "h_diamond_2", nickname: "러브식걸", rating: 2278, isBot: false },
+  { id: "h_master_1", nickname: "눈구신데요", rating: 2582, isBot: false },
+  { id: "h_master_2", nickname: "1등이되겠다", rating: 2710, isBot: false },
+  { id: "b_silver_1", nickname: "Mika", rating: 1290, isBot: true },
+  { id: "b_gold_1", nickname: "Juno", rating: 1718, isBot: true },
+  { id: "b_gold_2", nickname: "Seth", rating: 1866, isBot: true },
+  { id: "b_diamond_1", nickname: "Rin", rating: 2140, isBot: true },
+  { id: "b_master_1", nickname: "Nova", rating: 2594, isBot: true },
+];
+const MATCH_SIM_STAGE_FLOW = [
+  { key: "tight", startSec: 0, labelKo: "같은 티어 · ±120", labelEn: "Same tier · ±120" },
+  { key: "widen", startSec: 10, labelKo: "같은 티어 · ±220", labelEn: "Same tier · ±220" },
+  { key: "adjacent", startSec: 20, labelKo: "인접 티어 · ±350", labelEn: "Adjacent tier · ±350" },
+  { key: "broad", startSec: 35, labelKo: "봇 후보 포함 · ±500", labelEn: "Bots included · ±500" },
+  { key: "forced", startSec: 50, labelKo: "강제 매칭", labelEn: "Forced match" },
+];
+const TIER_ORDER = {
+  bronze: 0,
+  silver: 1,
+  gold: 2,
+  diamond: 3,
+  master: 4,
+  challenger: 5,
 };
 
 function normalizePath(pathname) {
@@ -53,9 +252,12 @@ function getModeFromPath(pathname) {
   if (path === "/single") return "single";
   if (path === "/multi") return "multi";
   if (path === "/pvp") return "pvp";
+  if (path === "/placement") return "placement_test";
+  if (path === "/placement-test") return "placement_test";
   if (path === "/auth") return "auth";
   if (path === "/tutorial") return "tutorial";
   if (path === "/ranking") return "ranking";
+  if (path === "/ranking-legacy") return "legacy_ranking";
   if (path === "/hall") return "replay_hall";
   return "menu";
 }
@@ -74,6 +276,437 @@ function normalizeUiTheme(raw) {
 
 function normalizeUiStyleVariant(raw) {
   return String(raw || "").toLowerCase() === "excel" ? "excel" : "default";
+}
+
+function getTierInfoByRating(ratingRaw, rankRaw = null) {
+  const rating = Math.max(0, Math.round(Number(ratingRaw || 0)));
+  const rank = Number(rankRaw);
+  if (rating >= 2500) {
+    if (Number.isInteger(rank) && rank > 0 && rank <= 5) {
+      return { key: "challenger", labelKo: "챌린저", labelEn: "Challenger" };
+    }
+    return { key: "master", labelKo: "마스터", labelEn: "Master" };
+  }
+  if (rating >= 2000) return { key: "diamond", labelKo: "다이아", labelEn: "Diamond" };
+  if (rating >= 1500) return { key: "gold", labelKo: "골드", labelEn: "Gold" };
+  if (rating >= 1000) return { key: "silver", labelKo: "실버", labelEn: "Silver" };
+  return { key: "bronze", labelKo: "브론즈", labelEn: "Bronze" };
+}
+
+function isGoldOrHigherTierKey(raw) {
+  const tierKey = String(raw || "").trim().toLowerCase();
+  return tierKey === "gold" || tierKey === "diamond" || tierKey === "master" || tierKey === "challenger";
+}
+
+function getAllowedPvpSizeKeys(players, viewerUser) {
+  const playerTierKeys = Array.isArray(players)
+    ? players
+        .map((player) => getTierInfoByRating(player?.rating, player?.ratingRank).key)
+        .filter(Boolean)
+    : [];
+
+  if (playerTierKeys.length >= 2) {
+    return playerTierKeys.every((tierKey) => isGoldOrHigherTierKey(tierKey))
+      ? PVP_SIZE_KEYS_GOLD_PLUS
+      : PVP_SIZE_KEYS_LOW_TIER;
+  }
+
+  const viewerTierKey =
+    String(viewerUser?.placement_tier_key || "").trim().toLowerCase() ||
+    getTierInfoByRating(viewerUser?.placement_rating ?? viewerUser?.rating, viewerUser?.ratingRank).key;
+
+  return isGoldOrHigherTierKey(viewerTierKey) ? PVP_SIZE_KEYS_GOLD_PLUS : PVP_SIZE_KEYS_LOW_TIER;
+}
+
+function parseHallProfileAvatarKey(raw) {
+  const value = String(raw || "").trim().toLowerCase();
+  const normalized = LEGACY_SPECIAL_AVATAR_KEY_MAP[value] || value;
+  const option = HALL_PROFILE_AVATAR_OPTIONS.find((entry) => entry.key === normalized);
+  if (!option) return null;
+  return option;
+}
+
+function getSpecialProfileAvatarOption(raw) {
+  const value = String(raw || "").trim().toLowerCase();
+  const normalized = LEGACY_SPECIAL_AVATAR_KEY_MAP[value] || value;
+  return SPECIAL_PROFILE_AVATAR_OPTIONS.find((entry) => entry.key === normalized) || null;
+}
+
+function isSpecialProfileAvatarKey(raw) {
+  return !!getSpecialProfileAvatarOption(raw);
+}
+
+function getDefaultProfileAvatarOption(rawKey) {
+  const key = String(rawKey || "").trim().toLowerCase();
+  return DEFAULT_PROFILE_AVATAR_OPTIONS.find((option) => option.key === key) || DEFAULT_PROFILE_AVATAR_OPTIONS[0];
+}
+
+function getProfileAvatarMeta(rawKey) {
+  const special = getSpecialProfileAvatarOption(rawKey);
+  if (special) {
+    return { type: "special", ...special };
+  }
+  return { type: "default", ...getDefaultProfileAvatarOption(rawKey) };
+}
+
+function normalizeProfileAvatarKey(rawKey) {
+  const special = getSpecialProfileAvatarOption(rawKey);
+  if (special) return special.key;
+  return getDefaultProfileAvatarOption(rawKey).key;
+}
+
+function readLocalProfileAvatarOverrides() {
+  try {
+    const raw = localStorage.getItem(PROFILE_AVATAR_LOCAL_OVERRIDES_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === "object" ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+function getProfileAvatarOverrideStorageKey(user) {
+  const id = Number(user?.id);
+  if (Number.isInteger(id) && id > 0) return `id:${id}`;
+  const username = String(user?.username || "").trim().toLowerCase();
+  if (username) return `username:${username}`;
+  return "";
+}
+
+function getLocalProfileAvatarOverride(user) {
+  const key = getProfileAvatarOverrideStorageKey(user);
+  if (!key) return "";
+  const overrides = readLocalProfileAvatarOverrides();
+  return normalizeProfileAvatarKey(overrides[key] || "");
+}
+
+function writeLocalProfileAvatarOverride(user, avatarKey) {
+  const key = getProfileAvatarOverrideStorageKey(user);
+  if (!key) return;
+  try {
+    const overrides = readLocalProfileAvatarOverrides();
+    overrides[key] = normalizeProfileAvatarKey(avatarKey);
+    localStorage.setItem(PROFILE_AVATAR_LOCAL_OVERRIDES_KEY, JSON.stringify(overrides));
+  } catch {
+    // ignore localStorage errors
+  }
+}
+
+function applyLocalProfileAvatarOverride(user) {
+  if (!user || typeof user !== "object") return user;
+  const override = getLocalProfileAvatarOverride(user);
+  if (!override) {
+    if (user.profile_avatar_key) return { ...user, profile_avatar_key: normalizeProfileAvatarKey(user.profile_avatar_key) };
+    return { ...user, profile_avatar_key: DEFAULT_PROFILE_AVATAR_KEY };
+  }
+  return { ...user, profile_avatar_key: override };
+}
+
+function ProfileAvatar({ avatarKey, nickname = "", size = "md" }) {
+  const meta = getProfileAvatarMeta(avatarKey);
+  const label = nickname ? `${nickname} avatar` : "avatar";
+  if (meta.type === "hall") {
+    return (
+      <span className={`profileAvatar profileAvatar-${size} hall`}>
+        <img src={meta.imageSrc} alt={label} />
+      </span>
+    );
+  }
+  if (meta.imageSrc) {
+    return (
+      <span className={`profileAvatar profileAvatar-${size} defaultImageAvatar ${meta.key}`}>
+        <img src={meta.imageSrc} alt={label} />
+      </span>
+    );
+  }
+  if (meta.emoji) {
+    return (
+      <span
+        className={`profileAvatar profileAvatar-${size} defaultAvatar emojiAvatar ${meta.key}`}
+        style={{ "--avatar-a": meta.colorA, "--avatar-b": meta.colorB }}
+        aria-label={label}
+      >
+        <span className={`profileAvatarEmoji profileAvatarEmoji-${size}`}>{meta.emoji}</span>
+      </span>
+    );
+  }
+  const Icon = meta.Icon || User;
+  const iconSize = size === "xl" ? 44 : size === "picker" ? 38 : size === "lg" ? 28 : size === "sm" ? 14 : 18;
+  return (
+    <span
+      className={`profileAvatar profileAvatar-${size} defaultAvatar ${meta.key}`}
+      style={{ "--avatar-a": meta.colorA, "--avatar-b": meta.colorB }}
+      aria-label={label}
+    >
+      <Icon size={iconSize} strokeWidth={2.2} />
+    </span>
+  );
+}
+
+function getTierBracketInfo(ratingRaw, rankRaw = null) {
+  const rating = Math.max(0, Math.round(Number(ratingRaw || 0)));
+  const tier = getTierInfoByRating(rating, rankRaw);
+  let min = 0;
+  let max = 1000;
+  let nextTier = getTierInfoByRating(1000);
+
+  if (tier.key === "silver") {
+    min = 1000;
+    max = 1500;
+    nextTier = getTierInfoByRating(1500);
+  } else if (tier.key === "gold") {
+    min = 1500;
+    max = 2000;
+    nextTier = getTierInfoByRating(2000);
+  } else if (tier.key === "diamond") {
+    min = 2000;
+    max = 2500;
+    nextTier = getTierInfoByRating(2500);
+  } else if (tier.key === "master") {
+    min = 2500;
+    max = 3000;
+    nextTier = null;
+  } else if (tier.key === "challenger") {
+    min = 2500;
+    max = 3000;
+    nextTier = null;
+  }
+
+  const span = Math.max(1, max - min);
+  const progress =
+    tier.key === "challenger"
+      ? 100
+      : Math.max(0, Math.min(100, ((Math.min(rating, max) - min) / span) * 100));
+
+  return {
+    tier,
+    min,
+    max,
+    progress,
+    nextTier,
+  };
+}
+
+function getMatchSimRule(waitSecRaw) {
+  const waitSec = Math.max(0, Math.floor(Number(waitSecRaw || 0)));
+  if (waitSec < 10) {
+    return {
+      key: "tight",
+      maxDiff: 120,
+      allowAdjacent: false,
+      botsEnabled: false,
+      humanChance: 0.18,
+      botChance: 0,
+      labelKo: "같은 티어 · ±120 · 사람만 탐색",
+      labelEn: "Same tier · ±120 · human only",
+    };
+  }
+  if (waitSec < 20) {
+    return {
+      key: "same_tier_wide",
+      maxDiff: 220,
+      allowAdjacent: false,
+      botsEnabled: false,
+      humanChance: 0.28,
+      botChance: 0,
+      labelKo: "같은 티어 · ±220 · 탐색 범위 확장",
+      labelEn: "Same tier · ±220 · widened search",
+    };
+  }
+  if (waitSec < 35) {
+    return {
+      key: "adjacent",
+      maxDiff: 350,
+      allowAdjacent: true,
+      botsEnabled: false,
+      humanChance: 0.4,
+      botChance: 0,
+      labelKo: "인접 티어 허용 · ±350",
+      labelEn: "Adjacent tier allowed · ±350",
+    };
+  }
+  if (waitSec < 50) {
+    return {
+      key: "broad",
+      maxDiff: 500,
+      allowAdjacent: true,
+      botsEnabled: true,
+      humanChance: 0.52,
+      botChance: 0.34,
+      labelKo: "넓은 탐색 · ±500 · 봇 후보 포함",
+      labelEn: "Broad search · ±500 · bots included",
+    };
+  }
+  return {
+    key: "forced",
+    maxDiff: 9999,
+    allowAdjacent: true,
+    botsEnabled: true,
+    humanChance: 1,
+    botChance: 1,
+    labelKo: "강제 매칭 단계",
+    labelEn: "Forced match stage",
+  };
+}
+
+function pickMatchSimCandidate(playerRatingRaw, waitSecRaw, recentIds = MATCH_SIM_RECENT_IDS) {
+  const playerRating = Math.max(0, Math.round(Number(playerRatingRaw || 0)));
+  const rule = getMatchSimRule(waitSecRaw);
+  const myTier = getTierInfoByRating(playerRating);
+  const playerTierOrder = TIER_ORDER[myTier.key] || 0;
+
+  const eligible = MATCH_SIM_POOL.filter((candidate) => {
+    const diff = Math.abs(Number(candidate.rating) - playerRating);
+    if (diff > rule.maxDiff) return false;
+    const candidateTier = getTierInfoByRating(candidate.rating);
+    const tierDistance = Math.abs((TIER_ORDER[candidateTier.key] || 0) - playerTierOrder);
+    if (rule.allowAdjacent) return tierDistance <= 1;
+    return tierDistance === 0;
+  });
+
+  const humans = eligible
+    .filter((candidate) => !candidate.isBot && !recentIds.includes(candidate.id))
+    .map((candidate) => ({
+      ...candidate,
+      tier: getTierInfoByRating(candidate.rating),
+      source: "human",
+      score: Math.abs(candidate.rating - playerRating) + Math.random() * 38,
+    }))
+    .sort((a, b) => a.score - b.score);
+
+  if (humans.length > 0 && (Math.random() < rule.humanChance || rule.key === "forced")) {
+    return {
+      ...humans[0],
+      matchedAtSec: Math.max(1, Math.floor(Number(waitSecRaw || 0))),
+      reasonKo: "사람 우선 규칙으로 매칭",
+      reasonEn: "Matched through human-first search",
+      rule,
+    };
+  }
+
+  if (!rule.botsEnabled) return null;
+
+  const bots = eligible
+    .filter((candidate) => candidate.isBot)
+    .map((candidate) => ({
+      ...candidate,
+      tier: getTierInfoByRating(candidate.rating),
+      source: "bot",
+      score: Math.abs(candidate.rating - playerRating) + Math.random() * 54,
+    }))
+    .sort((a, b) => a.score - b.score);
+
+  if (bots.length > 0 && (Math.random() < rule.botChance || rule.key === "forced")) {
+    return {
+      ...bots[0],
+      matchedAtSec: Math.max(1, Math.floor(Number(waitSecRaw || 0))),
+      reasonKo: "대기 시간이 길어져 봇 후보까지 포함",
+      reasonEn: "Queue widened to bot candidates after waiting",
+      rule,
+    };
+  }
+
+  return null;
+}
+
+function getMatchSimQueueSize(waitSecRaw, playerRatingRaw = 1500) {
+  const waitSec = Math.max(0, Math.floor(Number(waitSecRaw || 0)));
+  const tier = getTierInfoByRating(playerRatingRaw);
+  const tierBoost =
+    tier.key === "bronze"
+      ? 2
+      : tier.key === "silver"
+        ? 3
+        : tier.key === "gold"
+          ? 4
+          : tier.key === "diamond"
+            ? 3
+            : 2;
+  const wave = [0, 1, 0, 2, 1, 0, 3, 1][waitSec % 8];
+  const widenBoost = waitSec >= 35 ? 2 : waitSec >= 20 ? 1 : 0;
+  return Math.max(1, Math.min(9, tierBoost + wave + widenBoost));
+}
+
+function getMatchSimOutcomeTarget(fromRatingRaw, mode) {
+  const from = Math.max(0, Math.round(Number(fromRatingRaw || 0)));
+  const bracket = getTierBracketInfo(from);
+  if (mode === "promotion") {
+    if (bracket.tier.key === "master" || bracket.tier.key === "challenger") {
+      return { to: from + 36, result: "win" };
+    }
+    return { to: Math.max(from + 18, bracket.max + 18), result: "win" };
+  }
+  if (mode === "demotion") {
+    if (bracket.min <= 0) {
+      return { to: Math.max(0, from - 32), result: "loss" };
+    }
+    return { to: Math.max(0, bracket.min - 22), result: "loss" };
+  }
+  if (mode === "loss") {
+    const lossValue = from >= 2500 ? 22 : from >= 2000 ? 20 : from >= 1500 ? 18 : 16;
+    return { to: Math.max(0, from - lossValue), result: "loss" };
+  }
+  const winValue = from >= 2500 ? 24 : from >= 2000 ? 28 : from >= 1500 ? 32 : 36;
+  return { to: from + winValue, result: "win" };
+}
+
+function evaluatePlacementResult(rawResults, elapsedSecRaw, currentStageProgressRaw = 0) {
+  const elapsedSec = Math.max(1, Math.min(PLACEMENT_TIME_LIMIT_SEC, Math.floor(Number(elapsedSecRaw || 0))));
+  const currentStageProgress = Math.max(0, Math.min(1, Number(currentStageProgressRaw || 0)));
+  const results = Array.isArray(rawResults) ? rawResults : [];
+  let solvedSequential = 0;
+  for (const r of results) {
+    if (r?.status === "solved") solvedSequential += 1;
+    else break;
+  }
+
+  let minRating = 0;
+  let maxRating = 999;
+  if (solvedSequential >= 5) {
+    minRating = 2200;
+    maxRating = 2499;
+  } else if (solvedSequential === 4) {
+    minRating = 2000;
+    maxRating = 2299;
+  } else if (solvedSequential === 3) {
+    minRating = 1500;
+    maxRating = 1999;
+  } else if (solvedSequential === 2) {
+    minRating = 1000;
+    maxRating = 1499;
+  } else if (solvedSequential === 1) {
+    minRating = 500;
+    maxRating = 999;
+  } else {
+    minRating = 0;
+    maxRating = 699;
+  }
+
+  const timeScore = Math.max(0, Math.min(1, (PLACEMENT_TIME_LIMIT_SEC - elapsedSec) / PLACEMENT_TIME_LIMIT_SEC));
+  const performance = Math.max(0, Math.min(1, 0.7 + 0.3 * Math.sqrt(timeScore)));
+
+  const currentStage = results[solvedSequential];
+  const hasPendingCurrent = currentStage && currentStage.status === "pending";
+  const stageProgress = hasPendingCurrent ? currentStageProgress : 0;
+  const stageBonusCap =
+    solvedSequential >= 3 ? 220 : solvedSequential === 2 ? 140 : solvedSequential === 1 ? 100 : 70;
+  const stageProgressBonus = Math.round(stageBonusCap * Math.pow(stageProgress, 0.9));
+
+  const rating = Math.round(
+    Math.max(0, Math.min(2499, minRating + (maxRating - minRating) * performance + stageProgressBonus))
+  );
+  const tier = getTierInfoByRating(rating);
+  return {
+    rating,
+    tier,
+    solvedSequential,
+    elapsedSec,
+    timeScore,
+    performance,
+    stageProgress,
+    stageProgressBonus,
+  };
 }
 
 function toSheetColumnLabel(index) {
@@ -313,7 +946,7 @@ function App() {
   const [authUser, setAuthUser] = useState(() => {
     try {
       const raw = localStorage.getItem(AUTH_USER_KEY);
-      return raw ? JSON.parse(raw) : null;
+      return raw ? applyLocalProfileAvatarOverride(JSON.parse(raw)) : null;
     } catch {
       return null;
     }
@@ -322,6 +955,7 @@ function App() {
   const [authReturnMode, setAuthReturnMode] = useState("menu");
   const [showNeedLoginPopup, setShowNeedLoginPopup] = useState(false);
   const [needLoginReturnMode, setNeedLoginReturnMode] = useState("multi");
+  const [showPlacementRequiredPopup, setShowPlacementRequiredPopup] = useState(false);
   const [loginUsername, setLoginUsername] = useState("");
   const [loginPassword, setLoginPassword] = useState("");
   const [loginError, setLoginError] = useState("");
@@ -356,6 +990,15 @@ function App() {
     theme: "light",
     soundVolume: 100,
   });
+  const [showProfileModal, setShowProfileModal] = useState(false);
+  const [profileModalMode, setProfileModalMode] = useState("self"); // self | public
+  const [profileModalLoading, setProfileModalLoading] = useState(false);
+  const [profileModalSaving, setProfileModalSaving] = useState(false);
+  const [profileModalError, setProfileModalError] = useState("");
+  const [profileModalData, setProfileModalData] = useState(null);
+  const [profileDraftAvatarKey, setProfileDraftAvatarKey] = useState(DEFAULT_PROFILE_AVATAR_KEY);
+  const [profileAvatarTab, setProfileAvatarTab] = useState("default"); // default | special
+  const [profilePickerOpen, setProfilePickerOpen] = useState(false);
   const [pvpTicketId, setPvpTicketId] = useState("");
   const [pvpSearching, setPvpSearching] = useState(false);
   const [pvpQueueSize, setPvpQueueSize] = useState(0);
@@ -367,6 +1010,25 @@ function App() {
   const [pvpRatingFx, setPvpRatingFx] = useState(null);
   const [pvpShowdownMatchId, setPvpShowdownMatchId] = useState("");
   const [pvpShowdownUntilMs, setPvpShowdownUntilMs] = useState(0);
+  const [placementRunning, setPlacementRunning] = useState(false);
+  const [placementLoading, setPlacementLoading] = useState(false);
+  const [placementStartedAtMs, setPlacementStartedAtMs] = useState(0);
+  const [placementStageIndex, setPlacementStageIndex] = useState(0);
+  const [placementResults, setPlacementResults] = useState(() =>
+    PLACEMENT_STAGES.map((s) => ({ ...s, status: "pending", solvedAtSec: null }))
+  );
+  const [placementResultCard, setPlacementResultCard] = useState(null);
+  const [placementRevealOpen, setPlacementRevealOpen] = useState(false);
+  const [placementRevealPhase, setPlacementRevealPhase] = useState("idle"); // idle | analyzing | counting | reveal
+  const [placementRevealRating, setPlacementRevealRating] = useState(0);
+  const [matchSimProfileKey, setMatchSimProfileKey] = useState("gold");
+  const [matchSimRating, setMatchSimRating] = useState(() => MATCH_SIM_PROFILE_PRESETS.find((item) => item.key === "gold")?.rating || 1760);
+  const [matchSimSearching, setMatchSimSearching] = useState(false);
+  const [matchSimElapsedSec, setMatchSimElapsedSec] = useState(0);
+  const [matchSimQueueSize, setMatchSimQueueSize] = useState(() => getMatchSimQueueSize(0, 1760));
+  const [matchSimLogs, setMatchSimLogs] = useState([]);
+  const [matchSimFound, setMatchSimFound] = useState(null);
+  const [matchFlowTest, setMatchFlowTest] = useState(null);
   const boardRef = useRef(null);
   const canvasRef = useRef(null);
   const chatBodyRef = useRef(null);
@@ -384,6 +1046,12 @@ function App() {
   const racePollRef = useRef(0);
   const pvpPollRef = useRef(0);
   const pvpRevealAnimRef = useRef(0);
+  const placementSessionRef = useRef(0);
+  const matchSimSessionRef = useRef(0);
+  const matchSimElapsedRef = useRef(0);
+  const matchSimLastRuleKeyRef = useRef("");
+  const matchFlowTimersRef = useRef([]);
+  const matchFlowRevealRef = useRef(0);
   const raceRoomCodeRef = useRef("");
   const racePlayerIdRef = useRef("");
   const pvpTicketRef = useRef("");
@@ -418,9 +1086,266 @@ function App() {
   };
 
   const cacheAuthUser = (user, { applyPrefs = false } = {}) => {
-    setAuthUser(user);
-    localStorage.setItem(AUTH_USER_KEY, JSON.stringify(user));
-    if (applyPrefs) applyUiPreferences(user);
+    const nextUser = applyLocalProfileAvatarOverride(user);
+    setAuthUser(nextUser);
+    localStorage.setItem(AUTH_USER_KEY, JSON.stringify(nextUser));
+    if (applyPrefs) applyUiPreferences(nextUser);
+  };
+
+  const mapHallBucketsFromResponse = (sizesRaw) => {
+    const mapped = {};
+    for (const key of PVP_SIZE_KEYS) mapped[key] = [];
+    const sizes = Array.isArray(sizesRaw) ? sizesRaw : [];
+    for (const bucket of sizes) {
+      const sizeKey = String(bucket?.sizeKey || "");
+      if (!sizeKey || !mapped[sizeKey]) continue;
+      const top = Array.isArray(bucket?.top) ? bucket.top : [];
+      mapped[sizeKey] = top.slice(0, 3).map((r, idx) => ({
+        recordId: Number(r.recordId || 0),
+        rank: Number(r.rank || idx + 1),
+        userId: Number(r.userId || 0),
+        nickname: String(r.nickname || ""),
+        elapsedSec: Number(r.elapsedSec || 0),
+        elapsedMs: Number(r.elapsedMs || 0),
+        puzzleId: Number(r.puzzleId || 0),
+        finishedAtMs: Number(r.finishedAtMs || 0),
+        sizeKey,
+      }));
+    }
+    return mapped;
+  };
+
+  const hasHallSnapshot = (snapshot) =>
+    PVP_SIZE_KEYS.some((sizeKey) => Array.isArray(snapshot?.[sizeKey]) && snapshot[sizeKey].length > 0);
+  const hasStreakSnapshot = (snapshot) => Array.isArray(snapshot) && snapshot.length > 0;
+  const hasRatingSnapshot = (snapshot) => Array.isArray(snapshot) && snapshot.length > 0;
+
+  const buildHallRewardsFromSnapshot = (snapshot, target) => {
+    const targetUserId = Number(target?.id || target?.userId || 0);
+    const targetNickname = String(target?.nickname || "").trim().toLowerCase();
+    const rewards = [];
+    for (const sizeKey of PVP_SIZE_KEYS) {
+      const records = Array.isArray(snapshot?.[sizeKey]) ? snapshot[sizeKey] : [];
+      for (const record of records) {
+        const recordUserId = Number(record?.userId || 0);
+        const recordNickname = String(record?.nickname || "").trim().toLowerCase();
+        const matched =
+          (targetUserId > 0 && recordUserId > 0 && targetUserId === recordUserId) ||
+          (!!targetNickname && targetNickname === recordNickname);
+        if (!matched) continue;
+        const rank = Math.max(1, Math.min(3, Number(record?.rank || 0) || 1));
+        rewards.push({
+          key: `hall-${sizeKey}-${rank}`,
+          sizeKey,
+          rank,
+          elapsedSec: Number(record?.elapsedSec || 0),
+          finishedAtMs: Number(record?.finishedAtMs || 0),
+        });
+      }
+    }
+    const unique = new Map();
+    for (const reward of rewards) {
+      const prev = unique.get(reward.key);
+      if (!prev || Number(reward.elapsedSec || 0) < Number(prev.elapsedSec || 0)) {
+        unique.set(reward.key, reward);
+      }
+    }
+    return Array.from(unique.values()).sort((a, b) => {
+      const sizeDiff = PVP_SIZE_KEYS.indexOf(a.sizeKey) - PVP_SIZE_KEYS.indexOf(b.sizeKey);
+      if (sizeDiff !== 0) return sizeDiff;
+      return Number(a.rank || 0) - Number(b.rank || 0);
+    });
+  };
+
+  const buildRatingRewardsFromSnapshot = (snapshot, target) => {
+    const targetUserId = Number(target?.id || target?.userId || 0);
+    const targetNickname = String(target?.nickname || "").trim().toLowerCase();
+    return (Array.isArray(snapshot) ? snapshot : [])
+      .slice(0, 3)
+      .map((entry, idx) => ({
+        rank: Number(entry?.rank || idx + 1),
+        userId: Number(entry?.id || entry?.userId || 0),
+        nickname: String(entry?.nickname || "").trim().toLowerCase(),
+      }))
+      .filter((entry) =>
+        (targetUserId > 0 && entry.userId > 0 && targetUserId === entry.userId) ||
+        (!!targetNickname && targetNickname === entry.nickname)
+      )
+      .map((entry) => ({
+        key: `special-rating-${Math.max(1, Math.min(3, entry.rank))}`,
+        group: "rating",
+        rank: Math.max(1, Math.min(3, entry.rank)),
+      }));
+  };
+
+  const buildStreakRewardsFromSnapshot = (snapshot, target) => {
+    const targetUserId = Number(target?.id || target?.userId || 0);
+    const targetNickname = String(target?.nickname || "").trim().toLowerCase();
+    return (Array.isArray(snapshot) ? snapshot : [])
+      .slice(0, 3)
+      .map((entry, idx) => ({
+        rank: Number(entry?.rank || idx + 1),
+        userId: Number(entry?.userId || 0),
+        nickname: String(entry?.nickname || "").trim().toLowerCase(),
+        winStreakBest: Number(entry?.winStreakBest || 0),
+      }))
+      .filter((entry) =>
+        ((targetUserId > 0 && entry.userId > 0 && targetUserId === entry.userId) ||
+          (!!targetNickname && targetNickname === entry.nickname)) &&
+        entry.winStreakBest > 0
+      )
+      .map((entry) => ({
+        key: `special-streak-${Math.max(1, Math.min(3, entry.rank))}`,
+        group: "streak",
+        rank: Math.max(1, Math.min(3, entry.rank)),
+        winStreakBest: entry.winStreakBest,
+      }));
+  };
+
+  const mergeSpecialRewards = (...groups) => {
+    const unique = new Map();
+    for (const reward of groups.flat().filter(Boolean)) {
+      if (!reward?.key) continue;
+      if (!unique.has(reward.key)) unique.set(reward.key, reward);
+    }
+    const orderedKeys = SPECIAL_PROFILE_AVATAR_OPTIONS.map((option) => option.key);
+    return Array.from(unique.values()).sort((a, b) => orderedKeys.indexOf(a.key) - orderedKeys.indexOf(b.key));
+  };
+
+  const ensureHallSnapshotForProfile = async () => {
+    if (hasHallSnapshot(hallDataBySize) || hasStreakSnapshot(hallStreakTop)) {
+      return { sizes: hallDataBySize, streakTop: hallStreakTop };
+    }
+    try {
+      const res = await fetch(`${API_BASE}/replays/hall`);
+      const data = await parseJsonSafe(res);
+      if (!res.ok || !data.ok) throw new Error(data.error || "Failed to load Hall of Fame records.");
+      const mapped = mapHallBucketsFromResponse(data.sizes);
+      const streakTopRaw = Array.isArray(data?.streakTop) ? data.streakTop : [];
+      const streakTop = streakTopRaw
+        .map((r, idx) => ({
+          rank: Number(r.rank || idx + 1),
+          userId: Number(r.userId || 0),
+          nickname: String(r.nickname || ""),
+          winStreakBest: Number(r.winStreakBest || 0),
+        }))
+        .filter((r) => r.winStreakBest > 0)
+        .slice(0, 3);
+      setHallDataBySize(mapped);
+      setHallStreakTop(streakTop);
+      return { sizes: mapped, streakTop };
+    } catch {
+      return { sizes: hallDataBySize, streakTop: hallStreakTop };
+    }
+  };
+
+  const ensureRatingSnapshotForProfile = async () => {
+    if (hasRatingSnapshot(ratingUsers)) return ratingUsers;
+    try {
+      const res = await fetch(`${API_BASE}/ratings/leaderboard?limit=200`, {
+        headers: { ...authHeaders },
+      });
+      const data = await parseJsonSafe(res);
+      if (!res.ok || !data.ok) throw new Error(data.error || "Failed to load ranking");
+      const users = Array.isArray(data.users) ? data.users : [];
+      setRatingUsers(users);
+      setMyRatingRank(Number.isInteger(Number(data.myRank)) ? Number(data.myRank) : null);
+      setRatingTotalUsers(Number.isInteger(Number(data.totalUsers)) ? Number(data.totalUsers) : 0);
+      return users;
+    } catch {
+      return ratingUsers;
+    }
+  };
+
+  const buildSelfProfileFallback = (
+    userOverride = null,
+    rewardSnapshot = { sizes: hallDataBySize, streakTop: hallStreakTop },
+    ratingSnapshot = ratingUsers
+  ) => {
+    const baseUser = applyLocalProfileAvatarOverride(userOverride || authUser || {});
+    const wins = Number(baseUser?.rating_wins || 0);
+    const losses = Number(baseUser?.rating_losses || 0);
+    const games = Number(baseUser?.rating_games || wins + losses || 0);
+    const hallRewards = buildHallRewardsFromSnapshot(rewardSnapshot?.sizes || {}, {
+      id: baseUser?.id,
+      nickname: baseUser?.nickname,
+    });
+    const specialRewards = mergeSpecialRewards(
+      hallRewards,
+      buildRatingRewardsFromSnapshot(ratingSnapshot, { id: baseUser?.id, nickname: baseUser?.nickname }),
+      buildStreakRewardsFromSnapshot(rewardSnapshot?.streakTop || [], { id: baseUser?.id, nickname: baseUser?.nickname })
+    );
+    return {
+      id: Number(baseUser?.id || 0),
+      username: String(baseUser?.username || ""),
+      nickname: String(baseUser?.nickname || L("플레이어", "Player")),
+      isBot: false,
+      rating: Number(baseUser?.rating || 0),
+      ratingRank: Number.isInteger(Number(myRatingRank)) ? Number(myRatingRank) : null,
+      rating_games: games,
+      rating_wins: wins,
+      rating_losses: losses,
+      win_streak_current: Number(baseUser?.win_streak_current || 0),
+      win_streak_best: Number(baseUser?.win_streak_best || 0),
+      winRate: games > 0 ? (wins / games) * 100 : 0,
+      profile_avatar_key: normalizeProfileAvatarKey(baseUser?.profile_avatar_key || DEFAULT_PROFILE_AVATAR_KEY),
+      hallRewards,
+      specialRewards,
+      unlockedHallAvatarKeys: hallRewards.map((reward) => reward.key),
+      unlockedSpecialAvatarKeys: specialRewards.map((reward) => reward.key),
+    };
+  };
+
+  const buildPublicProfileFallback = (
+    userId,
+    rewardSnapshot = { sizes: hallDataBySize, streakTop: hallStreakTop },
+    ratingSnapshot = ratingUsers,
+    sourceOverride = null
+  ) => {
+    const targetUserId = Number(userId || sourceOverride?.userId || sourceOverride?.id || 0);
+    const racePlayer =
+      targetUserId > 0 ? (raceState?.players || []).find((player) => Number(player?.userId) === targetUserId) : null;
+    const pvpPlayer =
+      targetUserId > 0 ? (pvpMatch?.players || []).find((player) => Number(player?.userId) === targetUserId) : null;
+    const ratingUser =
+      targetUserId > 0 ? (ratingSnapshot || []).find((player) => Number(player?.id) === targetUserId) : null;
+    const source = sourceOverride || ratingUser || pvpPlayer || racePlayer || null;
+    if (!source) return null;
+    const wins = Number(source?.rating_wins || 0);
+    const losses = Number(source?.rating_losses || 0);
+    const games = Number(source?.rating_games || wins + losses || 0);
+    const hallRewards = buildHallRewardsFromSnapshot(rewardSnapshot?.sizes || {}, {
+      id: targetUserId,
+      nickname: source?.nickname,
+    });
+    const specialRewards = mergeSpecialRewards(
+      hallRewards,
+      buildRatingRewardsFromSnapshot(ratingSnapshot, { id: targetUserId, nickname: source?.nickname }),
+      buildStreakRewardsFromSnapshot(rewardSnapshot?.streakTop || [], { id: targetUserId, nickname: source?.nickname })
+    );
+    return {
+      id: targetUserId > 0 ? targetUserId : Number(source?.id || source?.userId || 0),
+      nickname: String(source?.nickname || L("플레이어", "Player")),
+      isBot: Boolean(source?.isBot),
+      rating: Number(source?.rating || 0),
+      ratingRank:
+        ratingUser && Array.isArray(ratingSnapshot) && ratingSnapshot.length > 0
+          ? ratingSnapshot.findIndex((player) => Number(player?.id) === targetUserId) + 1 || null
+          : Number.isInteger(Number(source?.ratingRank))
+            ? Number(source?.ratingRank)
+            : null,
+      rating_games: games,
+      rating_wins: wins,
+      rating_losses: losses,
+      win_streak_current: Number(source?.win_streak_current || 0),
+      win_streak_best: Number(source?.win_streak_best || 0),
+      winRate: games > 0 ? (wins / games) * 100 : 0,
+      profile_avatar_key: normalizeProfileAvatarKey(source?.profileAvatarKey || source?.profile_avatar_key || DEFAULT_PROFILE_AVATAR_KEY),
+      hallRewards,
+      specialRewards,
+      unlockedHallAvatarKeys: hallRewards.map((reward) => reward.key),
+      unlockedSpecialAvatarKeys: specialRewards.map((reward) => reward.key),
+    };
   };
 
   const openSettingsModal = () => {
@@ -465,6 +1390,196 @@ function App() {
       setSettingsError(String(err.message || L("설정 저장 실패", "Failed to save settings")));
     } finally {
       setSettingsSaving(false);
+    }
+  };
+
+  const closeProfileModal = () => {
+    setShowProfileModal(false);
+    setProfileModalLoading(false);
+    setProfileModalSaving(false);
+    setProfileModalError("");
+    setProfileModalData(null);
+    setProfileDraftAvatarKey(DEFAULT_PROFILE_AVATAR_KEY);
+    setProfileAvatarTab("default");
+    setProfilePickerOpen(false);
+  };
+
+  const openOwnProfile = async () => {
+    if (!isLoggedIn) return;
+    setShowProfileModal(true);
+    setProfileModalMode("self");
+    setProfileModalLoading(true);
+    setProfileModalSaving(false);
+    setProfileModalError("");
+    setProfileModalData(null);
+    const initialAvatarKey = normalizeProfileAvatarKey(authUser?.profile_avatar_key || DEFAULT_PROFILE_AVATAR_KEY);
+    setProfileDraftAvatarKey(initialAvatarKey);
+    setProfileAvatarTab(isSpecialProfileAvatarKey(initialAvatarKey) ? "special" : "default");
+    setProfilePickerOpen(false);
+    try {
+      const res = await fetch(`${API_BASE}/profile/me`, { headers: { ...authHeaders } });
+      if (res.status === 404) {
+        const rewardSnapshot = await ensureHallSnapshotForProfile();
+        const ratingSnapshot = await ensureRatingSnapshotForProfile();
+        const fallbackProfile = buildSelfProfileFallback(null, rewardSnapshot, ratingSnapshot);
+        setProfileModalData(fallbackProfile);
+        setProfileDraftAvatarKey(normalizeProfileAvatarKey(fallbackProfile.profile_avatar_key));
+        if (fallbackProfile.unlockedSpecialAvatarKeys.length > 0) {
+          setProfileAvatarTab("special");
+        }
+        return;
+      }
+      const data = await parseJsonSafe(res);
+      if (!res.ok || !data.ok) throw new Error(data.error || L("프로필 정보를 불러오지 못했습니다.", "Failed to load profile."));
+      const profile = data.profile || null;
+      const nextAvatarKey = normalizeProfileAvatarKey(profile?.profile_avatar_key || authUser?.profile_avatar_key || DEFAULT_PROFILE_AVATAR_KEY);
+      setProfileModalData(profile);
+      setProfileDraftAvatarKey(nextAvatarKey);
+      setProfileAvatarTab(isSpecialProfileAvatarKey(nextAvatarKey) ? "special" : "default");
+    } catch (err) {
+      const rewardSnapshot = await ensureHallSnapshotForProfile();
+      const ratingSnapshot = await ensureRatingSnapshotForProfile();
+      const fallbackProfile = buildSelfProfileFallback(null, rewardSnapshot, ratingSnapshot);
+      setProfileModalData(fallbackProfile);
+      const nextAvatarKey = normalizeProfileAvatarKey(fallbackProfile.profile_avatar_key);
+      setProfileDraftAvatarKey(nextAvatarKey);
+      setProfileAvatarTab(
+        isSpecialProfileAvatarKey(nextAvatarKey) || fallbackProfile.unlockedSpecialAvatarKeys.length > 0 ? "special" : "default"
+      );
+      setProfileModalError("");
+    } finally {
+      setProfileModalLoading(false);
+    }
+  };
+
+  const openPublicProfile = async (userId, sourceOverride = null) => {
+    const nextUserId = Number(userId || sourceOverride?.userId || sourceOverride?.id || 0);
+    if (!Number.isInteger(nextUserId) || nextUserId <= 0) {
+      if (sourceOverride) {
+        const rewardSnapshot = await ensureHallSnapshotForProfile();
+        const ratingSnapshot = await ensureRatingSnapshotForProfile();
+        const fallbackProfile = buildPublicProfileFallback(0, rewardSnapshot, ratingSnapshot, sourceOverride);
+        if (fallbackProfile) {
+          setShowProfileModal(true);
+          setProfileModalMode("public");
+          setProfileModalLoading(false);
+          setProfileModalSaving(false);
+          setProfileModalError("");
+          setProfileModalData(fallbackProfile);
+          setProfileDraftAvatarKey(normalizeProfileAvatarKey(fallbackProfile.profile_avatar_key));
+        }
+      }
+      return;
+    }
+    if (isLoggedIn && nextUserId === Number(authUser?.id)) {
+      await openOwnProfile();
+      return;
+    }
+    setShowProfileModal(true);
+    setProfileModalMode("public");
+    setProfileModalLoading(true);
+    setProfileModalSaving(false);
+    setProfileModalError("");
+    setProfileModalData(null);
+    setProfileDraftAvatarKey(DEFAULT_PROFILE_AVATAR_KEY);
+    setProfileAvatarTab("default");
+    setProfilePickerOpen(false);
+    try {
+      const res = await fetch(`${API_BASE}/profiles/${nextUserId}`, { headers: { ...authHeaders } });
+      if (res.status === 404) {
+        const rewardSnapshot = await ensureHallSnapshotForProfile();
+        const ratingSnapshot = await ensureRatingSnapshotForProfile();
+        const fallbackProfile = buildPublicProfileFallback(nextUserId, rewardSnapshot, ratingSnapshot, sourceOverride);
+        if (!fallbackProfile) {
+          throw new Error(L("프로필 정보를 불러오지 못했습니다.", "Failed to load profile."));
+        }
+        setProfileModalData(fallbackProfile);
+        setProfileDraftAvatarKey(normalizeProfileAvatarKey(fallbackProfile.profile_avatar_key));
+        return;
+      }
+      const data = await parseJsonSafe(res);
+      if (!res.ok || !data.ok) throw new Error(data.error || L("프로필 정보를 불러오지 못했습니다.", "Failed to load profile."));
+      const profile = data.profile || null;
+      setProfileModalData(profile);
+      setProfileDraftAvatarKey(normalizeProfileAvatarKey(profile?.profile_avatar_key || DEFAULT_PROFILE_AVATAR_KEY));
+    } catch (err) {
+      const rewardSnapshot = await ensureHallSnapshotForProfile();
+      const ratingSnapshot = await ensureRatingSnapshotForProfile();
+      const fallbackProfile = buildPublicProfileFallback(nextUserId, rewardSnapshot, ratingSnapshot, sourceOverride);
+      if (fallbackProfile) {
+        setProfileModalData(fallbackProfile);
+        setProfileDraftAvatarKey(normalizeProfileAvatarKey(fallbackProfile.profile_avatar_key));
+        setProfileModalError("");
+      } else {
+        setProfileModalError(String(err.message || L("프로필 정보를 불러오지 못했습니다.", "Failed to load profile.")));
+      }
+    } finally {
+      setProfileModalLoading(false);
+    }
+  };
+
+  const canOpenUserProfile = (userId) => Number.isInteger(Number(userId)) && Number(userId) > 0;
+
+  const handleOpenUserProfile = (userId, sourceOverride = null) => {
+    if (!canOpenUserProfile(userId) && !sourceOverride) return;
+    void openPublicProfile(userId, sourceOverride);
+  };
+
+  const saveProfileAvatarSelection = async () => {
+    if (!isLoggedIn || profileModalMode !== "self") return;
+    setProfileModalSaving(true);
+    setProfileModalError("");
+    try {
+      const res = await fetch(`${API_BASE}/profile/me`, {
+        method: "PUT",
+        headers: { ...authHeaders, "Content-Type": "application/json" },
+        body: JSON.stringify({ profileAvatarKey: profileDraftAvatarKey }),
+      });
+      if (res.status === 404) {
+        throw new Error(L("프로필 저장 실패", "Failed to save profile."));
+      }
+      const data = await parseJsonSafe(res);
+      if (!res.ok || !data.ok) throw new Error(data.error || L("프로필 저장 실패", "Failed to save profile."));
+      const nextProfile = data.profile || null;
+      if (data.user) {
+        writeLocalProfileAvatarOverride(data.user, nextProfile?.profile_avatar_key || profileDraftAvatarKey);
+        cacheAuthUser(data.user, { applyPrefs: false });
+      }
+      setProfileModalData(nextProfile);
+      setProfileDraftAvatarKey(normalizeProfileAvatarKey(nextProfile?.profile_avatar_key || profileDraftAvatarKey));
+      setRaceState((prev) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          players: (prev.players || []).map((player) =>
+            Number(player?.userId) === Number(authUser?.id)
+              ? { ...player, profileAvatarKey: normalizeProfileAvatarKey(nextProfile?.profile_avatar_key || profileDraftAvatarKey) }
+              : player
+          ),
+        };
+      });
+      setPvpMatch((prev) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          players: (prev.players || []).map((player) =>
+            Number(player?.userId) === Number(authUser?.id)
+              ? { ...player, profileAvatarKey: normalizeProfileAvatarKey(nextProfile?.profile_avatar_key || profileDraftAvatarKey) }
+              : player
+          ),
+          me:
+            prev.me && Number(prev.me.userId) === Number(authUser?.id)
+              ? { ...prev.me, profileAvatarKey: normalizeProfileAvatarKey(nextProfile?.profile_avatar_key || profileDraftAvatarKey) }
+              : prev.me,
+        };
+      });
+      setStatus(L("프로필이 저장되었습니다.", "Profile saved."));
+      closeProfileModal();
+    } catch (err) {
+      setProfileModalError(String(err?.message || L("프로필 저장 실패", "Failed to save profile.")));
+      setStatus(L("프로필 저장에 실패했습니다.", "Failed to save profile."));
+    } finally {
+      setProfileModalSaving(false);
     }
   };
 
@@ -734,13 +1849,21 @@ function App() {
   const isModeSingle = playMode === "single";
   const isModeMulti = playMode === "multi";
   const isModePvp = playMode === "pvp";
+  const isModePlacementTest = playMode === "placement_test";
   const isModeAuth = playMode === "auth";
   const isModeTutorial = playMode === "tutorial";
   const isModeRanking = playMode === "ranking";
+  const isModeLegacyRanking = playMode === "legacy_ranking";
   const isModeReplayHall = playMode === "replay_hall";
   const isLoggedIn = Boolean(authToken && authUser);
+  const placementAssignedRating = Number(authUser?.placement_rating || 0);
+  const hasPlacementQualification = isLoggedIn && Boolean(authUser?.placement_done) && Number.isFinite(placementAssignedRating) && placementAssignedRating >= 0;
+  const placementAssignedTier = hasPlacementQualification
+    ? getTierInfoByRating(placementAssignedRating, myRatingRank)
+    : null;
+  const myTierInfo = isLoggedIn ? getTierInfoByRating(authUser?.rating, myRatingRank) : null;
   const isInRaceRoom = Boolean(raceRoomCode);
-  const isSingleSoloMode = (isModeSingle || isModeTutorial) && !isInRaceRoom;
+  const isSingleSoloMode = (isModeSingle || isModeTutorial || isModePlacementTest) && !isInRaceRoom;
   const shouldShowPuzzleBoard = Boolean(
     puzzle && ((isSingleSoloMode && !isInRaceRoom) || ((isModeMulti || isModePvp) && isInRaceRoom))
   );
@@ -817,6 +1940,7 @@ function App() {
         const status = String(rankInfo?.status || (p.disconnectedAt ? "left" : "dnf"));
         return {
           playerId: p.playerId,
+          userId: Number.isInteger(Number(p.userId)) ? Number(p.userId) : null,
           nickname: p.nickname,
           rank,
           elapsedSec,
@@ -853,6 +1977,19 @@ function App() {
     const ss = String(Math.floor((totalCs % 6000) / 100)).padStart(2, "0");
     const cc = String(totalCs % 100).padStart(2, "0");
     return `${mm}:${ss}.${cc}`;
+  };
+
+  const formatHallElapsedMs = (elapsedMs, fallbackSec = null) => {
+    let ms = Number(elapsedMs || 0);
+    if (!Number.isFinite(ms) || ms <= 0) {
+      const sec = Number(fallbackSec);
+      if (!Number.isFinite(sec) || sec <= 0) return "-";
+      ms = sec * 1000;
+    }
+    if (ms < 60000) {
+      return (ms / 1000).toFixed(2);
+    }
+    return formatRaceElapsedMs(ms, fallbackSec);
   };
 
   const formatRaceStatusLabel = (status) => {
@@ -915,6 +2052,30 @@ function App() {
   const pvpMatchState = pvpMatch?.state || "";
   const pvpOptions = Array.isArray(pvpMatch?.options) ? pvpMatch.options : [];
   const pvpPlayers = Array.isArray(pvpMatch?.players) ? pvpMatch.players : [];
+  const pvpAllowedSizeKeys = useMemo(
+    () => getAllowedPvpSizeKeys(pvpPlayers, authUser),
+    [
+      pvpPlayers,
+      authUser?.placement_tier_key,
+      authUser?.placement_rating,
+      authUser?.rating,
+      authUser?.ratingRank,
+    ]
+  );
+  const pvpDisplayOptions = useMemo(() => {
+    if (pvpOptions.length > 0) {
+      const filteredOptions = pvpOptions.filter((option) => {
+        const sizeKey = option?.sizeKey || `${option?.width}x${option?.height}`;
+        return pvpAllowedSizeKeys.includes(sizeKey);
+      });
+      return filteredOptions.length > 0 ? filteredOptions : pvpOptions;
+    }
+    return pvpAllowedSizeKeys.map((sizeKey) => ({
+      sizeKey,
+      bannedByNicknames: [],
+      banned: false,
+    }));
+  }, [pvpOptions, pvpAllowedSizeKeys]);
   const pvpAllAccepted = pvpPlayers.length >= 2 && pvpPlayers.every((p) => p.accepted === true);
   const pvpShowdownPlayers = useMemo(() => {
     if (!pvpPlayers.length) return [];
@@ -965,6 +2126,39 @@ function App() {
       pvpMatchState === "reveal" ||
       (pvpMatchState === "accept" && pvpMatch?.me?.accepted === true)
     );
+  const placementElapsedSec = useMemo(() => {
+    if (!placementStartedAtMs) return 0;
+    if (!placementRunning && placementResultCard?.elapsedSec != null) {
+      return Number(placementResultCard.elapsedSec);
+    }
+    return Math.max(0, Math.min(PLACEMENT_TIME_LIMIT_SEC, Math.floor((nowMs - placementStartedAtMs) / 1000)));
+  }, [placementRunning, placementStartedAtMs, placementResultCard?.elapsedSec, nowMs]);
+  const placementLeftSec = Math.max(0, PLACEMENT_TIME_LIMIT_SEC - placementElapsedSec);
+  const placementStageProgress = useMemo(() => {
+    if (!isModePlacementTest || !placementRunning || !puzzle) return 0;
+    const totalUnits = Number(puzzle.width || 0) + Number(puzzle.height || 0);
+    if (!Number.isFinite(totalUnits) || totalUnits <= 0) return 0;
+    const solvedUnits = solvedRows.size + solvedCols.size;
+    return Math.max(0, Math.min(1, solvedUnits / totalUnits));
+  }, [isModePlacementTest, placementRunning, puzzle, solvedRows, solvedCols]);
+  const placementCurrentStage = placementResults[Math.max(0, Math.min(PLACEMENT_STAGES.length - 1, placementStageIndex))] || null;
+  const placementTimerText = `${String(Math.floor(placementLeftSec / 60)).padStart(2, "0")}:${String(
+    placementLeftSec % 60
+  ).padStart(2, "0")}`;
+  const matchSimResolvedSec = matchSimFound?.matchedAtSec ?? matchSimElapsedSec;
+  const matchSimCurrentRule = useMemo(() => getMatchSimRule(matchSimResolvedSec), [matchSimResolvedSec]);
+  const matchSimCurrentTier = useMemo(() => getTierInfoByRating(matchSimRating), [matchSimRating]);
+  const matchSimProgressPercent = Math.max(0, Math.min(100, (matchSimResolvedSec / MATCH_SIM_MAX_WAIT_SEC) * 100));
+  const matchFlowLeftMs = useMemo(() => {
+    if (!matchFlowTest?.phaseEndsAtMs) return 0;
+    return Math.max(0, Number(matchFlowTest.phaseEndsAtMs) - nowMs);
+  }, [matchFlowTest?.phaseEndsAtMs, nowMs]);
+  const matchFlowAcceptPercent =
+    matchFlowTest?.phase === "accept" ? Math.max(0, Math.min(100, (matchFlowLeftMs / 3200) * 100)) : 0;
+  const matchFlowBanPercent =
+    matchFlowTest?.phase === "ban" ? Math.max(0, Math.min(100, (matchFlowLeftMs / 3200) * 100)) : 0;
+  const matchFlowShowdownActive = Boolean(matchFlowTest?.showdown);
+  const matchFlowRevealSpinning = Boolean(matchFlowTest?.phase === "reveal" && matchFlowTest?.revealSpinning);
 
   const ensureAudio = () => {
     if (audioCtxRef.current && audioCtxRef.current.state !== "closed") return audioCtxRef.current;
@@ -1081,6 +2275,54 @@ function App() {
     tone(500, 60, { type: "triangle", gain: 0.05 });
   };
 
+  useEffect(() => {
+    if (!placementResultCard) {
+      setPlacementRevealOpen(false);
+      setPlacementRevealPhase("idle");
+      setPlacementRevealRating(0);
+      return;
+    }
+    const target = Math.max(0, Math.round(Number(placementResultCard.rating || 0)));
+    const start = 0;
+    const analyzingMs = 980;
+    const countMs = 940;
+    let analyzingTimer = 0;
+    let raf = 0;
+    let cancelled = false;
+
+    setPlacementRevealOpen(true);
+    setPlacementRevealPhase("analyzing");
+    setPlacementRevealRating(start);
+    playSfx("ready");
+
+    analyzingTimer = window.setTimeout(() => {
+      if (cancelled) return;
+      setPlacementRevealPhase("counting");
+      playSfx("ui");
+      const startTs = performance.now();
+      const tick = (ts) => {
+        if (cancelled) return;
+        const t = Math.max(0, Math.min(1, (ts - startTs) / countMs));
+        const eased = 1 - (1 - t) ** 3;
+        const now = Math.round(start + (target - start) * eased);
+        setPlacementRevealRating(now);
+        if (t < 1) {
+          raf = requestAnimationFrame(tick);
+          return;
+        }
+        setPlacementRevealPhase("reveal");
+        playSfx(target >= 2000 ? "rank-up" : "win");
+      };
+      raf = requestAnimationFrame(tick);
+    }, analyzingMs);
+
+    return () => {
+      cancelled = true;
+      if (analyzingTimer) window.clearTimeout(analyzingTimer);
+      if (raf) cancelAnimationFrame(raf);
+    };
+  }, [placementResultCard?.rating, placementResultCard?.tier?.key]);
+
   const markTutorialSeen = () => {
     try {
       localStorage.setItem(TUTORIAL_SEEN_KEY, "1");
@@ -1186,6 +2428,18 @@ function App() {
     setStatus(suppressStatus ? "" : message || `Puzzle ${p.id} loaded.`);
   };
 
+  const fetchRandomPuzzleBySize = async (width, height) => {
+    let res = await fetch(`${API_BASE}/puzzles-random?width=${width}&height=${height}`);
+    if (res.status === 404) {
+      res = await fetch(`${API_BASE}/puzzles/random?width=${width}&height=${height}`);
+    }
+    const data = await parseJsonSafe(res);
+    if (!res.ok || !data.ok || !data.puzzle) {
+      throw new Error(data.error || "Failed to load random puzzle.");
+    }
+    return data.puzzle;
+  };
+
   const loadRandomBySize = async () => {
     if (isInRaceRoom) {
       setStatus("You cannot change puzzle while in a race room.");
@@ -1202,17 +2456,10 @@ function App() {
     setIsLoading(true);
     setStatus("");
     try {
-      let res = await fetch(`${API_BASE}/puzzles-random?width=${width}&height=${height}`);
-      if (res.status === 404) {
-        res = await fetch(`${API_BASE}/puzzles/random?width=${width}&height=${height}`);
-      }
-      const data = await parseJsonSafe(res);
-      if (!res.ok || !data.ok) {
-        throw new Error(data.error || "Failed to load random puzzle.");
-      }
-      initializePuzzle(data.puzzle, {
+      const puzzleData = await fetchRandomPuzzleBySize(width, height);
+      initializePuzzle(puzzleData, {
         resume: true,
-        message: `Puzzle ${data.puzzle.id} (${data.puzzle.width}x${data.puzzle.height}) loaded.`,
+        message: `Puzzle ${puzzleData.id} (${puzzleData.width}x${puzzleData.height}) loaded.`,
       });
       playSfx("ui");
     } catch (err) {
@@ -1275,6 +2522,11 @@ function App() {
       setShowNeedLoginPopup(true);
       return;
     }
+    if (!hasPlacementQualification) {
+      setShowPlacementRequiredPopup(true);
+      setStatus(L("PvP 입장 전 배치고사를 완료해야 합니다.", "You must complete placement before entering PvP."));
+      return;
+    }
     if (!isInRaceRoom) clearPuzzleViewState();
     setPlayMode("pvp");
     setStatus("");
@@ -1289,6 +2541,15 @@ function App() {
     setStatus("");
   };
 
+  const goLegacyRankingMode = () => {
+    if (pvpSearching && !isInRaceRoom) {
+      void cancelPvpQueue({ silent: true });
+    }
+    if (!isInRaceRoom) clearPuzzleViewState();
+    setPlayMode("legacy_ranking");
+    setStatus("");
+  };
+
   const goReplayHallMode = () => {
     if (pvpSearching && !isInRaceRoom) {
       void cancelPvpQueue({ silent: true });
@@ -1297,6 +2558,271 @@ function App() {
     setHallActiveSizeKey("10x10");
     setPlayMode("replay_hall");
     setStatus("");
+  };
+
+  const clearMatchSimState = () => {
+    matchSimSessionRef.current += 1;
+    matchSimElapsedRef.current = 0;
+    matchSimLastRuleKeyRef.current = "";
+    setMatchSimSearching(false);
+    setMatchSimElapsedSec(0);
+    setMatchSimQueueSize(getMatchSimQueueSize(0, matchSimRating));
+    setMatchSimLogs([]);
+    setMatchSimFound(null);
+  };
+
+  const resetPlacementTest = () => {
+    placementSessionRef.current += 1;
+    clearMatchSimState();
+    resetMatchFlowTest();
+    clearPuzzleViewState();
+    setPlacementRunning(false);
+    setPlacementLoading(false);
+    setPlacementRevealOpen(false);
+    setPlacementRevealPhase("idle");
+    setPlacementRevealRating(0);
+    setPlacementStartedAtMs(0);
+    setPlacementStageIndex(0);
+    setPlacementResults(PLACEMENT_STAGES.map((s) => ({ ...s, status: "pending", solvedAtSec: null })));
+    setPlacementResultCard(null);
+  };
+
+  const goPlacementTestMode = () => {
+    if (!isLoggedIn) {
+      setNeedLoginReturnMode("placement_test");
+      setShowNeedLoginPopup(true);
+      return;
+    }
+    if (pvpSearching && !isInRaceRoom) {
+      void cancelPvpQueue({ silent: true });
+    }
+    if (!isInRaceRoom) clearPuzzleViewState();
+    resetPlacementTest();
+    setPlayMode("placement_test");
+    setStatus("");
+  };
+
+  const applyPlacementResultToCurrentUser = async (results, elapsedSec, currentStageProgress, fallbackEvaluated = null) => {
+    if (!isLoggedIn || !authUser) {
+      throw new Error(L("배치고사는 로그인 후 저장됩니다.", "Login is required to save placement."));
+    }
+    const res = await fetch(`${API_BASE}/placement/complete`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...authHeaders },
+      body: JSON.stringify({
+        results,
+        elapsedSec,
+        currentStageProgress,
+      }),
+    });
+    const data = await parseJsonSafe(res);
+    if (!res.ok || !data.ok) {
+      throw new Error(data.error || L("배치고사 저장 실패", "Failed to save placement result"));
+    }
+    if (data.user) {
+      cacheAuthUser(data.user, { applyPrefs: false });
+    }
+    if (data.placement) {
+      const rating = Number(data.placement.rating || fallbackEvaluated?.rating || 0);
+      return {
+        rating,
+        tier: getTierInfoByRating(rating),
+        solvedSequential: Number(data.placement.solvedSequential || fallbackEvaluated?.solvedSequential || 0),
+        elapsedSec: Number(data.placement.elapsedSec || fallbackEvaluated?.elapsedSec || 0),
+        completedAtMs: Number(data.placement.completedAtMs || Date.now()),
+      };
+    }
+    return fallbackEvaluated;
+  };
+
+  const finishPlacementTest = async (fromTimeout = false, overrideResults = null, stageProgressOverride = null) => {
+    placementSessionRef.current += 1;
+    const elapsed = placementStartedAtMs
+      ? Math.max(0, Math.min(PLACEMENT_TIME_LIMIT_SEC, Math.floor((Date.now() - placementStartedAtMs) / 1000)))
+      : placementElapsedSec;
+    let finalResults = Array.isArray(overrideResults)
+      ? overrideResults.map((row) => ({ ...row }))
+      : placementResults.map((row) => ({ ...row }));
+    if (fromTimeout && placementRunning && finalResults.length > 0) {
+      const idx = Math.max(0, Math.min(finalResults.length - 1, placementStageIndex));
+      if (finalResults[idx]?.status === "pending") {
+        finalResults[idx] = {
+          ...finalResults[idx],
+          status: "failed",
+          solvedAtSec: null,
+        };
+      }
+    }
+    const stageProgress = Number.isFinite(Number(stageProgressOverride))
+      ? Number(stageProgressOverride)
+      : placementStageProgress;
+    const evaluated = evaluatePlacementResult(finalResults, elapsed, stageProgress);
+    setPlacementRunning(false);
+    setPlacementLoading(false);
+    setTimerRunning(false);
+    setPlacementResults(finalResults);
+    try {
+      const assigned = await applyPlacementResultToCurrentUser(finalResults, elapsed, stageProgress, evaluated);
+      const resolved = assigned || evaluated;
+      setPlacementResultCard(resolved);
+      setStatus(
+        L(
+          `배치고사 완료. 초기 레이팅 R ${resolved.rating}이 계정에 반영되었습니다.`,
+          `Placement complete. Initial rating R ${resolved.rating} has been assigned to your account.`
+        )
+      );
+    } catch (err) {
+      setPlacementResultCard(evaluated);
+      setStatus(
+        err.message
+          || (fromTimeout
+            ? L("시간 종료! 배치고사 결과 저장에 실패했습니다.", "Time over! Failed to save placement result.")
+            : L("배치고사 결과 저장에 실패했습니다.", "Failed to save placement result."))
+      );
+    }
+  };
+
+  const loadPlacementStage = async (stageIdx, sessionId = placementSessionRef.current) => {
+    const stage = PLACEMENT_STAGES[stageIdx];
+    if (!stage) return;
+    const [wStr, hStr] = String(stage.sizeKey || "").split("x");
+    const width = Number(wStr);
+    const height = Number(hStr);
+    if (!Number.isInteger(width) || !Number.isInteger(height)) {
+      throw new Error("Invalid placement stage size.");
+    }
+    setPlacementLoading(true);
+    try {
+      const stagePuzzle = await fetchRandomPuzzleBySize(width, height);
+      if (placementSessionRef.current !== sessionId || playMode !== "placement_test") return;
+      initializePuzzle(stagePuzzle, {
+        resume: false,
+        message: "",
+        startTimer: false,
+        suppressStatus: true,
+      });
+      setStatus(
+        L(
+          `${stageIdx + 1}단계 진행 중 (${stage.sizeKey})`,
+          `Stage ${stageIdx + 1} in progress (${stage.sizeKey})`
+        )
+      );
+    } finally {
+      if (placementSessionRef.current === sessionId) {
+        setPlacementLoading(false);
+      }
+    }
+  };
+
+  const startPlacementTest = async () => {
+    if (!isLoggedIn) {
+      setNeedLoginReturnMode("placement_test");
+      setShowNeedLoginPopup(true);
+      return;
+    }
+    if (hasPlacementQualification) {
+      setStatus(L("배치고사가 이미 완료되었습니다.", "Placement has already been completed."));
+      return;
+    }
+    const sessionId = Date.now();
+    placementSessionRef.current = sessionId;
+    clearMatchSimState();
+    resetMatchFlowTest();
+    setPlacementRunning(true);
+    setPlacementLoading(true);
+    setPlacementStartedAtMs(Date.now());
+    setPlacementStageIndex(0);
+    setPlacementResultCard(null);
+    setPlacementResults(PLACEMENT_STAGES.map((s) => ({ ...s, status: "pending", solvedAtSec: null })));
+    setStatus(L("배치고사 시작! 1단계 퍼즐 로딩 중...", "Placement started! Loading stage 1..."));
+    try {
+      await loadPlacementStage(0, sessionId);
+      playSfx("ui");
+    } catch (err) {
+      if (placementSessionRef.current !== sessionId) return;
+      setStatus(err.message || "Failed to start placement test.");
+      void finishPlacementTest(false);
+    }
+  };
+
+  const runPlacementRevealTest = (tierKey = "") => {
+    const preset = PLACEMENT_REVEAL_TEST_PRESETS.find((p) => p.key === tierKey) || null;
+    const randomRating = 1950 + Math.floor(Math.random() * 420);
+    const rating = preset ? Number(preset.rating) : randomRating;
+    const boundedRating = Math.max(0, Math.min(5000, rating));
+    const tier = getTierInfoByRating(boundedRating);
+    const solvedSequential = preset
+      ? Number(preset.solvedSequential || 3)
+      : boundedRating >= 2000
+        ? 4
+        : 3;
+    const elapsedSec = preset ? Number(preset.elapsedSec || 238) : 238;
+    setPlacementRunning(false);
+    setPlacementLoading(false);
+    setPlacementRevealOpen(false);
+    setPlacementRevealPhase("idle");
+    setPlacementRevealRating(0);
+    setPlacementResultCard({
+      rating: boundedRating,
+      tier,
+      solvedSequential,
+      elapsedSec,
+    });
+    setStatus(
+      preset
+        ? L(`${tier.labelKo} 연출 테스트 실행`, `${tier.labelEn} reveal test started`)
+        : L("연출 테스트 실행", "Reveal animation test started")
+    );
+    playSfx("ui");
+  };
+
+  const handlePlacementStageSolved = async () => {
+    if (!placementRunning) return;
+    const sessionId = placementSessionRef.current;
+    const idx = Math.max(0, Math.min(PLACEMENT_STAGES.length - 1, placementStageIndex));
+    const solvedAtSec = placementElapsedSec;
+    let nextResults = placementResults;
+    setPlacementResults((prev) => {
+      nextResults = prev.map((row, i) =>
+        i === idx
+          ? {
+              ...row,
+              status: "solved",
+              solvedAtSec,
+            }
+          : row
+      );
+      return nextResults;
+    });
+    if (idx >= PLACEMENT_STAGES.length - 1) {
+      setPlacementStageIndex(idx);
+      void finishPlacementTest(false, nextResults, 0);
+      return;
+    }
+    const nextIdx = idx + 1;
+    setPlacementStageIndex(nextIdx);
+    setStatus(L(`${idx + 1}단계 완료! 다음 퍼즐 로딩 중...`, `Stage ${idx + 1} cleared! Loading next puzzle...`));
+    try {
+      await loadPlacementStage(nextIdx, sessionId);
+      playSfx("ui");
+    } catch (err) {
+      if (placementSessionRef.current !== sessionId) return;
+      let failResults = nextResults;
+      setPlacementResults((prev) => {
+        failResults = prev.map((row, i) =>
+          i === nextIdx && row.status === "pending"
+            ? {
+                ...row,
+                status: "failed",
+                solvedAtSec: null,
+              }
+            : row
+        );
+        return failResults;
+      });
+      setStatus(err.message || "Failed to load next stage.");
+      void finishPlacementTest(false, failResults, 0);
+    }
   };
 
   const backToMenu = async () => {
@@ -1318,9 +2844,34 @@ function App() {
     cacheAuthUser(user, { applyPrefs: true });
   };
 
+  const routeAfterAuth = (user, returnMode = "menu") => {
+    const placementRating = Number(user?.placement_rating || 0);
+    const canEnterPvp = Boolean(user?.placement_done) && Number.isFinite(placementRating) && placementRating >= 0;
+    if (returnMode === "multi") {
+      setPlayMode("multi");
+      return;
+    }
+    if (returnMode === "placement_test") {
+      setPlayMode("placement_test");
+      return;
+    }
+    if (returnMode === "pvp") {
+      if (canEnterPvp) {
+        setPlayMode("pvp");
+      } else {
+        setPlayMode("menu");
+        setShowPlacementRequiredPopup(true);
+        setStatus(L("PvP 입장 전 배치고사를 완료해야 합니다.", "You must complete placement before entering PvP."));
+      }
+      return;
+    }
+    setPlayMode("menu");
+  };
+
   const clearAuth = () => {
     setAuthToken("");
     setAuthUser(null);
+    closeProfileModal();
     localStorage.removeItem(AUTH_TOKEN_KEY);
     localStorage.removeItem(AUTH_USER_KEY);
   };
@@ -1372,7 +2923,7 @@ function App() {
       setSignupAgreeTerms(false);
       setSignupAgreePrivacy(false);
       setStatus(L(`환영합니다, ${data.user.nickname}!`, `Welcome, ${data.user.nickname}!`));
-      setPlayMode(authReturnMode === "multi" || authReturnMode === "pvp" ? authReturnMode : "menu");
+      routeAfterAuth(data.user, authReturnMode);
     } catch (err) {
       const msg = String(err.message || "");
       if (msg.includes("password must be 8+ chars")) {
@@ -1413,7 +2964,7 @@ function App() {
       setLoginUsername("");
       setLoginPassword("");
       setStatus(L(`로그인 완료: ${data.user.nickname}`, `Logged in: ${data.user.nickname}`));
-      setPlayMode(authReturnMode === "multi" || authReturnMode === "pvp" ? authReturnMode : "menu");
+      routeAfterAuth(data.user, authReturnMode);
     } catch (err) {
       const msg = String(err.message || "");
       if (msg.includes("Invalid credentials")) {
@@ -1457,10 +3008,11 @@ function App() {
     }
   };
 
-  const fetchRatingUsers = async () => {
+  const fetchRatingUsers = async (view = "current") => {
     setRatingLoading(true);
     try {
-      const res = await fetch(`${API_BASE}/ratings/leaderboard?limit=200`, {
+      const q = view === "legacy" ? "?limit=200&view=legacy" : "?limit=200";
+      const res = await fetch(`${API_BASE}/ratings/leaderboard${q}`, {
         headers: { ...authHeaders },
       });
       const data = await parseJsonSafe(res);
@@ -1548,12 +3100,28 @@ function App() {
     }
   };
 
-  const startPvpRatingAnimation = (fromRating, toRating, roomCode) => {
+  const dismissPvpRatingFx = () => {
+    stopPvpRatingAnimation();
+    setPvpRatingFx(null);
+  };
+
+  const startPvpRatingAnimation = (fromRating, toRating, roomCode, options = {}) => {
     stopPvpRatingAnimation();
     const from = Number(fromRating);
     const to = Number(toRating);
     if (!Number.isFinite(from) || !Number.isFinite(to)) return;
     const delta = to - from;
+    const result = options.result === "loss" ? "loss" : "win";
+    const fromRank = Number.isFinite(Number(options.fromRank)) ? Number(options.fromRank) : null;
+    const toRank = Number.isFinite(Number(options.toRank)) ? Number(options.toRank) : null;
+    const fromTier = getTierBracketInfo(from, fromRank).tier;
+    const toTier = getTierBracketInfo(to, toRank).tier;
+    const tierShift =
+      (TIER_ORDER[toTier.key] || 0) > (TIER_ORDER[fromTier.key] || 0)
+        ? "promoted"
+        : (TIER_ORDER[toTier.key] || 0) < (TIER_ORDER[fromTier.key] || 0)
+          ? "demoted"
+          : "steady";
     const duration = 1850;
     const startAt = performance.now();
 
@@ -1564,9 +3132,16 @@ function App() {
       delta,
       ratingNow: from,
       deltaNow: 0,
+      result,
+      fromRank,
+      toRank,
+      fromTier,
+      toTier,
+      tierShift,
+      isTest: Boolean(options.isTest),
       done: false,
     });
-    playSfx("ui");
+    playSfx(result === "win" ? "win" : "rank-down");
 
     const tick = (now) => {
       const t = Math.max(0, Math.min(1, (now - startAt) / duration));
@@ -1588,11 +3163,298 @@ function App() {
         pvpRatingAnimRef.current = requestAnimationFrame(tick);
       } else {
         pvpRatingAnimRef.current = 0;
-        playSfx(delta >= 0 ? "rank-up" : "rank-down");
+        playSfx(tierShift === "promoted" || delta >= 0 ? "rank-up" : "rank-down");
       }
     };
 
     pvpRatingAnimRef.current = requestAnimationFrame(tick);
+  };
+
+  const runPvpResultFxTest = (presetKey) => {
+    const preset = PVP_RESULT_FX_TEST_PRESETS.find((item) => item.key === presetKey);
+    if (!preset) return;
+    startPvpRatingAnimation(preset.from, preset.to, `pvp-fx-test:${preset.key}:${Date.now()}`, {
+      result: preset.outcome,
+      isTest: true,
+    });
+  };
+
+  const pushMatchSimLog = (textKo, textEn, tone = "neutral") => {
+    setMatchSimLogs((prev) => {
+      const next = [...prev, { id: `${Date.now()}-${Math.random()}`, textKo, textEn, tone }];
+      return next.slice(-8);
+    });
+  };
+
+  const resetMatchSim = ({ clearFx = false, keepProfile = true } = {}) => {
+    clearMatchSimState();
+    if (!keepProfile) {
+      const preset = MATCH_SIM_PROFILE_PRESETS.find((item) => item.key === "gold");
+      setMatchSimProfileKey("gold");
+      setMatchSimRating(preset?.rating || 1760);
+    }
+    if (clearFx) dismissPvpRatingFx();
+  };
+
+  const selectMatchSimProfile = (profileKey) => {
+    const preset = MATCH_SIM_PROFILE_PRESETS.find((item) => item.key === profileKey);
+    if (!preset) return;
+    clearMatchSimState();
+    setMatchSimProfileKey(profileKey);
+    setMatchSimRating(preset.rating);
+    setMatchSimQueueSize(getMatchSimQueueSize(0, preset.rating));
+  };
+
+  const startMatchSim = () => {
+    const tier = getTierInfoByRating(matchSimRating);
+    const firstRule = getMatchSimRule(0);
+    clearMatchSimState();
+    matchSimLastRuleKeyRef.current = firstRule.key;
+    setMatchSimSearching(true);
+    setMatchSimQueueSize(getMatchSimQueueSize(0, matchSimRating));
+    pushMatchSimLog(
+      `${tier.labelKo} 구간 R ${matchSimRating} 기준으로 탐색 시작`,
+      `Starting search around ${tier.labelEn} at R ${matchSimRating}`,
+      "info"
+    );
+    pushMatchSimLog(
+      `1단계 규칙 적용: ${firstRule.labelKo}`,
+      `Stage 1 rule: ${firstRule.labelEn}`,
+      "info"
+    );
+    playSfx("ui");
+  };
+
+  const runMatchSimResultFx = (mode) => {
+    const outcome = getMatchSimOutcomeTarget(matchSimRating, mode);
+    startPvpRatingAnimation(matchSimRating, outcome.to, `match-sim:${mode}:${Date.now()}`, {
+      result: outcome.result,
+      isTest: true,
+    });
+    pushMatchSimLog(
+      mode === "promotion"
+        ? "승급 결과 연출 실행"
+        : mode === "demotion"
+          ? "강등 결과 연출 실행"
+          : mode === "loss"
+            ? "패배 결과 연출 실행"
+            : "승리 결과 연출 실행",
+      mode === "promotion"
+        ? "Promotion result FX triggered"
+        : mode === "demotion"
+          ? "Demotion result FX triggered"
+          : mode === "loss"
+            ? "Defeat result FX triggered"
+            : "Victory result FX triggered",
+      "accent"
+    );
+  };
+
+  const clearMatchFlowTimers = () => {
+    if (matchFlowRevealRef.current) {
+      clearInterval(matchFlowRevealRef.current);
+      matchFlowRevealRef.current = 0;
+    }
+    if (matchFlowTimersRef.current.length) {
+      matchFlowTimersRef.current.forEach((timerId) => clearTimeout(timerId));
+      matchFlowTimersRef.current = [];
+    }
+  };
+
+  const resetMatchFlowTest = ({ clearFx = false } = {}) => {
+    clearMatchFlowTimers();
+    setMatchFlowTest(null);
+    if (clearFx) dismissPvpRatingFx();
+  };
+
+  const startMatchFlowTest = (outcome = "win") => {
+    clearMatchFlowTimers();
+    dismissPvpRatingFx();
+    const myNickname = authUser?.nickname || L("테스터", "Tester");
+    const scriptedOptions = PVP_SIZE_KEYS.map((sizeKey) => ({
+      sizeKey,
+      bannedByNicknames: [],
+      banned: false,
+    }));
+    const chosenSizeKey = "10x10";
+    const roomCode = `flow-test:${outcome}:${Date.now()}`;
+
+    setMatchFlowTest({
+      active: true,
+      outcome,
+      phase: "search",
+      queueSize: 4,
+      meAccepted: false,
+      opponentAccepted: false,
+      showdown: false,
+      revealIndex: 0,
+      revealSpinning: false,
+      chosenSizeKey,
+      options: scriptedOptions,
+      phaseEndsAtMs: Date.now() + 2200,
+      roomCode,
+      me: {
+        nickname: myNickname,
+        rating: MATCH_FLOW_TEST_BASE_RATING,
+        ratingRank: null,
+      },
+      opponent: MATCH_FLOW_TEST_OPPONENT,
+    });
+    setStatus(L("풀 시퀀스 테스트 시작", "Full flow test started"));
+    playSfx("ui");
+
+    const schedule = (delay, callback) => {
+      const timerId = setTimeout(callback, delay);
+      matchFlowTimersRef.current.push(timerId);
+    };
+
+    schedule(650, () => {
+      setMatchFlowTest((prev) => (prev ? { ...prev, queueSize: 3 } : prev));
+    });
+    schedule(1450, () => {
+      setMatchFlowTest((prev) => (prev ? { ...prev, queueSize: 2 } : prev));
+    });
+    schedule(2200, () => {
+      setMatchFlowTest((prev) =>
+        prev
+          ? {
+              ...prev,
+              phase: "accept",
+              phaseEndsAtMs: Date.now() + 3200,
+              meAccepted: false,
+              opponentAccepted: false,
+            }
+          : prev
+      );
+      playSfx("ready");
+    });
+    schedule(3300, () => {
+      setMatchFlowTest((prev) => (prev ? { ...prev, meAccepted: true } : prev));
+      playSfx("ui");
+    });
+    schedule(4300, () => {
+      setMatchFlowTest((prev) =>
+        prev
+          ? {
+              ...prev,
+              meAccepted: true,
+              opponentAccepted: true,
+              showdown: true,
+              phaseEndsAtMs: Date.now() + 1700,
+            }
+          : prev
+      );
+      playSfx("countdown");
+    });
+    schedule(6000, () => {
+      setMatchFlowTest((prev) =>
+        prev
+          ? {
+              ...prev,
+              phase: "ban",
+              showdown: false,
+              phaseEndsAtMs: Date.now() + 3200,
+              options: scriptedOptions,
+            }
+          : prev
+      );
+      playSfx("ui");
+    });
+    schedule(7050, () => {
+      setMatchFlowTest((prev) =>
+        prev
+          ? {
+              ...prev,
+              options: prev.options.map((option) =>
+                option.sizeKey === "25x25"
+                  ? { ...option, bannedByNicknames: [prev.opponent.nickname], banned: true }
+                  : option
+              ),
+            }
+          : prev
+      );
+    });
+    schedule(8350, () => {
+      setMatchFlowTest((prev) =>
+        prev
+          ? {
+              ...prev,
+              options: prev.options.map((option) =>
+                option.sizeKey === "20x20"
+                  ? { ...option, bannedByNicknames: [prev.me.nickname], banned: true }
+                  : option
+              ),
+            }
+          : prev
+      );
+    });
+    schedule(9400, () => {
+      setMatchFlowTest((prev) =>
+        prev
+          ? {
+              ...prev,
+              phase: "reveal",
+              revealIndex: 0,
+              revealSpinning: true,
+              phaseEndsAtMs: Date.now() + 4200,
+            }
+          : prev
+      );
+      let revealIdx = 0;
+      if (matchFlowRevealRef.current) clearInterval(matchFlowRevealRef.current);
+      matchFlowRevealRef.current = window.setInterval(() => {
+        revealIdx = (revealIdx + 1) % PVP_SIZE_KEYS.length;
+        setMatchFlowTest((prev) => (prev ? { ...prev, revealIndex: revealIdx } : prev));
+        playSfx("roulette-tick");
+      }, 150);
+    });
+    schedule(12600, () => {
+      if (matchFlowRevealRef.current) {
+        clearInterval(matchFlowRevealRef.current);
+        matchFlowRevealRef.current = 0;
+      }
+      const finalIndex = PVP_SIZE_KEYS.indexOf(chosenSizeKey);
+      setMatchFlowTest((prev) =>
+        prev
+          ? {
+              ...prev,
+              revealIndex: finalIndex >= 0 ? finalIndex : 0,
+              revealSpinning: false,
+            }
+          : prev
+      );
+      playSfx("roulette-stop");
+    });
+    schedule(14500, () => {
+      setMatchFlowTest((prev) =>
+        prev
+          ? {
+              ...prev,
+              phase: "game",
+              phaseEndsAtMs: Date.now() + 1800,
+            }
+          : prev
+      );
+      playSfx("countdown");
+    });
+    schedule(16500, () => {
+      const result = outcome === "loss" ? "loss" : "win";
+      const toRating = result === "loss" ? 563 : 621;
+      startPvpRatingAnimation(MATCH_FLOW_TEST_BASE_RATING, toRating, roomCode, {
+        result,
+        isTest: true,
+      });
+      setMatchFlowTest((prev) =>
+        prev
+          ? {
+              ...prev,
+              phase: "done",
+              active: false,
+              phaseEndsAtMs: 0,
+            }
+          : prev
+      );
+    });
   };
 
   const pvpCancelReasonText = (reason) => {
@@ -1721,6 +3583,7 @@ function App() {
 
   const joinPvpQueue = async () => {
     if (!isLoggedIn) {
+      setNeedLoginReturnMode("pvp");
       setShowNeedLoginPopup(true);
       return;
     }
@@ -1751,7 +3614,14 @@ function App() {
       startPvpPolling(String(data.ticketId || ""));
       playSfx("ui");
     } catch (err) {
-      setStatus(err.message);
+      const message = String(err.message || "");
+      if (message.includes("Placement required")) {
+        setPlayMode("menu");
+        setShowPlacementRequiredPopup(true);
+        setStatus(L("PvP 입장 전 배치고사를 완료해야 합니다.", "You must complete placement before entering PvP."));
+      } else {
+        setStatus(message);
+      }
       resetPvpQueueState();
     } finally {
       setIsLoading(false);
@@ -1821,15 +3691,15 @@ function App() {
   };
 
   const leaveRace = async () => {
-    const willPenaltyLeave =
+    const willLeaveDuringMatch =
       Boolean(raceRoomCode && racePlayerId) &&
       isModePvp &&
       (racePhase === "countdown" || racePhase === "playing");
-    if (willPenaltyLeave) {
+    if (willLeaveDuringMatch) {
       const ok = window.confirm(
         L(
-          "게임 종료 전에 나가면 즉시 패배 + 점수 30점이 차감됩니다. 정말 나갈까요?",
-          "Leaving before the match ends causes instant defeat and -30 rating. Leave anyway?"
+          "게임 종료 전에 나가면 즉시 패배 처리됩니다. 정말 나갈까요?",
+          "Leaving before the match ends counts as an immediate defeat. Leave anyway?"
         )
       );
       if (!ok) return;
@@ -1858,23 +3728,11 @@ function App() {
           body: JSON.stringify({ roomCode: raceRoomCode, playerId: racePlayerId }),
         });
         const data = await parseJsonSafe(res);
-        if (data?.leavePenalty?.applied) {
-          const points = Number(data.leavePenalty.points || 30);
+        if (willLeaveDuringMatch && data?.ok) {
           leaveStatusMessage = L(
-            `게임 종료 전 방을 나가 점수 ${points}점이 차감되었습니다.`,
-            `You left before match end. ${points} rating points were deducted.`
+            "게임 종료 전에 방을 나가 즉시 패배 처리되었습니다.",
+            "You left before the match ended and were marked as defeated."
           );
-          if (authToken) {
-            try {
-              const meRes = await fetch(`${API_BASE}/auth/me`, { headers: { ...authHeaders } });
-              const meData = await parseJsonSafe(meRes);
-              if (meRes.ok && meData?.ok && meData?.user) {
-                cacheAuthUser(meData.user, { applyPrefs: true });
-              }
-            } catch {
-              // ignore leave-penalty auth refresh errors
-            }
-          }
         }
       } catch {
         // ignore leave API errors
@@ -2524,10 +4382,11 @@ function App() {
       !isInRaceRoom &&
       pvpSearching &&
       (pvpMatchState === "accept" || pvpMatchState === "ban" || pvpMatchState === "reveal");
-    if (!shouldTickRace && !shouldTickPvp) return undefined;
+    const shouldTickPlacement = isModePlacementTest && (placementRunning || Boolean(matchFlowTest?.active));
+    if (!shouldTickRace && !shouldTickPvp && !shouldTickPlacement) return undefined;
     const id = setInterval(() => setNowMs(Date.now()), 200);
     return () => clearInterval(id);
-  }, [isInRaceRoom, isRaceCountdown, isRacePlaying, isModePvp, pvpSearching, pvpMatchState]);
+  }, [isInRaceRoom, isRaceCountdown, isRacePlaying, isModePvp, pvpSearching, pvpMatchState, isModePlacementTest, placementRunning, matchFlowTest?.active]);
 
   useEffect(() => {
     if (!isInRaceRoom || !raceState?.gameStartAt) return;
@@ -2540,6 +4399,70 @@ function App() {
   }, [isInRaceRoom, isRacePlaying, isRaceCountdown, isRaceLobby, raceState, nowMs]);
 
   useEffect(() => {
+    if (!isModePlacementTest || !placementRunning) return;
+    if (placementLeftSec > 0) return;
+    void finishPlacementTest(true);
+  }, [isModePlacementTest, placementRunning, placementLeftSec]);
+
+  useEffect(() => {
+    if (!isModePlacementTest || !matchSimSearching || matchSimFound) return undefined;
+    const sessionId = matchSimSessionRef.current;
+    const id = setInterval(() => {
+      if (matchSimSessionRef.current !== sessionId) return;
+      const nextSec = Math.min(MATCH_SIM_MAX_WAIT_SEC, matchSimElapsedRef.current + 1);
+      matchSimElapsedRef.current = nextSec;
+      setMatchSimElapsedSec(nextSec);
+      const nextRule = getMatchSimRule(nextSec);
+      const nextQueueSize = getMatchSimQueueSize(nextSec, matchSimRating);
+      setMatchSimQueueSize(nextQueueSize);
+
+      if (nextRule.key !== matchSimLastRuleKeyRef.current) {
+        matchSimLastRuleKeyRef.current = nextRule.key;
+        pushMatchSimLog(
+          `탐색 단계 전환: ${nextRule.labelKo}`,
+          `Search stage changed: ${nextRule.labelEn}`,
+          "info"
+        );
+        if (nextRule.key === "adjacent") {
+          pushMatchSimLog(
+            "최근 상대한 상대는 우선순위를 낮추고 다음 후보를 확인합니다.",
+            "Recent opponents are deprioritized while the queue widens.",
+            "muted"
+          );
+        }
+      } else if (nextSec === 14 || nextSec === 29 || nextSec === 43) {
+        pushMatchSimLog(
+          `대기열 변동 감지: 현재 후보 ${nextQueueSize}명`,
+          `Queue updated: ${nextQueueSize} candidates visible`,
+          "muted"
+        );
+      }
+
+      const foundCandidate = pickMatchSimCandidate(matchSimRating, nextSec);
+      if (foundCandidate) {
+        setMatchSimFound(foundCandidate);
+        setMatchSimSearching(false);
+        pushMatchSimLog(
+          `${foundCandidate.nickname} 매칭 완료 · ${foundCandidate.matchedAtSec}초`,
+          `${foundCandidate.nickname} matched in ${foundCandidate.matchedAtSec}s`,
+          "success"
+        );
+        pushMatchSimLog(foundCandidate.reasonKo, foundCandidate.reasonEn, foundCandidate.source === "bot" ? "warn" : "accent");
+        setStatus(
+          L(
+            `${foundCandidate.nickname}와 매칭되었습니다.`,
+            `Matched with ${foundCandidate.nickname}.`
+          )
+        );
+        playSfx("ui");
+      }
+    }, 180);
+    return () => clearInterval(id);
+  }, [isModePlacementTest, matchSimSearching, matchSimFound, matchSimRating]);
+
+  useEffect(() => () => clearMatchFlowTimers(), []);
+
+  useEffect(() => {
     if (!puzzle) {
       autoSolvedShownRef.current = false;
       return;
@@ -2547,7 +4470,10 @@ function App() {
     if (isBoardCompleteByHints && !autoSolvedShownRef.current) {
       autoSolvedShownRef.current = true;
       setTimerRunning(false);
-      if (isModeTutorial) {
+      if (isModePlacementTest && !isInRaceRoom && placementRunning) {
+        setStatus(L("단계 완료! 다음 퍼즐로 이동합니다.", "Stage cleared! Moving to next puzzle."));
+        void handlePlacementStageSolved();
+      } else if (isModeTutorial) {
         // Tutorial completion status is handled by tutorial progress effect.
       } else if (isInRaceRoom && isRacePlaying) {
         setStatus(L("완주! 다른 플레이어 결과 대기중...", "Finished! Waiting for other players..."));
@@ -2562,7 +4488,16 @@ function App() {
     if (!isBoardCompleteByHints) {
       autoSolvedShownRef.current = false;
     }
-  }, [isBoardCompleteByHints, puzzle, isInRaceRoom, isRacePlaying, isModeTutorial, isModeSingle]);
+  }, [
+    isBoardCompleteByHints,
+    puzzle,
+    isInRaceRoom,
+    isRacePlaying,
+    isModePlacementTest,
+    placementRunning,
+    isModeTutorial,
+    isModeSingle,
+  ]);
 
   useEffect(() => {
     if (!isInRaceRoom || racePhase !== "finished" || !raceState?.winnerPlayerId || raceResultShownRef.current) return;
@@ -2646,12 +4581,15 @@ function App() {
     const fromGames = Number(pvpRatingBaseGamesRef.current);
     const toRating = Number(authUser?.rating);
     const toGames = Number(authUser?.rating_games);
+    const didWin = raceState?.winnerPlayerId === racePlayerId;
     if (!Number.isFinite(fromRating) || !Number.isFinite(fromGames)) return;
     if (!Number.isFinite(toRating) || !Number.isFinite(toGames)) return;
     if (toGames <= fromGames) return;
     pvpRatingFxDoneRoomRef.current = raceRoomCode;
-    startPvpRatingAnimation(fromRating, toRating, raceRoomCode);
-  }, [isLoggedIn, isModePvp, isInRaceRoom, racePhase, raceRoomCode, authUser?.rating, authUser?.rating_games]);
+    startPvpRatingAnimation(fromRating, toRating, raceRoomCode, {
+      result: didWin ? "win" : "loss",
+    });
+  }, [isLoggedIn, isModePvp, isInRaceRoom, racePhase, raceRoomCode, authUser?.rating, authUser?.rating_games, raceState?.winnerPlayerId, racePlayerId]);
 
   useEffect(() => {
     if (!isRaceCountdown || countdownLeft == null) {
@@ -2709,29 +4647,29 @@ function App() {
   }, [isModePvp, isInRaceRoom, pvpSearching, pvpMatch?.matchId, pvpMatchState, pvpAllAccepted]);
 
   useEffect(() => {
-    if (!isModePvp || !pvpSearching || isInRaceRoom || pvpMatchState !== "reveal" || pvpOptions.length === 0) {
+    if (!isModePvp || !pvpSearching || isInRaceRoom || pvpMatchState !== "reveal" || pvpDisplayOptions.length === 0) {
       stopPvpRevealAnimation();
       return;
     }
     if (!isPvpRevealSpinning) {
       stopPvpRevealAnimation();
-      const chosenIdx = pvpOptions.findIndex((o) => o.sizeKey === pvpMatch?.chosenSizeKey);
+      const chosenIdx = pvpDisplayOptions.findIndex((o) => o.sizeKey === pvpMatch?.chosenSizeKey);
       if (chosenIdx >= 0) setPvpRevealIndex(chosenIdx);
       return;
     }
 
     stopPvpRevealAnimation();
-    let idx = Math.floor(Math.random() * pvpOptions.length);
+    let idx = Math.floor(Math.random() * pvpDisplayOptions.length);
     setPvpRevealIndex(idx);
     pvpRevealAnimRef.current = window.setInterval(() => {
-      idx = (idx + 1) % pvpOptions.length;
+      idx = (idx + 1) % pvpDisplayOptions.length;
       setPvpRevealIndex(idx);
       playSfx("roulette-tick");
     }, 95);
     return () => {
       stopPvpRevealAnimation();
     };
-  }, [isModePvp, pvpSearching, isInRaceRoom, pvpMatchState, pvpOptions, pvpMatch?.chosenSizeKey, isPvpRevealSpinning]);
+  }, [isModePvp, pvpSearching, isInRaceRoom, pvpMatchState, pvpDisplayOptions, pvpMatch?.chosenSizeKey, isPvpRevealSpinning]);
 
   useEffect(() => {
     if (pvpMatchState !== "reveal") {
@@ -2773,9 +4711,9 @@ function App() {
   }, [isInRaceRoom, isModeMulti]);
 
   useEffect(() => {
-    if (!isModeRanking || isInRaceRoom) return;
-    fetchRatingUsers();
-  }, [isModeRanking, isInRaceRoom]);
+    if ((!isModeRanking && !isModeLegacyRanking) || isInRaceRoom) return;
+    void fetchRatingUsers(isModeLegacyRanking ? "legacy" : "current");
+  }, [isModeRanking, isModeLegacyRanking, isInRaceRoom]);
 
   useEffect(() => {
     if (!isModeReplayHall || isInRaceRoom) return;
@@ -2828,6 +4766,105 @@ function App() {
   const brandTitle = "Nonogram Arena";
   const modeTagText = L("로그인 필요", "Login Required");
   const excelMainStyle = isExcelMode ? { "--excel-cell-size": `${cellSize}px` } : undefined;
+  const placementDisplayCard = placementResultCard
+    || (hasPlacementQualification && placementAssignedTier
+      ? {
+          rating: placementAssignedRating,
+          tier: placementAssignedTier,
+          solvedSequential: Number(authUser?.placement_solved_sequential || 0),
+          elapsedSec: Number(authUser?.placement_elapsed_sec || 0),
+        }
+      : null);
+  const placementResultTierKey = placementDisplayCard?.tier?.key || "bronze";
+  const placementResultTierClass = placementDisplayCard ? `tier-${placementResultTierKey}` : "";
+  const placementResultElapsedText = (() => {
+    const totalSec = Math.max(0, Number(placementDisplayCard?.elapsedSec || 0));
+    const mm = String(Math.floor(totalSec / 60)).padStart(2, "0");
+    const ss = String(totalSec % 60).padStart(2, "0");
+    return `${mm}:${ss}`;
+  })();
+  const placementResultTierLabel = placementDisplayCard
+    ? lang === "ko"
+      ? placementDisplayCard.tier.labelKo
+      : placementDisplayCard.tier.labelEn
+    : "";
+  const pvpModeTagText = !isLoggedIn
+    ? modeTagText
+    : !hasPlacementQualification
+      ? L("배치고사 필요", "Placement Required")
+      : "";
+  const pvpFxBracketNow = pvpRatingFx ? getTierBracketInfo(pvpRatingFx.ratingNow, pvpRatingFx.done ? pvpRatingFx.toRank : pvpRatingFx.fromRank) : null;
+  const pvpFxTierNow = pvpFxBracketNow?.tier || pvpRatingFx?.toTier || null;
+  const pvpFxTierClass = pvpFxTierNow ? `tier-${pvpFxTierNow.key}` : "";
+  const pvpFxTierLabel = pvpFxTierNow ? (lang === "ko" ? pvpFxTierNow.labelKo : pvpFxTierNow.labelEn) : "";
+  const pvpFxFromTierLabel = pvpRatingFx?.fromTier
+    ? lang === "ko"
+      ? pvpRatingFx.fromTier.labelKo
+      : pvpRatingFx.fromTier.labelEn
+    : "";
+  const pvpFxToTierLabel = pvpRatingFx?.toTier
+    ? lang === "ko"
+      ? pvpRatingFx.toTier.labelKo
+      : pvpRatingFx.toTier.labelEn
+    : "";
+  const pvpFxOutcomeLabel = pvpRatingFx?.result === "loss" ? L("패배", "Defeat") : L("승리", "Victory");
+  const pvpFxOutcomeSub = pvpRatingFx?.result === "loss" ? L("레이팅 하락", "Rating Lost") : L("레이팅 상승", "Rating Gained");
+  const pvpFxShiftLabel =
+    pvpRatingFx?.tierShift === "promoted"
+      ? L("티어 승급", "Promotion")
+      : pvpRatingFx?.tierShift === "demoted"
+        ? L("티어 강등", "Demotion")
+        : "";
+  const pvpFxGaugePercent = Math.max(0, Math.min(100, Number(pvpFxBracketNow?.progress || 0)));
+  const pvpFxNextTierLabel = pvpFxBracketNow?.nextTier
+    ? lang === "ko"
+      ? pvpFxBracketNow.nextTier.labelKo
+      : pvpFxBracketNow.nextTier.labelEn
+    : "MAX";
+  const pvpFxDeltaText = pvpRatingFx
+    ? pvpRatingFx.deltaNow > 0
+      ? `+${pvpRatingFx.deltaNow}`
+      : String(pvpRatingFx.deltaNow)
+    : "";
+  const pvpFxRouteChanged = pvpRatingFx && pvpFxFromTierLabel && pvpFxToTierLabel && pvpFxFromTierLabel !== pvpFxToTierLabel;
+  const matchSimTierLabel = lang === "ko" ? matchSimCurrentTier.labelKo : matchSimCurrentTier.labelEn;
+  const matchSimRuleLabel = lang === "ko" ? matchSimCurrentRule.labelKo : matchSimCurrentRule.labelEn;
+  const matchSimStageIndex = MATCH_SIM_STAGE_FLOW.findIndex((stage) => stage.key === matchSimCurrentRule.key);
+  const matchSimFoundTierLabel = matchSimFound?.tier ? (lang === "ko" ? matchSimFound.tier.labelKo : matchSimFound.tier.labelEn) : "";
+  const matchSimFoundSourceLabel = matchSimFound
+    ? matchSimFound.source === "bot"
+      ? L("봇 후보", "Bot Candidate")
+      : L("유저 풀", "Human Pool")
+    : "";
+  const matchFlowPlayers = matchFlowTest
+    ? [
+        matchFlowTest.me || { nickname: L("테스터", "Tester"), rating: MATCH_FLOW_TEST_BASE_RATING, ratingRank: null },
+        matchFlowTest.opponent || MATCH_FLOW_TEST_OPPONENT,
+      ]
+    : [];
+  const profileModalTier = profileModalData
+    ? getTierInfoByRating(profileModalData.rating, profileModalData.ratingRank)
+    : null;
+  const profileModalTierLabel = profileModalTier ? (lang === "ko" ? profileModalTier.labelKo : profileModalTier.labelEn) : "";
+  const profileModalAvatarKey = normalizeProfileAvatarKey(
+    profileModalMode === "self" ? profileDraftAvatarKey : profileModalData?.profile_avatar_key || DEFAULT_PROFILE_AVATAR_KEY
+  );
+  const profileModalRankText =
+    Number.isInteger(Number(profileModalData?.ratingRank)) && Number(profileModalData?.ratingRank) > 0
+      ? lang === "ko"
+        ? `${Number(profileModalData.ratingRank)}등`
+        : `#${Number(profileModalData.ratingRank)}`
+      : "";
+  const profileUnlockedSpecialKeys = new Set(
+    Array.isArray(profileModalData?.unlockedSpecialAvatarKeys)
+      ? profileModalData.unlockedSpecialAvatarKeys.map((key) => normalizeProfileAvatarKey(key))
+      : []
+  );
+  const profileModalHallRewards = Array.isArray(profileModalData?.hallRewards) ? profileModalData.hallRewards : [];
+  const profileAvatarDirty =
+    profileModalMode === "self" &&
+    normalizeProfileAvatarKey(profileModalData?.profile_avatar_key || DEFAULT_PROFILE_AVATAR_KEY) !==
+      normalizeProfileAvatarKey(profileDraftAvatarKey);
 
   return (
     <main className={`page ${isExcelMode ? "excelSkin" : ""} ${isDarkThemeActive ? "themeDark" : ""}`} style={excelMainStyle}>
@@ -2851,9 +4888,13 @@ function App() {
               </button>
               {isLoggedIn ? (
                 <>
-                  <span className="userChip">
-                    {authUser.nickname} ({authUser.username}) · R {Number(authUser.rating || 1500)}
-                  </span>
+                  <button type="button" className="userChip userChipBtn" onClick={openOwnProfile}>
+                    <ProfileAvatar avatarKey={authUser?.profile_avatar_key} nickname={authUser?.nickname} size="sm" />
+                    <span className="userChipText">
+                      <strong>{authUser.nickname}</strong>
+                      <span>R {Number.isFinite(Number(authUser?.rating)) ? Number(authUser.rating) : 0}</span>
+                    </span>
+                  </button>
                   <button onClick={logout}>{L("로그아웃", "Logout")}</button>
                 </>
               ) : (
@@ -2916,7 +4957,7 @@ function App() {
                 className="modeBtn modePvp"
                 onClick={goPvpMode}
               >
-                {!isLoggedIn && <span className="modeTag">{modeTagText}</span>}
+                {pvpModeTagText && <span className="modeTag">{pvpModeTagText}</span>}
                 <span className="modeName">PVP MATCH</span>
               </motion.button>
               <motion.button
@@ -2952,6 +4993,164 @@ function App() {
           </section>
         )}
 
+        {isModePlacementTest && (
+          <section className="placementScreen">
+            <div className="placementHead">
+              <h2>{L("배치고사", "Placement")}</h2>
+              <p>
+                {hasPlacementQualification
+                  ? L(
+                      "배치고사가 완료되었습니다. 현재 배정된 티어와 시작 레이팅이 PvP 기준으로 사용됩니다.",
+                      "Placement is complete. Your assigned tier and starting rating are now used for PvP."
+                    )
+                  : L(
+                      "5분 동안 5x5 -> 10x10 -> 10x10 -> 15x15 -> 15x15 순서로 실제 퍼즐이 출제됩니다. 풀면 자동으로 다음 단계로 이동합니다.",
+                      "Real puzzles are served in order for 5 minutes: 5x5 -> 10x10 -> 10x10 -> 15x15 -> 15x15. Solving one advances automatically."
+                    )}
+              </p>
+            </div>
+
+            <div className="placementMeta">
+              {placementRunning && (
+                <div className="placementTimer">
+                  {L("남은 시간", "Time Left")}: <b>{placementTimerText}</b>
+                </div>
+              )}
+            </div>
+
+            <div className="placementActions">
+              {!placementRunning && !hasPlacementQualification && (
+                <button className="singleActionBtn" onClick={() => void startPlacementTest()} disabled={placementLoading}>
+                  {placementLoading ? L("로딩 중...", "Loading...") : L("배치고사 시작", "Start Placement")}
+                </button>
+              )}
+              {!placementRunning && hasPlacementQualification && (
+                <button className="singleActionBtn" onClick={goPvpMode}>
+                  {L("랭크전 시작", "Start Ranked")}
+                </button>
+              )}
+              <button
+                className="singleHomeBtn"
+                onClick={() => {
+                  resetPlacementTest();
+                  void backToMenu();
+                }}
+              >
+                HOME
+              </button>
+            </div>
+
+            {placementDisplayCard && (
+              <div className={`placementResultCard ${placementResultTierClass}`}>
+                <div className="placementResultBadge">{L("배치 결과", "Placement Result")}</div>
+                <div className="placementTierMedia">
+                  <img
+                    src={TIER_IMAGE_MAP[placementDisplayCard.tier.key] || TIER_IMAGE_MAP.bronze}
+                    alt={placementDisplayCard.tier.labelEn}
+                  />
+                </div>
+                <div className="placementResultText">
+                  <div className="placementTierNameRow">
+                    <div className="placementTierName">{placementResultTierLabel}</div>
+                    <div className="placementTierRating">R {placementDisplayCard.rating}</div>
+                  </div>
+                </div>
+              </div>
+            )}
+            {placementRevealOpen && placementResultCard && (
+              <div className={`placementRevealOverlay ${placementResultTierClass}`}>
+                <motion.div
+                  className={`placementRevealCard ${placementResultTierClass}`}
+                  initial={{ opacity: 0, scale: 0.84, y: 28 }}
+                  animate={{ opacity: 1, scale: 1, y: 0 }}
+                  transition={{ type: "spring", stiffness: 240, damping: 24, mass: 0.9 }}
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <div className="placementRevealEyebrow">{L("배치 평가", "Placement Evaluation")}</div>
+                  {placementRevealPhase !== "reveal" && (
+                    <div className="placementRevealHead">
+                      {placementRevealPhase === "analyzing"
+                        ? L("결과 분석 중", "Analyzing")
+                        : L("점수 집계 중", "Counting Score")}
+                    </div>
+                  )}
+
+                  <div className="placementRevealScorePanel">
+                    <div className="placementRevealScoreLabel">{L("배치 점수", "Placement Rating")}</div>
+                    <div className={`placementRevealScore ${placementRevealPhase === "counting" ? "counting" : ""}`}>
+                      R {placementRevealRating}
+                    </div>
+                  </div>
+
+                  {placementRevealPhase !== "reveal" && (
+                    <div className="placementRevealAnalyzePanel">
+                      <div className="placementRevealStatusRow">
+                        <span>{L("단계 데이터", "Stage Data")}</span>
+                        <strong>{placementResultCard.solvedSequential}/{PLACEMENT_STAGES.length}</strong>
+                      </div>
+                      <div className="placementRevealStatusRow">
+                        <span>{L("기록 정렬", "Time Sync")}</span>
+                        <strong>{placementResultElapsedText}</strong>
+                      </div>
+                      <div className="placementRevealAnalyzing">
+                        <span />
+                      </div>
+                    </div>
+                  )}
+
+                  <motion.div
+                    className={`placementRevealTierWrap ${placementRevealPhase === "reveal" ? "show" : ""}`}
+                    initial={false}
+                    animate={{
+                      opacity: placementRevealPhase === "reveal" ? 1 : 0,
+                      scale: placementRevealPhase === "reveal" ? 1 : 0.82,
+                      y: placementRevealPhase === "reveal" ? 0 : 16,
+                    }}
+                    transition={{ type: "spring", stiffness: 190, damping: 18, mass: 0.84 }}
+                  >
+                    <span className="placementRevealImpactRing primary" />
+                    <span className="placementRevealImpactRing secondary" />
+                    <span className="placementRevealTierHalo" />
+                    <div className="placementRevealTierMedia">
+                      <img
+                        src={TIER_IMAGE_MAP[placementResultCard.tier.key] || TIER_IMAGE_MAP.bronze}
+                        alt={placementResultCard.tier.labelEn}
+                      />
+                    </div>
+                    <div className="placementRevealTierStamp">{L("배치 확정", "ASSIGNED")}</div>
+                  </motion.div>
+                  {placementRevealPhase === "reveal" && (
+                    <>
+                      <div className="placementRevealTierName">{placementResultTierLabel}</div>
+                      <div className="placementRevealActions">
+                        <button
+                          className="singleHomeBtn placementRevealClose placementRevealCloseSecondary"
+                          onClick={() => {
+                            setPlacementRevealOpen(false);
+                            resetPlacementTest();
+                            void backToMenu();
+                          }}
+                        >
+                          HOME
+                        </button>
+                        <button
+                          className="singleActionBtn placementRevealClose placementRevealClosePrimary"
+                          onClick={() => {
+                            setPlacementRevealOpen(false);
+                            goPvpMode();
+                          }}
+                        >
+                          {L("랭크전 시작", "Start Ranked")}
+                        </button>
+                      </div>
+                    </>
+                  )}
+                </motion.div>
+              </div>
+            )}
+          </section>
+        )}
+
         {isModeAuth && (
           <div className="authScreen">
             <div className="authTabs">
@@ -2980,7 +5179,14 @@ function App() {
             </div>
 
             {authTab === "login" && (
-              <div className="authCard">
+              <form
+                className="authCard"
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  if (isLoading || !loginUsername.trim() || !loginPassword) return;
+                  login();
+                }}
+              >
                 <label>
                   {L("아이디", "Username")}
                   <input
@@ -3013,12 +5219,12 @@ function App() {
                 </label>
                 {loginError && <div className="modalError">{loginError}</div>}
                 <div className="modalActions">
-                  <button onClick={backToMenu}>{L("취소", "Cancel")}</button>
-                  <button onClick={login} disabled={isLoading || !loginUsername.trim() || !loginPassword}>
+                  <button type="button" onClick={backToMenu}>{L("취소", "Cancel")}</button>
+                  <button type="submit" disabled={isLoading || !loginUsername.trim() || !loginPassword}>
                     {isLoading ? L("로그인 중...", "Logging in...") : L("로그인", "Login")}
                   </button>
                 </div>
-              </div>
+              </form>
             )}
 
             {authTab === "signup" && (
@@ -3207,26 +5413,35 @@ function App() {
           </div>
         )}
 
-        {isModeRanking && (
+        {(isModeRanking || isModeLegacyRanking) && (
           <section className="rankingScreen">
             <div className="rankingTopBar">
               <div className="rankingTitleBlock">
                 <div className="rankingTitle">
-                  <Trophy size={18} /> {L("레이팅 랭킹", "Rating Ranking")}
+                  <Trophy size={18} /> {isModeLegacyRanking ? L("이전 레이팅 랭킹", "Legacy Rating Ranking") : L("PvP 랭킹", "PvP Ranking")}
                 </div>
                 {isLoggedIn && (
                   <div className="rankingMeBadge">
                     {myRatingRank
-                      ? L(
-                          `내 순위 #${myRatingRank}${ratingTotalUsers > 0 ? ` / ${ratingTotalUsers}` : ""}`,
-                          `My Rank #${myRatingRank}${ratingTotalUsers > 0 ? ` / ${ratingTotalUsers}` : ""}`
-                        )
+                      ? isModeLegacyRanking
+                        ? L(
+                            `내 순위 ${myRatingRank}등${ratingTotalUsers > 0 ? ` / ${ratingTotalUsers}` : ""}`,
+                            `My Rank #${myRatingRank}${ratingTotalUsers > 0 ? ` / ${ratingTotalUsers}` : ""}`
+                          )
+                        : L(
+                            `내 순위 ${myRatingRank}등${ratingTotalUsers > 0 ? ` / ${ratingTotalUsers}` : ""} · ${myTierInfo?.labelKo || "브론즈"}`,
+                            `My Rank #${myRatingRank}${ratingTotalUsers > 0 ? ` / ${ratingTotalUsers}` : ""} · ${myTierInfo?.labelEn || "Bronze"}`
+                          )
                       : L("내 순위: 집계 중", "My Rank: calculating")}
                   </div>
                 )}
               </div>
               <div className="rankingActions">
-                <button className="singleActionBtn" onClick={fetchRatingUsers} disabled={ratingLoading}>
+                <button
+                  className="singleActionBtn"
+                  onClick={() => void fetchRatingUsers(isModeLegacyRanking ? "legacy" : "current")}
+                  disabled={ratingLoading}
+                >
                   {ratingLoading ? "LOADING..." : "REFRESH"}
                 </button>
                 <button className="singleSfxBtn replayOpenBtn" onClick={goReplayHallMode} disabled={replayLoading}>
@@ -3243,15 +5458,16 @@ function App() {
                   <tr>
                     <th>#</th>
                     <th>{L("닉네임", "Nickname")}</th>
-                    <th>{L("레이팅", "Rating")}</th>
-                    <th>{L("전적", "Record")}</th>
-                    <th>{L("승률", "Win Rate")}</th>
+                    <th>{L("티어", "Tier")}</th>
+                    <th>{isModeLegacyRanking ? L("레이팅", "Rating") : L("점수", "Score")}</th>
+                    {isModeLegacyRanking && <th>{L("전적", "Record")}</th>}
+                    {isModeLegacyRanking && <th>{L("승률", "Win Rate")}</th>}
                   </tr>
                 </thead>
                 <tbody>
                   {ratingUsers.length === 0 ? (
                     <tr>
-                      <td colSpan={5} className="rankingEmpty">
+                      <td colSpan={isModeLegacyRanking ? 6 : 4} className="rankingEmpty">
                         {ratingLoading ? L("불러오는 중...", "Loading...") : L("표시할 유저가 없습니다.", "No users to display.")}
                       </td>
                     </tr>
@@ -3261,15 +5477,23 @@ function App() {
                       const wins = Number(u.rating_wins || 0);
                       const losses = Number(u.rating_losses || 0);
                       const winRate = games > 0 ? Math.round((wins / games) * 100) : 0;
+                      const tierInfo = getTierInfoByRating(u.rating, idx + 1);
                       return (
                         <tr key={u.id}>
                           <td>{idx + 1}</td>
                           <td>{u.nickname}</td>
-                          <td className="ratingScore">{Number(u.rating || 1500)}</td>
                           <td>
-                            {wins}W {losses}L ({games})
+                            <span className={`tierBadge tier-${tierInfo.key}`}>
+                              {lang === "ko" ? tierInfo.labelKo : tierInfo.labelEn}
+                            </span>
                           </td>
-                          <td>{winRate}%</td>
+                          <td className="ratingScore">{Number.isFinite(Number(u?.rating)) ? Number(u.rating) : 0}</td>
+                          {isModeLegacyRanking && (
+                            <td>
+                              {wins}W {losses}L ({games})
+                            </td>
+                          )}
+                          {isModeLegacyRanking && <td>{winRate}%</td>}
                         </tr>
                       );
                     })
@@ -3284,7 +5508,12 @@ function App() {
           <section className="hallScreen">
             <div className="hallHero">
               <div className="hallHeroGlint" />
-              <div className="hallHeroTag">HALL OF FAME</div>
+              <div className="hallHeroTop">
+                <div className="hallHeroTag">HALL OF FAME</div>
+                <button className="hallLegacyBtn" onClick={goLegacyRankingMode}>
+                  {L("이전 랭킹", "Legacy Ranking")}
+                </button>
+              </div>
               <h2>{L("사이즈별 최고 기록", "Best Records By Size")}</h2>
               <p>
                 {L(
@@ -3352,7 +5581,7 @@ function App() {
                             <span className={`hallMedal ${medalClass}`}>{formatRankLabel(rank)}</span>
                           </td>
                           <td>{record.nickname || "-"}</td>
-                          <td>{formatRaceElapsedMs(record.elapsedMs, record.elapsedSec)}</td>
+                          <td>{formatHallElapsedMs(record.elapsedMs, record.elapsedSec)}</td>
                           <td>{formatKstDate(record.finishedAtMs)}</td>
                         </tr>
                       );
@@ -3459,7 +5688,10 @@ function App() {
               <section className="pvpQueuePanel">
                 <div className="pvpQueueTitle">RANKED PVP MATCH</div>
                 <div className="pvpQueueDesc">
-                  {L("랜덤 사이즈(5x5/10x10/15x15/20x20/25x25) 중 1개로 매칭됩니다.", "One random size is selected from 5x5/10x10/15x15/20x20/25x25.")}
+                  {L(
+                    "실버 티어까지는 5x5·10x10·15x15, 골드 티어부터는 10x10·15x15·20x20·25x25 퍼즐이 등장합니다.",
+                    "Up to Silver tier, 5x5/10x10/15x15 puzzles appear. From Gold tier, 10x10/15x15/20x20/25x25 puzzles appear."
+                  )}
                 </div>
                 <div className="pvpQueueState">
                   {pvpServerState === "matching" && pvpMatchState === "accept" && L("수락 확인 단계", "Acceptance check")}
@@ -3481,18 +5713,20 @@ function App() {
                           : "R -"}
                       </span>
                       <span className="pvpShowdownStat">
-                        {L(
-                          `등수 #${
-                            Number.isInteger(Number(pvpShowdownPlayers[0]?.ratingRank)) && Number(pvpShowdownPlayers[0]?.ratingRank) > 0
+                        {(() => {
+                          const rank =
+                            Number.isInteger(Number(pvpShowdownPlayers[0]?.ratingRank)) &&
+                            Number(pvpShowdownPlayers[0]?.ratingRank) > 0
                               ? Number(pvpShowdownPlayers[0]?.ratingRank)
-                              : "-"
-                          }`,
-                          `Rank #${
-                            Number.isInteger(Number(pvpShowdownPlayers[0]?.ratingRank)) && Number(pvpShowdownPlayers[0]?.ratingRank) > 0
-                              ? Number(pvpShowdownPlayers[0]?.ratingRank)
-                              : "-"
-                          }`
-                        )}
+                              : null;
+                          return rank ? L(`${rank}등`, `Rank #${rank}`) : L("등수 미집계", "Unranked");
+                        })()}
+                      </span>
+                      <span className="pvpShowdownStat">
+                        {(() => {
+                          const t = getTierInfoByRating(pvpShowdownPlayers[0]?.rating, pvpShowdownPlayers[0]?.ratingRank);
+                          return lang === "ko" ? t.labelKo : t.labelEn;
+                        })()}
                       </span>
                     </div>
                     <div className="pvpShowdownVs">VS</div>
@@ -3504,18 +5738,20 @@ function App() {
                           : "R -"}
                       </span>
                       <span className="pvpShowdownStat">
-                        {L(
-                          `등수 #${
-                            Number.isInteger(Number(pvpShowdownPlayers[1]?.ratingRank)) && Number(pvpShowdownPlayers[1]?.ratingRank) > 0
+                        {(() => {
+                          const rank =
+                            Number.isInteger(Number(pvpShowdownPlayers[1]?.ratingRank)) &&
+                            Number(pvpShowdownPlayers[1]?.ratingRank) > 0
                               ? Number(pvpShowdownPlayers[1]?.ratingRank)
-                              : "-"
-                          }`,
-                          `Rank #${
-                            Number.isInteger(Number(pvpShowdownPlayers[1]?.ratingRank)) && Number(pvpShowdownPlayers[1]?.ratingRank) > 0
-                              ? Number(pvpShowdownPlayers[1]?.ratingRank)
-                              : "-"
-                          }`
-                        )}
+                              : null;
+                          return rank ? L(`${rank}등`, `Rank #${rank}`) : L("등수 미집계", "Unranked");
+                        })()}
+                      </span>
+                      <span className="pvpShowdownStat">
+                        {(() => {
+                          const t = getTierInfoByRating(pvpShowdownPlayers[1]?.rating, pvpShowdownPlayers[1]?.ratingRank);
+                          return lang === "ko" ? t.labelKo : t.labelEn;
+                        })()}
                       </span>
                     </div>
                   </div>
@@ -3529,12 +5765,14 @@ function App() {
                     </div>
                     <div className="pvpDeadlineText">{(pvpAcceptLeftMs / 1000).toFixed(1)}s</div>
                     <div className="pvpAcceptPlayers">
-                      {(pvpMatch?.players || []).map((p) => (
-                        <div key={p.userId} className={`pvpAcceptPlayer ${p.accepted ? "accepted" : ""}`}>
-                          <span>{p.nickname}</span>
-                          <span>{p.accepted ? L("수락 완료", "Accepted") : L("대기 중", "Waiting")}</span>
-                        </div>
-                      ))}
+                      {(pvpMatch?.players || []).map((p) => {
+                        return (
+                          <div key={p.userId} className={`pvpAcceptPlayer ${p.accepted ? "accepted" : ""}`}>
+                            <span>{p.nickname}</span>
+                            <span>{p.accepted ? L("수락 완료", "Accepted") : L("대기 중", "Waiting")}</span>
+                          </div>
+                        );
+                      })}
                     </div>
                     <button
                       className="singleActionBtn"
@@ -3548,16 +5786,21 @@ function App() {
 
                 {!isPvpShowdownActive && pvpMatchState === "ban" && (
                   <div className="pvpStageCard">
-                    <div className="pvpStageTitle">{L("5개 유형 중 1개를 밴하거나 스킵하세요", "Ban one of five types, or skip")}</div>
+                    <div className="pvpStageTitle">
+                      {L(
+                        `${pvpDisplayOptions.length}개 유형 중 1개를 밴하거나 스킵하세요`,
+                        `Ban one of ${pvpDisplayOptions.length} available types, or skip`
+                      )}
+                    </div>
                     <div className="pvpGaugeWrap ban">
                       <div className="pvpGaugeFill" style={{ width: `${pvpBanPercent}%` }} />
                     </div>
                     <div className="pvpDeadlineText">{(pvpBanLeftMs / 1000).toFixed(1)}s</div>
-                    <div className="pvpBanGrid">
-                      {(pvpOptions.length
-                        ? pvpOptions
-                        : PVP_SIZE_KEYS.map((k) => ({ sizeKey: k, bannedByNicknames: [], banned: false }))
-                      ).map((option) => {
+                    <div
+                      className={`pvpBanGrid count-${Math.max(1, pvpDisplayOptions.length)}`}
+                      style={{ "--pvp-option-count": Math.max(1, pvpDisplayOptions.length) }}
+                    >
+                      {pvpDisplayOptions.map((option) => {
                         const sizeKey = option.sizeKey || `${option.width}x${option.height}`;
                         const bannedBy = Array.isArray(option.bannedByNicknames) ? option.bannedByNicknames : [];
                         const bannedLabel = bannedBy.length ? bannedBy.join(", ") : "";
@@ -3590,11 +5833,11 @@ function App() {
                 {!isPvpShowdownActive && pvpMatchState === "reveal" && (
                   <div className="pvpStageCard">
                     <div className="pvpStageTitle">{L("밴 제외 유형 중 랜덤 추첨", "Random draw among unbanned types")}</div>
-                    <div className="pvpRevealTrack">
-                      {(pvpOptions.length
-                        ? pvpOptions
-                        : PVP_SIZE_KEYS.map((k) => ({ sizeKey: k, bannedByNicknames: [], banned: false }))
-                      ).map((option, idx) => {
+                    <div
+                      className={`pvpRevealTrack count-${Math.max(1, pvpDisplayOptions.length)}`}
+                      style={{ "--pvp-option-count": Math.max(1, pvpDisplayOptions.length) }}
+                    >
+                      {pvpDisplayOptions.map((option, idx) => {
                         const sizeKey = option.sizeKey || `${option.width}x${option.height}`;
                         const bannedBy = Array.isArray(option.bannedByNicknames) ? option.bannedByNicknames : [];
                         const isBanned = bannedBy.length > 0 || option.banned;
@@ -3795,37 +6038,12 @@ function App() {
               <div>{L("방", "Room")}: <b>{roomTitleText || raceRoomCode}</b></div>
               <div>{L("코드", "Code")}: <b>{raceRoomCode}</b></div>
               <div>{L("인원", "Players")}: {(raceState?.players || []).length}/{raceState?.maxPlayers || 2}</div>
-              {myRacePlayer && <div className="raceInfoMe">{myRacePlayer.nickname}</div>}
-              <div className="timerBar">{L("시간", "TIME")} {formattedTime}</div>
-              {isModePvp && isRaceFinished && pvpRatingFx && (
-                <motion.div
-                  initial={{ opacity: 0, y: 10, scale: 0.97 }}
-                  animate={{ opacity: 1, y: 0, scale: 1 }}
-                  transition={{ duration: 0.28, ease: "easeOut" }}
-                  className={`ratingFxCard ${pvpRatingFx.delta >= 0 ? "up" : "down"} ${pvpRatingFx.done ? "done" : ""}`}
-                >
-                  <div className="ratingFxHead">RATING UPDATE</div>
-                  <div className="ratingFxNums">
-                    <span className="old">{pvpRatingFx.from}</span>
-                    <span className="arrow">→</span>
-                    <span className="now">{pvpRatingFx.ratingNow}</span>
-                  </div>
-                  <div className={`ratingFxDelta ${pvpRatingFx.delta >= 0 ? "plus" : "minus"}`}>
-                    {pvpRatingFx.deltaNow > 0 ? `+${pvpRatingFx.deltaNow}` : String(pvpRatingFx.deltaNow)}
-                  </div>
-                  <div className="ratingFxParticles" aria-hidden="true">
-                    {Array.from({ length: 12 }).map((_, i) => (
-                      <span
-                        key={`rating-p-${i}`}
-                        style={{
-                          "--rx": `${(i - 5.5) * 11}px`,
-                          "--rd": `${0.22 + i * 0.035}s`,
-                        }}
-                      />
-                    ))}
-                  </div>
-                </motion.div>
+              {myRacePlayer && (
+                <div className="raceInfoMe">
+                  <span>{myRacePlayer.nickname}</span>
+                </div>
               )}
+              <div className="timerBar">{L("시간", "TIME")} {formattedTime}</div>
               <div className="raceActions">
                 {isModeMulti && isRaceLobby && (
                   <>
@@ -3950,7 +6168,7 @@ function App() {
                         onContextMenu={(e) => e.preventDefault()}
                       >
                         <canvas ref={canvasRef} className="boardCanvas" />
-                        {isRaceFinished && <div className="countdownOverlay result">{raceResultText}</div>}
+                        {isRaceFinished && !isModePvp && <div className="countdownOverlay result">{raceResultText}</div>}
                         {showInactivityWarning && (
                           <div className={`idleDangerOverlay ${inactivityLeftSec <= 3 ? "critical" : inactivityLeftSec <= 6 ? "hot" : ""}`}>
                             <div className="idleDangerHead">
@@ -3994,11 +6212,30 @@ function App() {
                   const percent = raceState?.totalAnswerCells
                     ? Math.round(((p.correctAnswerCells || 0) / raceState.totalAnswerCells) * 100)
                     : 0;
+                  const canOpenProfile = canOpenUserProfile(p?.userId);
                   return (
-                    <div key={p.playerId} className="raceProgressRow">
-                      <span>{p.nickname}</span>
-                      <span>{percent}%</span>
-                    </div>
+                    canOpenProfile ? (
+                      <button
+                        key={p.playerId}
+                        type="button"
+                        className="raceProgressRow raceProgressRowButton clickable"
+                        onClick={() => handleOpenUserProfile(p.userId, p)}
+                      >
+                        <span className="raceProgressIdentity">
+                          <ProfileAvatar avatarKey={p.profileAvatarKey} nickname={p.nickname} size="sm" />
+                          <span>{p.nickname}</span>
+                        </span>
+                        <span>{percent}%</span>
+                      </button>
+                    ) : (
+                      <div key={p.playerId} className="raceProgressRow">
+                        <span className="raceProgressIdentity">
+                          <ProfileAvatar avatarKey={p.profileAvatarKey} nickname={p.nickname} size="sm" />
+                          <span>{p.nickname}</span>
+                        </span>
+                        <span>{percent}%</span>
+                      </div>
+                    )
                   );
                 })}
               </div>
@@ -4011,7 +6248,14 @@ function App() {
                   ) : (
                     chatMessages.map((msg) => (
                       <div className="chatMsg" key={msg.id}>
-                        <b>{msg.nickname}</b>: {msg.text}
+                        {canOpenUserProfile(msg.userId) ? (
+                          <button type="button" className="chatProfileBtn" onClick={() => handleOpenUserProfile(msg.userId, msg)}>
+                            <b>{msg.nickname}</b>
+                          </button>
+                        ) : (
+                          <b>{msg.nickname}</b>
+                        )}
+                        : {msg.text}
                       </div>
                     ))
                   )}
@@ -4088,7 +6332,9 @@ function App() {
         )}
         {shouldShowPuzzleBoard && isSingleSoloMode && (
           <div className="singleBottomBar">
-            <div className="singleTimer">TIMER: {formattedTime}</div>
+            <div className="singleTimer">
+              {isModePlacementTest ? L("남은 시간", "Time Left") : "TIMER"}: {isModePlacementTest ? placementTimerText : formattedTime}
+            </div>
             <div className="singleTools" data-tutorial="single-tools">
               <button className="toolBtn toolUndo" onClick={undo} disabled={!canUndo || !canInteractBoard}>
                 UNDO
@@ -4104,6 +6350,95 @@ function App() {
         )}
 
         {status && !isModeAuth && <div className="status">{status}</div>}
+
+        {pvpRatingFx && (
+          <div className={`rankedFxOverlay ${pvpFxTierClass}`} onClick={dismissPvpRatingFx}>
+            <motion.div
+              className={`rankedFxCard ${pvpFxTierClass} ${pvpRatingFx.result === "loss" ? "loss" : "win"} ${
+                pvpRatingFx.done ? "done" : ""
+              }`}
+              initial={{ opacity: 0, scale: 0.86, y: 24 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              transition={{ type: "spring", stiffness: 230, damping: 24, mass: 0.94 }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="rankedFxEyebrow">{pvpRatingFx.isTest ? L("연출 테스트", "FX Test") : "RANKED RESULT"}</div>
+              <div className={`rankedFxOutcome ${pvpRatingFx.result === "loss" ? "loss" : "win"}`}>{pvpFxOutcomeLabel}</div>
+              <div className="rankedFxSub">{pvpFxOutcomeSub}</div>
+
+              <div className={`rankedFxTierStage ${pvpRatingFx.tierShift}`}>
+                <span className="rankedFxBurst one" />
+                <span className="rankedFxBurst two" />
+                <span className="rankedFxHalo" />
+                {pvpRatingFx.tierShift === "promoted" && (
+                  <div className="rankedFxPromotionFx" aria-hidden="true">
+                    {Array.from({ length: 10 }).map((_, i) => (
+                      <span
+                        key={`promo-${i}`}
+                        style={{
+                          "--pa": `${i * 36}deg`,
+                          "--pd": `${(i % 5) * 0.06}s`,
+                        }}
+                      />
+                    ))}
+                  </div>
+                )}
+                {pvpRatingFx.tierShift === "demoted" && (
+                  <div className="rankedFxDemotionFx" aria-hidden="true">
+                    {Array.from({ length: 9 }).map((_, i) => (
+                      <span
+                        key={`demo-${i}`}
+                        style={{
+                          "--dx": `${(i - 4) * 18}px`,
+                          "--dd": `${i * 0.04}s`,
+                        }}
+                      />
+                    ))}
+                  </div>
+                )}
+                <img src={TIER_IMAGE_MAP[pvpFxTierNow?.key] || TIER_IMAGE_MAP.bronze} alt={pvpFxTierLabel || "Tier"} />
+                {pvpFxShiftLabel && <div className={`rankedFxShiftTag ${pvpRatingFx.tierShift}`}>{pvpFxShiftLabel}</div>}
+              </div>
+
+              <div className="rankedFxTierName">{pvpFxTierLabel}</div>
+              {pvpFxRouteChanged && (
+                <div className="rankedFxTierRoute">
+                  <span>{pvpFxFromTierLabel}</span>
+                  <span className="arrow">→</span>
+                  <span>{pvpFxToTierLabel}</span>
+                </div>
+              )}
+
+              <div className="rankedFxScoreRow">
+                <div className="rankedFxScoreNow">R {pvpRatingFx.ratingNow}</div>
+                <div className={`rankedFxScoreDelta ${pvpRatingFx.delta >= 0 ? "plus" : "minus"}`}>{pvpFxDeltaText}</div>
+              </div>
+
+              <div className="rankedFxTrackBlock">
+                <div className="rankedFxTrackRail">
+                  <div className="rankedFxTrackFill" style={{ width: `${pvpFxGaugePercent}%` }} />
+                  <div className="rankedFxTrackGlow" style={{ left: `${pvpFxGaugePercent}%` }} />
+                </div>
+                <div className="rankedFxTrackLabels">
+                  <span>{pvpFxTierLabel}</span>
+                  <span>{pvpFxNextTierLabel}</span>
+                </div>
+              </div>
+
+              <div className="rankedFxNumbers">
+                <span>{pvpRatingFx.from}</span>
+                <span className="arrow">→</span>
+                <span>{pvpRatingFx.to}</span>
+              </div>
+
+              <div className="rankedFxActions">
+                <button type="button" className="singleHomeBtn" onClick={dismissPvpRatingFx}>
+                  {L("닫기", "Close")}
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
 
         {shouldShowPuzzleBoard && isCoarsePointer && (
           <div className="mobilePaintToggle" role="group" aria-label={L("모바일 그리기 모드", "Mobile Paint Mode")}>
@@ -4147,7 +6482,15 @@ function App() {
                     {raceResultRows.map((row) => (
                       <tr key={`result-${row.playerId}`} className={row.isMe ? "me" : ""}>
                         <td>{Number.isInteger(row.rank) ? row.rank : "-"}</td>
-                        <td>{row.nickname}</td>
+                        <td>
+                          {canOpenUserProfile(row.userId) ? (
+                            <button type="button" className="tableLinkBtn" onClick={() => handleOpenUserProfile(row.userId, row)}>
+                              {row.nickname}
+                            </button>
+                          ) : (
+                            row.nickname
+                          )}
+                        </td>
                         <td>{formatRaceElapsedSec(row.elapsedSec)}</td>
                         <td>{formatRaceStatusLabel(row.status)}</td>
                       </tr>
@@ -4275,7 +6618,9 @@ function App() {
               <h2>{L("로그인 필요", "Login Required")}</h2>
               <p>{needLoginReturnMode === "pvp"
                 ? L("PVP 매칭은 로그인 후 이용 가능합니다.", "PVP matchmaking requires login.")
-                : L("멀티플레이는 로그인 후 이용 가능합니다.", "Multiplayer requires login.")}</p>
+                : needLoginReturnMode === "placement_test"
+                  ? L("배치고사는 로그인 후 진행할 수 있습니다.", "Placement is available after login.")
+                  : L("멀티플레이는 로그인 후 이용 가능합니다.", "Multiplayer requires login.")}</p>
               <div className="modalActions">
                 <button onClick={() => setShowNeedLoginPopup(false)}>{L("취소", "Cancel")}</button>
                 <button
@@ -4285,6 +6630,31 @@ function App() {
                   }}
                 >
                   {L("로그인하러 가기", "Go to Login")}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {showPlacementRequiredPopup && (
+          <div className="modalBackdrop" onClick={() => setShowPlacementRequiredPopup(false)}>
+            <div className="modalCard" onClick={(e) => e.stopPropagation()}>
+              <h2>{L("배치고사 필요", "Placement Required")}</h2>
+              <p>
+                {L(
+                  "PvP 시작 전 배치고사를 완료해야 합니다. 배치고사 결과로 초기 티어와 시작 레이팅이 부여됩니다.",
+                  "You must complete placement before entering PvP. Your initial tier and starting rating are assigned from the placement result."
+                )}
+              </p>
+              <div className="modalActions">
+                <button onClick={() => setShowPlacementRequiredPopup(false)}>{L("취소", "Cancel")}</button>
+                <button
+                  onClick={() => {
+                    setShowPlacementRequiredPopup(false);
+                    goPlacementTestMode();
+                  }}
+                >
+                  {L("배치고사 하러 가기", "Go to Placement")}
                 </button>
               </div>
             </div>
@@ -4380,6 +6750,204 @@ function App() {
                   {settingsSaving ? L("저장 중...", "Saving...") : L("저장", "Save")}
                 </button>
               </div>
+            </div>
+          </div>
+        )}
+
+        {showProfileModal && (
+          <div className="modalBackdrop" onClick={closeProfileModal}>
+            <div className="modalCard profileModal" onClick={(e) => e.stopPropagation()}>
+              {profileModalLoading ? (
+                <div className="profileLoadingState">{L("프로필 불러오는 중...", "Loading profile...")}</div>
+              ) : (
+                <>
+                  <div className="profileHero">
+                    {profileModalMode === "self" ? (
+                      <button
+                        type="button"
+                        className={`profileHeroAvatarButton ${profilePickerOpen ? "open" : ""}`}
+                        onClick={() => setProfilePickerOpen((prev) => !prev)}
+                      >
+                        <ProfileAvatar
+                          avatarKey={profileModalAvatarKey}
+                          nickname={profileModalData?.nickname}
+                          size="xl"
+                        />
+                        <span className="profileHeroAvatarChevron">
+                          <ChevronDown size={18} />
+                        </span>
+                      </button>
+                    ) : (
+                      <ProfileAvatar
+                        avatarKey={profileModalAvatarKey}
+                        nickname={profileModalData?.nickname}
+                        size="xl"
+                      />
+                    )}
+                    <div className="profileHeroMeta">
+                      <div className="profileEyebrow">
+                        {profileModalMode === "self" ? L("내 프로필", "My Profile") : L("플레이어 프로필", "Player Profile")}
+                      </div>
+                      <h2>{profileModalData?.nickname || L("알 수 없는 플레이어", "Unknown Player")}</h2>
+                      {profileModalTier && (
+                        <div className="profileTierLine">
+                          <img
+                            className="profileTierBadge"
+                            src={TIER_IMAGE_MAP[profileModalTier.key] || TIER_IMAGE_MAP.bronze}
+                            alt={profileModalTierLabel}
+                          />
+                          <span>{profileModalTierLabel}</span>
+                          <span>R {Number(profileModalData?.rating || 0)}</span>
+                          {profileModalRankText && <span>{profileModalRankText}</span>}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {profileModalError && <div className="modalError">{profileModalError}</div>}
+
+                  {profileModalData && (
+                    <>
+                      <div className="profileStatsGrid">
+                        <div className="profileStatCard">
+                          <span>{L("판수", "Games")}</span>
+                          <strong>{Number(profileModalData.rating_games || 0)}</strong>
+                        </div>
+                        <div className="profileStatCard">
+                          <span>{L("승", "Wins")}</span>
+                          <strong>{Number(profileModalData.rating_wins || 0)}</strong>
+                        </div>
+                        <div className="profileStatCard">
+                          <span>{L("패", "Losses")}</span>
+                          <strong>{Number(profileModalData.rating_losses || 0)}</strong>
+                        </div>
+                        <div className="profileStatCard">
+                          <span>{L("승률", "Win Rate")}</span>
+                          <strong>{Math.round(Number(profileModalData.winRate || 0))}%</strong>
+                        </div>
+                        <div className="profileStatCard">
+                          <span>{L("최고 연승", "Best Streak")}</span>
+                          <strong>{Number(profileModalData.win_streak_best || 0)}</strong>
+                        </div>
+                        <div className="profileStatCard">
+                          <span>{L("현재 연승", "Current Streak")}</span>
+                          <strong>{Number(profileModalData.win_streak_current || 0)}</strong>
+                        </div>
+                      </div>
+
+                      {profileModalMode === "self" ? (
+                        <>
+                          {profilePickerOpen && (
+                            <div className="profilePickerPanel">
+                              <div className="profileSection">
+                                <div className="profileTabRow">
+                                  <button
+                                    type="button"
+                                    className={`profileTabBtn ${profileAvatarTab === "default" ? "active" : ""}`}
+                                    onClick={() => setProfileAvatarTab("default")}
+                                  >
+                                    {L("기본 프로필", "Default Profiles")}
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className={`profileTabBtn ${profileAvatarTab === "special" ? "active" : ""}`}
+                                    onClick={() => setProfileAvatarTab("special")}
+                                  >
+                                    {L("특별 프로필", "Special Profiles")}
+                                  </button>
+                                </div>
+                              </div>
+
+                              {profileAvatarTab === "default" ? (
+                                <div className="profileSection">
+                                  <div className="profileAvatarGrid profileAvatarGridScrollable profileAvatarGridDefaultPicker">
+                                    {DEFAULT_PROFILE_AVATAR_OPTIONS.map((option) => {
+                                      const selected = normalizeProfileAvatarKey(profileDraftAvatarKey) === option.key;
+                                      const label = lang === "ko" ? option.labelKo : option.labelEn;
+                                      return (
+                                        <button
+                                          key={option.key}
+                                          type="button"
+                                          title={label}
+                                          aria-label={label}
+                                          className={`profileAvatarOption compact ${selected ? "selected" : ""}`}
+                                          onClick={() => setProfileDraftAvatarKey(option.key)}
+                                        >
+                                          <ProfileAvatar avatarKey={option.key} nickname={profileModalData.nickname} size="picker" />
+                                        </button>
+                                      );
+                                    })}
+                                  </div>
+                                </div>
+                              ) : (
+                                <div className="profileSection">
+                                  <div className="profileAvatarGrid profileAvatarGridScrollable hall">
+                                    {SPECIAL_PROFILE_AVATAR_OPTIONS.map((option) => {
+                                      const unlocked = profileUnlockedSpecialKeys.has(option.key);
+                                      const selected = normalizeProfileAvatarKey(profileDraftAvatarKey) === option.key;
+                                      const label = lang === "ko" ? option.labelKo : option.labelEn;
+                                      const unlockHint = lang === "ko" ? option.unlockHintKo : option.unlockHintEn;
+                                      return (
+                                        <button
+                                          key={option.key}
+                                          type="button"
+                                          title={unlockHint}
+                                          aria-label={label}
+                                          data-tooltip={unlockHint}
+                                          className={`profileAvatarOption hall compact hasTooltip ${selected ? "selected" : ""} ${unlocked ? "" : "locked"}`}
+                                          onClick={() => {
+                                            if (unlocked) setProfileDraftAvatarKey(option.key);
+                                          }}
+                                        >
+                                          <ProfileAvatar avatarKey={option.key} nickname={profileModalData.nickname} size="picker" />
+                                          {!unlocked && (
+                                            <span className="profileAvatarLockBadge prominent">
+                                              <Lock size={12} />
+                                            </span>
+                                          )}
+                                        </button>
+                                      );
+                                    })}
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </>
+                      ) : profileModalHallRewards.length > 0 ? (
+                        <div className="profileSection">
+                          <div className="profileSectionHead">
+                            <div className="profileSectionTitle">{L("명예의 전당 기록", "Hall of Fame Records")}</div>
+                          </div>
+                          <div className="profileRewardList">
+                            {profileModalHallRewards.map((reward) => {
+                              const option = HALL_PROFILE_AVATAR_OPTIONS.find((entry) => entry.key === reward.key);
+                              return (
+                                <div key={`${reward.key}-${reward.finishedAtMs}`} className="profileRewardItem">
+                                  <ProfileAvatar avatarKey={reward.key} nickname={profileModalData.nickname} size="md" />
+                                  <div>
+                                    <strong>{lang === "ko" ? option?.labelKo || reward.key : option?.labelEn || reward.key}</strong>
+                                    <span>{formatRaceElapsedSec(Math.max(0, Number(reward.elapsedSec || 0)))}</span>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      ) : null}
+                    </>
+                  )}
+
+                  <div className="modalActions">
+                    <button onClick={closeProfileModal}>{profileModalMode === "self" ? L("닫기", "Close") : L("확인", "Close")}</button>
+                    {profileModalMode === "self" && profileModalData && (
+                      <button onClick={saveProfileAvatarSelection} disabled={profileModalSaving || !profileAvatarDirty}>
+                        {profileModalSaving ? L("저장 중...", "Saving...") : L("프로필 저장", "Save Profile")}
+                      </button>
+                    )}
+                  </div>
+                </>
+              )}
             </div>
           </div>
         )}
@@ -4532,7 +7100,7 @@ function App() {
                       <div className="countdownOverlay">{countdownLeft ?? 0}</div>
                     )}
                     {isRaceLobby && <div className="countdownOverlay wait">{L("READY 대기", "Waiting for READY")}</div>}
-                    {isRaceFinished && <div className="countdownOverlay result">{raceResultText}</div>}
+                    {isRaceFinished && !isModePvp && <div className="countdownOverlay result">{raceResultText}</div>}
                   </div>
                 </div>
               </div>
