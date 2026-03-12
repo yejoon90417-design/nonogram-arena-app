@@ -58,7 +58,6 @@ const TIER_IMAGE_MAP = {
   gold: "/tiers/gold.png",
   diamond: "/tiers/diamond.png",
   master: "/tiers/master.png",
-  challenger: "/tiers/master.png",
 };
 const TIER_GUIDE_IMAGE_MAP = {
   ko: "/tier-guide/ko.png",
@@ -240,7 +239,6 @@ const TIER_ORDER = {
   gold: 2,
   diamond: 3,
   master: 4,
-  challenger: 5,
 };
 
 function normalizePath(pathname) {
@@ -284,11 +282,7 @@ function normalizeUiStyleVariant(raw) {
 
 function getTierInfoByRating(ratingRaw, rankRaw = null) {
   const rating = Math.max(0, Math.round(Number(ratingRaw || 0)));
-  const rank = Number(rankRaw);
   if (rating >= 2500) {
-    if (Number.isInteger(rank) && rank > 0 && rank <= 5) {
-      return { key: "challenger", labelKo: "챌린저", labelEn: "Challenger" };
-    }
     return { key: "master", labelKo: "마스터", labelEn: "Master" };
   }
   if (rating >= 2000) return { key: "diamond", labelKo: "다이아", labelEn: "Diamond" };
@@ -299,7 +293,7 @@ function getTierInfoByRating(ratingRaw, rankRaw = null) {
 
 function isGoldOrHigherTierKey(raw) {
   const tierKey = String(raw || "").trim().toLowerCase();
-  return tierKey === "gold" || tierKey === "diamond" || tierKey === "master" || tierKey === "challenger";
+  return tierKey === "gold" || tierKey === "diamond" || tierKey === "master";
 }
 
 function getAllowedPvpSizeKeys(players, viewerUser) {
@@ -471,17 +465,10 @@ function getTierBracketInfo(ratingRaw, rankRaw = null) {
     min = 2500;
     max = 3000;
     nextTier = null;
-  } else if (tier.key === "challenger") {
-    min = 2500;
-    max = 3000;
-    nextTier = null;
   }
 
   const span = Math.max(1, max - min);
-  const progress =
-    tier.key === "challenger"
-      ? 100
-      : Math.max(0, Math.min(100, ((Math.min(rating, max) - min) / span) * 100));
+  const progress = Math.max(0, Math.min(100, ((Math.min(rating, max) - min) / span) * 100));
 
   return {
     tier,
@@ -636,7 +623,7 @@ function getMatchSimOutcomeTarget(fromRatingRaw, mode) {
   const from = Math.max(0, Math.round(Number(fromRatingRaw || 0)));
   const bracket = getTierBracketInfo(from);
   if (mode === "promotion") {
-    if (bracket.tier.key === "master" || bracket.tier.key === "challenger") {
+    if (bracket.tier.key === "master") {
       return { to: from + 36, result: "win" };
     }
     return { to: Math.max(from + 18, bracket.max + 18), result: "win" };
