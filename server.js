@@ -31,6 +31,7 @@ const PVP_QUEUE_STALE_MS = 1000 * 60 * 2;
 const PVP_MATCH_TICKET_TTL_MS = 1000 * 60 * 5;
 const PVP_ACCEPT_MS = 12000;
 const PVP_BAN_MS = 10000;
+const PVP_SHOWDOWN_MS = 5200;
 const PVP_REVEAL_MS = 4200;
 const PVP_MATCH_DELAY_MIN_MS = Math.max(1000, Number(process.env.PVP_MATCH_DELAY_MIN_MS || 1000));
 const PVP_MATCH_DELAY_MAX_MS = Math.max(
@@ -1898,6 +1899,7 @@ function buildPvpMatchPublicState(match, viewerUserId) {
     createdAt: match.createdAt,
     updatedAt: match.updatedAt,
     acceptDeadlineAt: match.acceptDeadlineAt || null,
+    banStartAt: match.banStartAt || null,
     banDeadlineAt: match.banDeadlineAt || null,
     revealStartAt: match.revealStartAt || null,
     revealEndAt: match.revealEndAt || null,
@@ -2132,7 +2134,8 @@ async function syncPvpMatchState(match) {
     const allAccepted = match.players.every((p) => p.accepted === true);
     if (allAccepted) {
       match.state = "ban";
-      match.banDeadlineAt = now + PVP_BAN_MS;
+      match.banStartAt = now + PVP_SHOWDOWN_MS;
+      match.banDeadlineAt = match.banStartAt + PVP_BAN_MS;
       match.updatedAt = now;
     } else if (now >= match.acceptDeadlineAt) {
       cancelPvpMatch(match, "accept_timeout");
@@ -2140,6 +2143,8 @@ async function syncPvpMatchState(match) {
   }
 
   if (match.state === "ban") {
+    const banStartAt = Number(match.banStartAt || 0);
+    if (banStartAt && now < banStartAt) return;
     runBotActionsForMatch(match, now);
     const allSubmitted = match.players.every((p) => p.banSubmitted === true);
     if (allSubmitted || now >= match.banDeadlineAt) {
@@ -3772,6 +3777,7 @@ function createPvpMatch(ticketA, ticketB) {
     createdAt: now,
     updatedAt: now,
     acceptDeadlineAt: now + PVP_ACCEPT_MS,
+    banStartAt: null,
     banDeadlineAt: null,
     revealStartAt: null,
     revealEndAt: null,

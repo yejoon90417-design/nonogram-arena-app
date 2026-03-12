@@ -2167,8 +2167,10 @@ function App() {
   const pvpBanLeftMs = useMemo(() => {
     if (pvpMatchState !== "ban") return 0;
     const deadlineAt = Number(pvpMatch?.banDeadlineAt || 0);
+    const banStartAt = Number(pvpMatch?.banStartAt || 0);
     if (!deadlineAt) return 0;
-    return Math.max(0, deadlineAt - nowMs);
+    const effectiveNow = banStartAt > 0 ? Math.max(nowMs, banStartAt) : nowMs;
+    return Math.max(0, deadlineAt - effectiveNow);
   }, [pvpMatchState, pvpMatch, nowMs]);
   const pvpAcceptPercent = pvpMatchState === "accept" ? Math.max(0, Math.min(100, (pvpAcceptLeftMs / 12000) * 100)) : 0;
   const pvpBanPercent = pvpMatchState === "ban" ? Math.max(0, Math.min(100, (pvpBanLeftMs / 10000) * 100)) : 0;
