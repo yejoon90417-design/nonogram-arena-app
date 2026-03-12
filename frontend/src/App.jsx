@@ -668,34 +668,34 @@ function evaluatePlacementResult(rawResults, elapsedSecRaw, currentStageProgress
   let minRating = 0;
   let maxRating = 999;
   if (solvedSequential >= 5) {
-    minRating = 2200;
+    minRating = 2210;
     maxRating = 2499;
   } else if (solvedSequential === 4) {
-    minRating = 2000;
-    maxRating = 2299;
+    minRating = 1760;
+    maxRating = 1995;
   } else if (solvedSequential === 3) {
-    minRating = 1500;
-    maxRating = 1999;
+    minRating = 1220;
+    maxRating = 1589;
   } else if (solvedSequential === 2) {
-    minRating = 1000;
-    maxRating = 1499;
+    minRating = 820;
+    maxRating = 1099;
   } else if (solvedSequential === 1) {
-    minRating = 500;
-    maxRating = 999;
+    minRating = 420;
+    maxRating = 959;
   } else {
     minRating = 0;
-    maxRating = 699;
+    maxRating = 519;
   }
 
   const timeScore = Math.max(0, Math.min(1, (PLACEMENT_TIME_LIMIT_SEC - elapsedSec) / PLACEMENT_TIME_LIMIT_SEC));
-  const performance = Math.max(0, Math.min(1, 0.7 + 0.3 * Math.sqrt(timeScore)));
+  const performance = Math.max(0, Math.min(1, 0.14 + 0.72 * Math.sqrt(timeScore)));
 
   const currentStage = results[solvedSequential];
   const hasPendingCurrent = currentStage && currentStage.status === "pending";
   const stageProgress = hasPendingCurrent ? currentStageProgress : 0;
   const stageBonusCap =
-    solvedSequential >= 3 ? 220 : solvedSequential === 2 ? 140 : solvedSequential === 1 ? 100 : 70;
-  const stageProgressBonus = Math.round(stageBonusCap * Math.pow(stageProgress, 0.9));
+    solvedSequential >= 4 ? 90 : solvedSequential === 3 ? 85 : solvedSequential === 2 ? 70 : solvedSequential === 1 ? 44 : 28;
+  const stageProgressBonus = Math.round(stageBonusCap * Math.pow(stageProgress, 0.96));
 
   const rating = Math.round(
     Math.max(0, Math.min(2499, minRating + (maxRating - minRating) * performance + stageProgressBonus))
