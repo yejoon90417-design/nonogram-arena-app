@@ -6876,6 +6876,26 @@ button:disabled {
   color: #ffffff;
 }
 
+.paintDragHandle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 34px;
+  min-height: 34px;
+  border-radius: 999px;
+  border: 1px solid #aebfd4;
+  background: linear-gradient(180deg, #ffffff 0%, #edf3fa 100%);
+  color: #20364f;
+  touch-action: none;
+  cursor: grab;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.paintDragHandle:active {
+  cursor: grabbing;
+}
+
 .paintZoomBtn,
 .paintScaleBtn,
 .paintFocusBtn {

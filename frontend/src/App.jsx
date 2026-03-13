@@ -1,7 +1,7 @@
 ﻿import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import EmojiPicker from "emoji-picker-react";
 import { motion } from "framer-motion";
-import { ChevronDown, Eraser, Home, Lock, LogIn, Maximize2, Minimize2, Minus, Moon, Plus, Redo2, Settings, Sun, Trophy, Undo2, User, UserPlus, Volume2, VolumeX } from "lucide-react";
+import { ChevronDown, Eraser, GripHorizontal, Home, Lock, LogIn, Maximize2, Minimize2, Minus, Moon, Plus, Redo2, Settings, Sun, Trophy, Undo2, User, UserPlus, Volume2, VolumeX } from "lucide-react";
 import "./App.css";
 
 const DEFAULT_API_BASE = "https://nonogram-api.onrender.com";
@@ -979,6 +979,7 @@ function App() {
   const [mobileBoardScale, setMobileBoardScale] = useState(1);
   const [mobileBoardFocus, setMobileBoardFocus] = useState(false);
   const [mobileControlsCollapsed, setMobileControlsCollapsed] = useState(false);
+  const [mobileToolbarPosition, setMobileToolbarPosition] = useState(null);
   const [showMultiResultModal, setShowMultiResultModal] = useState(false);
   const [nowMs, setNowMs] = useState(Date.now());
   const [soundVolume, setSoundVolume] = useState(() => readInitialSoundVolume());
@@ -1067,6 +1068,8 @@ function App() {
   const pvpShowdownSeenRef = useRef("");
   const votePromptedTokenRef = useRef("");
   const mobilePinchRef = useRef(null);
+  const mobileToolbarRef = useRef(null);
+  const mobileToolbarDragRef = useRef(null);
   const raceFinishedSentRef = useRef(false);
   const raceResultShownRef = useRef(false);
   const raceProgressLastSentRef = useRef(0);
@@ -1962,7 +1965,9 @@ function App() {
     setMobileBoardFocus(false);
     setMobileBoardScale(1);
     setMobileControlsCollapsed(false);
+    setMobileToolbarPosition(null);
     mobilePinchRef.current = null;
+    mobileToolbarDragRef.current = null;
   }, [isMobileBoardUi]);
 
   useEffect(() => {
@@ -1983,6 +1988,98 @@ function App() {
   const nudgeMobileBoardScale = (delta) => {
     updateMobileBoardScale(mobileBoardScale + delta);
   };
+
+  const clampMobileToolbarPosition = (x, y, width = 0, height = 0) => {
+    if (typeof window === "undefined") return { x, y };
+    const margin = 8;
+    const maxX = Math.max(margin, window.innerWidth - width - margin);
+    const maxY = Math.max(margin, window.innerHeight - height - margin);
+    return {
+      x: Math.max(margin, Math.min(maxX, Math.round(x))),
+      y: Math.max(margin, Math.min(maxY, Math.round(y))),
+    };
+  };
+
+  const stopMobileToolbarDrag = () => {
+    mobileToolbarDragRef.current = null;
+    window.removeEventListener("pointermove", handleMobileToolbarPointerMove);
+    window.removeEventListener("pointerup", stopMobileToolbarDrag);
+    window.removeEventListener("pointercancel", stopMobileToolbarDrag);
+  };
+
+  function handleMobileToolbarPointerMove(event) {
+    const drag = mobileToolbarDragRef.current;
+    if (!drag) return;
+    event.preventDefault();
+    const next = clampMobileToolbarPosition(
+      drag.originX + (event.clientX - drag.startX),
+      drag.originY + (event.clientY - drag.startY),
+      drag.width,
+      drag.height
+    );
+    setMobileToolbarPosition(next);
+  }
+
+  const startMobileToolbarDrag = (event) => {
+    if (!isMobileBoardUi) return;
+    const toolbarEl = mobileToolbarRef.current;
+    if (!toolbarEl) return;
+    event.preventDefault();
+    event.stopPropagation();
+    const rect = toolbarEl.getBoundingClientRect();
+    mobileToolbarDragRef.current = {
+      startX: event.clientX,
+      startY: event.clientY,
+      originX: rect.left,
+      originY: rect.top,
+      width: rect.width,
+      height: rect.height,
+    };
+    window.addEventListener("pointermove", handleMobileToolbarPointerMove, { passive: false });
+    window.addEventListener("pointerup", stopMobileToolbarDrag);
+    window.addEventListener("pointercancel", stopMobileToolbarDrag);
+  };
+
+  useEffect(() => {
+    return () => stopMobileToolbarDrag();
+  }, []);
+
+  useEffect(() => {
+    if (!isMobileBoardUi || typeof window === "undefined") return undefined;
+    const syncToolbarPosition = () => {
+      const toolbarEl = mobileToolbarRef.current;
+      if (!toolbarEl) return;
+      const rect = toolbarEl.getBoundingClientRect();
+      setMobileToolbarPosition((prev) => {
+        if (prev && Number.isFinite(prev.x) && Number.isFinite(prev.y)) {
+          const next = clampMobileToolbarPosition(prev.x, prev.y, rect.width, rect.height);
+          if (next.x === prev.x && next.y === prev.y) return prev;
+          return next;
+        }
+        const defaultPos = clampMobileToolbarPosition(
+          (window.innerWidth - rect.width) / 2,
+          mobileBoardFocus ? 10 : 82,
+          rect.width,
+          rect.height
+        );
+        return defaultPos;
+      });
+    };
+    const raf = window.requestAnimationFrame(syncToolbarPosition);
+    window.addEventListener("resize", syncToolbarPosition);
+    return () => {
+      window.cancelAnimationFrame(raf);
+      window.removeEventListener("resize", syncToolbarPosition);
+    };
+  }, [isMobileBoardUi, mobileBoardFocus, mobileControlsCollapsed]);
+
+  const mobileToolbarInlineStyle = mobileToolbarPosition
+    ? {
+        left: `${mobileToolbarPosition.x}px`,
+        top: `${mobileToolbarPosition.y}px`,
+        transform: "none",
+      }
+    : undefined;
 
   const finishActiveStroke = () => {
     if (dragRef.current && strokeChangedRef.current && strokeBaseRef.current) {
@@ -6704,7 +6801,9 @@ function App() {
           mobileControlsCollapsed ? (
             <button
               type="button"
+              ref={mobileToolbarRef}
               className={`mobileControlsReveal ${mobileBoardFocus ? "focusMode" : ""}`}
+              style={mobileToolbarInlineStyle}
               onClick={() => setMobileControlsCollapsed(false)}
               aria-label={L("모바일 컨트롤 열기", "Show mobile controls")}
             >
@@ -6713,10 +6812,20 @@ function App() {
             </button>
           ) : (
             <div
+              ref={mobileToolbarRef}
               className={`mobilePaintToggle ${mobileBoardFocus ? "focusMode" : ""}`}
+              style={mobileToolbarInlineStyle}
               role="group"
               aria-label={L("모바일 퍼즐 컨트롤", "Mobile puzzle controls")}
             >
+              <button
+                type="button"
+                className="paintDragHandle"
+                onPointerDown={startMobileToolbarDrag}
+                aria-label={L("도구 위치 이동", "Move toolbar")}
+              >
+                <GripHorizontal size={16} />
+              </button>
               <button
                 type="button"
                 className={`paintModeBtn ${mobilePaintMode === "fill" ? "active" : ""}`}
