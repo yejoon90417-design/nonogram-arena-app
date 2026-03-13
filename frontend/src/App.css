@@ -5687,7 +5687,7 @@
 .mobileBoardFocusTools {
   position: fixed;
   left: 50%;
-  bottom: calc(max(12px, env(safe-area-inset-bottom)) + 10px);
+  bottom: calc(max(12px, env(safe-area-inset-bottom)) + 72px);
   transform: translateX(-50%);
   z-index: 121;
   padding: 0.4rem 0.5rem;
