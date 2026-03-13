@@ -1029,6 +1029,7 @@ function App() {
   const [matchSimLogs, setMatchSimLogs] = useState([]);
   const [matchSimFound, setMatchSimFound] = useState(null);
   const [matchFlowTest, setMatchFlowTest] = useState(null);
+  const mobileBoardViewportRef = useRef(null);
   const boardRef = useRef(null);
   const canvasRef = useRef(null);
   const chatBodyRef = useRef(null);
@@ -1064,6 +1065,7 @@ function App() {
   const pvpAuthRefreshDoneRoomRef = useRef("");
   const pvpShowdownSeenRef = useRef("");
   const votePromptedTokenRef = useRef("");
+  const mobilePinchRef = useRef(null);
   const raceFinishedSentRef = useRef(false);
   const raceResultShownRef = useRef(false);
   const raceProgressLastSentRef = useRef(0);
@@ -1958,6 +1960,7 @@ function App() {
     if (isMobileBoardUi) return;
     setMobileBoardFocus(false);
     setMobileBoardScale(1);
+    mobilePinchRef.current = null;
   }, [isMobileBoardUi]);
 
   useEffect(() => {
@@ -1977,6 +1980,22 @@ function App() {
 
   const nudgeMobileBoardScale = (delta) => {
     updateMobileBoardScale(mobileBoardScale + delta);
+  };
+
+  const finishActiveStroke = () => {
+    if (dragRef.current && strokeChangedRef.current && strokeBaseRef.current) {
+      pushUndo(strokeBaseRef.current);
+    }
+    dragRef.current = null;
+    lastPaintIndexRef.current = null;
+    strokeBaseRef.current = null;
+    strokeChangedRef.current = false;
+  };
+
+  const getTouchDistance = (touchA, touchB) => {
+    const dx = Number(touchA?.clientX || 0) - Number(touchB?.clientX || 0);
+    const dy = Number(touchA?.clientY || 0) - Number(touchB?.clientY || 0);
+    return Math.hypot(dx, dy);
   };
 
   useEffect(() => {
@@ -4355,6 +4374,35 @@ function App() {
     return row * puzzle.width + col;
   };
 
+  const onMobileBoardTouchStart = (event) => {
+    if (!isMobileBoardUi) return;
+    if (event.touches.length >= 2) {
+      event.preventDefault();
+      finishActiveStroke();
+      const distance = getTouchDistance(event.touches[0], event.touches[1]);
+      mobilePinchRef.current = {
+        startDistance: distance,
+        startScale: mobileBoardScale,
+      };
+    }
+  };
+
+  const onMobileBoardTouchMove = (event) => {
+    const pinch = mobilePinchRef.current;
+    if (!isMobileBoardUi || !pinch || event.touches.length < 2) return;
+    event.preventDefault();
+    const distance = getTouchDistance(event.touches[0], event.touches[1]);
+    if (!distance || !pinch.startDistance) return;
+    const nextScale = pinch.startScale * (distance / pinch.startDistance);
+    updateMobileBoardScale(nextScale);
+  };
+
+  const onMobileBoardTouchEnd = () => {
+    const pinch = mobilePinchRef.current;
+    if (!pinch) return;
+    mobilePinchRef.current = null;
+  };
+
   useEffect(() => {
     if (!puzzle || !canvasRef.current) return;
 
@@ -4494,13 +4542,7 @@ function App() {
 
   useEffect(() => {
     const endDrag = () => {
-      if (dragRef.current && strokeChangedRef.current && strokeBaseRef.current) {
-        pushUndo(strokeBaseRef.current);
-      }
-      dragRef.current = null;
-      lastPaintIndexRef.current = null;
-      strokeBaseRef.current = null;
-      strokeChangedRef.current = false;
+      finishActiveStroke();
     };
     window.addEventListener("mouseup", endDrag);
     window.addEventListener("pointerup", endDrag);
@@ -6266,8 +6308,13 @@ function App() {
 
             <div className="raceBoardPane">
               <div
+                ref={isMobileBoardUi ? mobileBoardViewportRef : null}
                 className={`boardWrap ${isMobileBoardUi ? "mobileBoardEnabled" : ""} ${isMobileBoardUi && mobileBoardFocus ? "mobileBoardFocus" : ""}`}
                 onContextMenu={(e) => e.preventDefault()}
+                onTouchStart={isMobileBoardUi ? onMobileBoardTouchStart : undefined}
+                onTouchMove={isMobileBoardUi ? onMobileBoardTouchMove : undefined}
+                onTouchEnd={isMobileBoardUi ? onMobileBoardTouchEnd : undefined}
+                onTouchCancel={isMobileBoardUi ? onMobileBoardTouchEnd : undefined}
               >
                 <div
                   className={`mobileBoardScaleShell ${isMobileBoardUi ? "active" : ""}`}
@@ -7255,9 +7302,14 @@ function App() {
 
         {shouldShowPuzzleBoard && !isInRaceRoom && (
           <div
+            ref={isMobileBoardUi ? mobileBoardViewportRef : null}
             className={`boardWrap ${isMobileBoardUi ? "mobileBoardEnabled" : ""} ${isMobileBoardUi && mobileBoardFocus ? "mobileBoardFocus" : ""}`}
             onContextMenu={(e) => e.preventDefault()}
             data-tutorial={isSingleSoloMode ? "single-board" : undefined}
+            onTouchStart={isMobileBoardUi ? onMobileBoardTouchStart : undefined}
+            onTouchMove={isMobileBoardUi ? onMobileBoardTouchMove : undefined}
+            onTouchEnd={isMobileBoardUi ? onMobileBoardTouchEnd : undefined}
+            onTouchCancel={isMobileBoardUi ? onMobileBoardTouchEnd : undefined}
           >
             <div
               className={`mobileBoardScaleShell ${isMobileBoardUi ? "active" : ""}`}
