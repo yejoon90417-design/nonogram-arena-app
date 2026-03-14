@@ -4360,8 +4360,9 @@ function App() {
   const queueCellPaint = (index, value) => {
     const pending = pendingPaintRef.current;
     const current = pending.has(index) ? pending.get(index) : (cellValuesRef.current[index] ?? 0);
-    // Prevent filled-paint from overwriting X marks.
+    // Keep filled cells and X marks from overwriting each other during drag paint.
     if (value === 1 && current === 2) return;
+    if (value === 2 && current === 1) return;
     pendingPaintRef.current.set(index, value);
     if (!frameRef.current) {
       frameRef.current = requestAnimationFrame(flushQueuedPaint);
