@@ -174,8 +174,24 @@ const STREAK_SPECIAL_PROFILE_AVATAR_OPTIONS = [1, 2, 3].map((rank) => ({
   unlockHintEn: `Best win streak #${rank}`,
   imageSrc: `/profile/special/streak-${rank}.png`,
 }));
+const TIER_SPECIAL_PROFILE_AVATAR_OPTIONS = ["bronze", "silver", "gold", "diamond", "master"].map((tierKey) => {
+  const tier = getTierInfoByRating(
+    tierKey === "master" ? 2500 : tierKey === "diamond" ? 2000 : tierKey === "gold" ? 1500 : tierKey === "silver" ? 1000 : 0
+  );
+  return {
+    key: `special-tier-${tierKey}`,
+    tierKey,
+    group: "tier",
+    labelKo: `${tier.labelKo} 프로필`,
+    labelEn: `${tier.labelEn} Profile`,
+    unlockHintKo: `${tier.labelKo} 이상 티어 달성`,
+    unlockHintEn: `Reach ${tier.labelEn} tier or higher`,
+    imageSrc: `/profile/special/tier-${tierKey}.png`,
+  };
+});
 const SPECIAL_PROFILE_AVATAR_OPTIONS = [
   ...HALL_PROFILE_AVATAR_OPTIONS,
+  ...TIER_SPECIAL_PROFILE_AVATAR_OPTIONS,
   ...RATING_SPECIAL_PROFILE_AVATAR_OPTIONS,
   ...STREAK_SPECIAL_PROFILE_AVATAR_OPTIONS,
 ];
@@ -1211,6 +1227,27 @@ function App() {
       }));
   };
 
+  const buildTierRewardsFromSource = (target) => {
+    const placementDone = target?.placement_done === true || Number(target?.placement_rating || -1) >= 0;
+    if (!placementDone) return [];
+    const explicitTierKey = String(target?.placement_tier_key || "").trim().toLowerCase();
+    const tierKey =
+      Number.isFinite(Number(target?.rating))
+        ? getTierInfoByRating(target?.rating).key
+        : Object.prototype.hasOwnProperty.call(TIER_ORDER, explicitTierKey)
+          ? explicitTierKey
+          : "";
+    const maxTierOrder = TIER_ORDER[tierKey];
+    if (!Number.isInteger(maxTierOrder)) return [];
+    return Object.entries(TIER_ORDER)
+      .filter(([, order]) => order <= maxTierOrder)
+      .map(([rewardTierKey]) => ({
+        key: `special-tier-${rewardTierKey}`,
+        group: "tier",
+        tierKey: rewardTierKey,
+      }));
+  };
+
   const mergeSpecialRewards = (...groups) => {
     const unique = new Map();
     for (const reward of groups.flat().filter(Boolean)) {
@@ -1281,6 +1318,7 @@ function App() {
     });
     const specialRewards = mergeSpecialRewards(
       hallRewards,
+      buildTierRewardsFromSource(baseUser),
       buildRatingRewardsFromSnapshot(ratingSnapshot, { id: baseUser?.id, nickname: baseUser?.nickname }),
       buildStreakRewardsFromSnapshot(rewardSnapshot?.streakTop || [], { id: baseUser?.id, nickname: baseUser?.nickname })
     );
@@ -1329,6 +1367,7 @@ function App() {
     });
     const specialRewards = mergeSpecialRewards(
       hallRewards,
+      buildTierRewardsFromSource(source),
       buildRatingRewardsFromSnapshot(ratingSnapshot, { id: targetUserId, nickname: source?.nickname }),
       buildStreakRewardsFromSnapshot(rewardSnapshot?.streakTop || [], { id: targetUserId, nickname: source?.nickname })
     );

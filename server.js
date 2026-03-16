@@ -144,6 +144,11 @@ const LEGACY_SPECIAL_AVATAR_KEY_MAP = {
   "default-rank-3": "special-rating-3",
 };
 const SPECIAL_PROFILE_AVATAR_KEYS = [
+  "special-tier-bronze",
+  "special-tier-silver",
+  "special-tier-gold",
+  "special-tier-diamond",
+  "special-tier-master",
   "special-rating-1",
   "special-rating-2",
   "special-rating-3",
@@ -721,6 +726,27 @@ async function fetchUnlockedSpecialAvatarRewards(userId) {
   const numericUserId = Number(userId);
   if (!Number.isInteger(numericUserId) || numericUserId <= 0) return [];
   const rewards = [...(await fetchUnlockedHallAvatarRewards(numericUserId))];
+
+  const { rows: tierRows } = await pool.query(
+    `SELECT rating, placement_done, placement_version
+     FROM users
+     WHERE id = $1
+     LIMIT 1`,
+    [numericUserId]
+  );
+  if (tierRows.length) {
+    const user = tierRows[0];
+    const placementActive =
+      user.placement_done === true && Number(user.placement_version || 0) === CURRENT_PLACEMENT_VERSION;
+    if (placementActive) {
+      const maxTierIndex = getTierIndexByRating(user.rating);
+      for (let i = 0; i <= maxTierIndex; i += 1) {
+        const tierKey = String(TIER_BANDS[i]?.key || "").trim();
+        if (!tierKey) continue;
+        rewards.push({ key: `special-tier-${tierKey}`, tierKey, category: "tier" });
+      }
+    }
+  }
 
   const { rows: ratingRows } = await pool.query(
     `SELECT ranked.rank_pos
