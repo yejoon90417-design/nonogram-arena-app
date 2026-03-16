@@ -1,9 +1,6 @@
 const crypto = require("crypto");
 const cors = require("cors");
-const dns = require("dns");
 const express = require("express");
-const net = require("net");
-const nodemailer = require("nodemailer");
 const { Pool } = require("pg");
 
 const PORT = Number(process.env.PORT || 3000);
@@ -121,20 +118,6 @@ const PVP_FAKE_QUEUE_MAX = Math.max(PVP_FAKE_QUEUE_MIN, Number(process.env.PVP_F
 const PVP_FAKE_QUEUE_UPDATE_MS = Math.max(1200, Number(process.env.PVP_FAKE_QUEUE_UPDATE_MS || 3200));
 const PLACEMENT_TIME_LIMIT_SEC = 300;
 const PLACEMENT_STAGE_COUNT = 5;
-const EMAIL_VERIFICATION_CODE_TTL_MS = Math.max(
-  1000 * 60 * 5,
-  Number(process.env.EMAIL_VERIFICATION_CODE_TTL_MS || 1000 * 60 * 15)
-);
-const PASSWORD_RESET_CODE_TTL_MS = Math.max(
-  1000 * 60 * 5,
-  Number(process.env.PASSWORD_RESET_CODE_TTL_MS || 1000 * 60 * 15)
-);
-const SMTP_HOST = String(process.env.SMTP_HOST || "").trim();
-const SMTP_PORT = Number(process.env.SMTP_PORT || 587);
-const SMTP_SECURE = String(process.env.SMTP_SECURE || "").trim().toLowerCase() === "true" || SMTP_PORT === 465;
-const SMTP_USER = String(process.env.SMTP_USER || "").trim();
-const SMTP_PASS = String(process.env.SMTP_PASS || "").trim();
-const SMTP_FROM = String(process.env.SMTP_FROM || "").trim();
 const PVP_SIZE_OPTIONS = [
   [5, 5],
   [10, 10],
@@ -653,60 +636,6 @@ function verifyUserPassword(password, stored) {
   const actual = crypto.scryptSync(password, salt, expected.length);
   if (actual.length !== expected.length) return false;
   return crypto.timingSafeEqual(actual, expected);
-}
-
-function createSixDigitCode() {
-  return String(crypto.randomInt(0, 1000000)).padStart(6, "0");
-}
-
-function isEmailTransportConfigured() {
-  return Boolean(SMTP_HOST && SMTP_PORT && SMTP_FROM);
-}
-
-let emailTransportPromise = null;
-async function getEmailTransport() {
-  if (emailTransportPromise) return emailTransportPromise;
-  if (!isEmailTransportConfigured()) return null;
-  emailTransportPromise = (async () => {
-    let transportHost = SMTP_HOST;
-    let tlsOptions = undefined;
-    if (SMTP_HOST && !net.isIP(SMTP_HOST)) {
-      try {
-        const ipv4Addresses = await dns.promises.resolve4(SMTP_HOST);
-        if (Array.isArray(ipv4Addresses) && ipv4Addresses.length > 0) {
-          transportHost = String(ipv4Addresses[0] || SMTP_HOST).trim();
-          tlsOptions = { servername: SMTP_HOST };
-        }
-      } catch {
-        transportHost = SMTP_HOST;
-      }
-    }
-    return nodemailer.createTransport({
-      host: transportHost,
-      port: SMTP_PORT,
-      secure: SMTP_SECURE,
-      auth: SMTP_USER ? { user: SMTP_USER, pass: SMTP_PASS } : undefined,
-      connectionTimeout: 15000,
-      greetingTimeout: 15000,
-      socketTimeout: 20000,
-      tls: tlsOptions,
-    });
-  })();
-  return emailTransportPromise;
-}
-
-async function sendTransactionalEmail({ to, subject, text, html }) {
-  const transport = await getEmailTransport();
-  if (!transport) {
-    throw new Error("Email service unavailable");
-  }
-  await transport.sendMail({
-    from: SMTP_FROM,
-    to,
-    subject,
-    text,
-    html,
-  });
 }
 
 async function createSessionForUser(userId) {
@@ -1328,8 +1257,6 @@ function buildClientUser(user) {
     ui_theme: user.ui_theme,
     ui_sound_on: user.ui_sound_on,
     ui_sound_volume: user.ui_sound_volume,
-    email: typeof user.email === "string" ? user.email : "",
-    email_verified: user.email_verified === true,
     placement_done: placementActive,
     placement_rating: placementActive ? Number(user.placement_rating || 0) : null,
     placement_tier_key: placementActive ? String(user.placement_tier_key || "") : "",
@@ -1338,241 +1265,6 @@ function buildClientUser(user) {
     placement_solved_sequential: placementActive ? Number(user.placement_solved_sequential || 0) : 0,
     placement_elapsed_sec: placementActive ? Number(user.placement_elapsed_sec || 0) : 0,
   };
-}
-
-async function sendEmailVerificationCode(email, code) {
-  const subject = "[Nonogram Arena] Email verification code";
-  const text = [
-    "Verify your email for Nonogram Arena.",
-    "",
-    `Verification code: ${code}`,
-    "",
-    `This code expires in ${Math.round(EMAIL_VERIFICATION_CODE_TTL_MS / 60000)} minutes.`,
-  ].join("\n");
-  const html = `
-    <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #111827;">
-      <h2 style="margin: 0 0 12px;">Nonogram Arena</h2>
-      <p style="margin: 0 0 12px;">Verify your email address.</p>
-      <div style="margin: 16px 0; font-size: 28px; font-weight: 800; letter-spacing: 0.18em;">${code}</div>
-      <p style="margin: 0;">This code expires in ${Math.round(EMAIL_VERIFICATION_CODE_TTL_MS / 60000)} minutes.</p>
-    </div>
-  `;
-  await sendTransactionalEmail({ to: email, subject, text, html });
-}
-
-async function sendPasswordResetCode(email, code) {
-  const subject = "[Nonogram Arena] Password reset code";
-  const text = [
-    "Use this code to reset your Nonogram Arena password.",
-    "",
-    `Reset code: ${code}`,
-    "",
-    `This code expires in ${Math.round(PASSWORD_RESET_CODE_TTL_MS / 60000)} minutes.`,
-  ].join("\n");
-  const html = `
-    <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #111827;">
-      <h2 style="margin: 0 0 12px;">Nonogram Arena</h2>
-      <p style="margin: 0 0 12px;">Use this code to reset your password.</p>
-      <div style="margin: 16px 0; font-size: 28px; font-weight: 800; letter-spacing: 0.18em;">${code}</div>
-      <p style="margin: 0;">This code expires in ${Math.round(PASSWORD_RESET_CODE_TTL_MS / 60000)} minutes.</p>
-    </div>
-  `;
-  await sendTransactionalEmail({ to: email, subject, text, html });
-}
-
-async function createEmailVerificationRequestForUser(userId, email) {
-  const numericUserId = Number(userId);
-  const normalizedEmail = normalizeEmail(email);
-  if (!Number.isInteger(numericUserId) || numericUserId <= 0) {
-    throw new Error("Invalid user");
-  }
-  if (!normalizedEmail) {
-    throw new Error("Invalid email");
-  }
-  const { rows: duplicateRows } = await pool.query(
-    `SELECT id
-     FROM users
-     WHERE email = $1
-       AND id <> $2
-     LIMIT 1`,
-    [normalizedEmail, numericUserId]
-  );
-  if (duplicateRows.length) {
-    throw new Error("Email already in use");
-  }
-  const code = createSixDigitCode();
-  const codeHash = hashToken(code);
-  const expiresAt = new Date(Date.now() + EMAIL_VERIFICATION_CODE_TTL_MS).toISOString();
-  await pool.query(
-    `INSERT INTO email_verification_requests (user_id, email, code_hash, expires_at, used_at)
-     VALUES ($1, $2, $3, $4, NULL)
-     ON CONFLICT (user_id) DO UPDATE
-     SET email = EXCLUDED.email,
-         code_hash = EXCLUDED.code_hash,
-         created_at = now(),
-         expires_at = EXCLUDED.expires_at,
-         used_at = NULL`,
-    [numericUserId, normalizedEmail, codeHash, expiresAt]
-  );
-  await sendEmailVerificationCode(normalizedEmail, code);
-}
-
-async function verifyEmailCodeForUser(userId, email, code) {
-  const numericUserId = Number(userId);
-  const normalizedEmail = normalizeEmail(email);
-  const normalizedCode = String(code || "").trim();
-  if (!Number.isInteger(numericUserId) || numericUserId <= 0) throw new Error("Invalid user");
-  if (!normalizedEmail) throw new Error("Invalid email");
-  if (!/^\d{6}$/.test(normalizedCode)) throw new Error("Invalid verification code");
-  const { rows } = await pool.query(
-    `SELECT user_id, email, code_hash, expires_at, used_at
-     FROM email_verification_requests
-     WHERE user_id = $1
-     LIMIT 1`,
-    [numericUserId]
-  );
-  if (!rows.length) throw new Error("Verification request not found");
-  const row = rows[0];
-  if (String(row.email || "") !== normalizedEmail) throw new Error("Verification request not found");
-  if (row.used_at) throw new Error("Verification code already used");
-  if (Date.parse(String(row.expires_at || "")) <= Date.now()) throw new Error("Verification code expired");
-  if (hashToken(normalizedCode) !== String(row.code_hash || "")) throw new Error("Invalid verification code");
-
-  const client = await pool.connect();
-  try {
-    await client.query("BEGIN");
-    await client.query(
-      `UPDATE users
-       SET email = $2,
-           email_verified = true,
-           email_verified_at = now()
-       WHERE id = $1`,
-      [numericUserId, normalizedEmail]
-    );
-    await client.query(
-      `UPDATE email_verification_requests
-       SET used_at = now()
-       WHERE user_id = $1`,
-      [numericUserId]
-    );
-    const { rows: userRows } = await client.query(
-      `SELECT id, username, nickname, rating, rating_games, rating_wins, rating_losses,
-              win_streak_current, win_streak_best, profile_avatar_key,
-              ui_lang, ui_theme, ui_sound_on, ui_sound_volume,
-              email, email_verified,
-              placement_done, placement_rating, placement_tier_key, placement_version,
-              placement_completed_at_ms, placement_solved_sequential, placement_elapsed_sec
-       FROM users
-       WHERE id = $1
-       LIMIT 1`,
-      [numericUserId]
-    );
-    await client.query("COMMIT");
-    return userRows[0] || null;
-  } catch (err) {
-    await client.query("ROLLBACK");
-    throw err;
-  } finally {
-    client.release();
-  }
-}
-
-async function createPasswordResetRequest(username, email) {
-  const normalizedUsername = normalizeUsername(username);
-  const normalizedEmail = normalizeEmail(email);
-  if (!normalizedUsername || !normalizedEmail) {
-    return;
-  }
-  const { rows } = await pool.query(
-    `SELECT id, email
-     FROM users
-     WHERE username = $1
-       AND is_bot = false
-       AND email = $2
-       AND email_verified = true
-     LIMIT 1`,
-    [normalizedUsername, normalizedEmail]
-  );
-  if (!rows.length) {
-    return;
-  }
-  const user = rows[0];
-  const code = createSixDigitCode();
-  const codeHash = hashToken(code);
-  const expiresAt = new Date(Date.now() + PASSWORD_RESET_CODE_TTL_MS).toISOString();
-  await pool.query(
-    `INSERT INTO password_reset_requests (user_id, email, code_hash, expires_at, used_at)
-     VALUES ($1, $2, $3, $4, NULL)
-     ON CONFLICT (user_id) DO UPDATE
-     SET email = EXCLUDED.email,
-         code_hash = EXCLUDED.code_hash,
-         created_at = now(),
-         expires_at = EXCLUDED.expires_at,
-         used_at = NULL`,
-    [Number(user.id), normalizedEmail, codeHash, expiresAt]
-  );
-  await sendPasswordResetCode(normalizedEmail, code);
-}
-
-async function resetPasswordWithCode(username, email, code, newPassword) {
-  const normalizedUsername = normalizeUsername(username);
-  const normalizedEmail = normalizeEmail(email);
-  const normalizedCode = String(code || "").trim();
-  const normalizedPassword = normalizeUserPassword(newPassword);
-  if (!normalizedUsername || !normalizedEmail) throw new Error("Invalid username or email");
-  if (!/^\d{6}$/.test(normalizedCode)) throw new Error("Invalid reset code");
-  if (!normalizedPassword) throw new Error("password must be 8+ chars and include letters and numbers");
-
-  const { rows } = await pool.query(
-    `SELECT id
-     FROM users
-     WHERE username = $1
-       AND is_bot = false
-       AND email = $2
-       AND email_verified = true
-     LIMIT 1`,
-    [normalizedUsername, normalizedEmail]
-  );
-  if (!rows.length) throw new Error("Reset request not found");
-  const userId = Number(rows[0].id);
-  const { rows: resetRows } = await pool.query(
-    `SELECT user_id, email, code_hash, expires_at, used_at
-     FROM password_reset_requests
-     WHERE user_id = $1
-     LIMIT 1`,
-    [userId]
-  );
-  if (!resetRows.length) throw new Error("Reset request not found");
-  const request = resetRows[0];
-  if (String(request.email || "") !== normalizedEmail) throw new Error("Reset request not found");
-  if (request.used_at) throw new Error("Reset code already used");
-  if (Date.parse(String(request.expires_at || "")) <= Date.now()) throw new Error("Reset code expired");
-  if (hashToken(normalizedCode) !== String(request.code_hash || "")) throw new Error("Invalid reset code");
-
-  const passwordHash = hashUserPassword(normalizedPassword);
-  const client = await pool.connect();
-  try {
-    await client.query("BEGIN");
-    await client.query(
-      `UPDATE users
-       SET password_hash = $2
-       WHERE id = $1`,
-      [userId, passwordHash]
-    );
-    await client.query(
-      `UPDATE password_reset_requests
-       SET used_at = now()
-       WHERE user_id = $1`,
-      [userId]
-    );
-    await client.query(`DELETE FROM user_sessions WHERE user_id = $1`, [userId]);
-    await client.query("COMMIT");
-  } catch (err) {
-    await client.query("ROLLBACK");
-    throw err;
-  } finally {
-    client.release();
-  }
 }
 
 async function buildActiveSiteVotePayloadForUser(userId) {
@@ -3504,8 +3196,6 @@ setInterval(async () => {
 setInterval(async () => {
   try {
     await pool.query(`DELETE FROM user_sessions WHERE expires_at <= now()`);
-    await pool.query(`DELETE FROM email_verification_requests WHERE expires_at <= now() OR used_at IS NOT NULL`);
-    await pool.query(`DELETE FROM password_reset_requests WHERE expires_at <= now() OR used_at IS NOT NULL`);
   } catch {
     // ignore cleanup failures
   }
@@ -3654,50 +3344,6 @@ app.get("/auth/me", requireAuth, async (req, res) => {
   });
 });
 
-app.post("/auth/password-reset/request", async (req, res) => {
-  const username = normalizeUsername(req.body?.username);
-  const email = normalizeEmail(req.body?.email);
-  if (!username || !email) {
-    return res.status(400).json({ ok: false, error: "username and email are required" });
-  }
-  try {
-    await createPasswordResetRequest(username, email);
-    return res.json({
-      ok: true,
-      message: "If the account information matches, a reset code has been sent.",
-    });
-  } catch (err) {
-    return res.status(500).json({ ok: false, error: err.message || "Failed to send reset code" });
-  }
-});
-
-app.post("/auth/password-reset/confirm", async (req, res) => {
-  const username = normalizeUsername(req.body?.username);
-  const email = normalizeEmail(req.body?.email);
-  const code = String(req.body?.code || "").trim();
-  const newPassword = String(req.body?.newPassword || "");
-  if (!username || !email || !code || !newPassword) {
-    return res.status(400).json({ ok: false, error: "username, email, code, and newPassword are required" });
-  }
-  try {
-    await resetPasswordWithCode(username, email, code, newPassword);
-    return res.json({ ok: true });
-  } catch (err) {
-    const message = String(err.message || "");
-    if (
-      message === "Reset request not found" ||
-      message === "Reset code expired" ||
-      message === "Reset code already used" ||
-      message === "Invalid reset code" ||
-      message === "password must be 8+ chars and include letters and numbers" ||
-      message === "Invalid username or email"
-    ) {
-      return res.status(400).json({ ok: false, error: message });
-    }
-    return res.status(500).json({ ok: false, error: message || "Failed to reset password" });
-  }
-});
-
 app.get("/vote/current", requireAuth, async (req, res) => {
   try {
     const vote = await buildActiveSiteVotePayloadForUser(req.authUser.id);
@@ -3777,48 +3423,6 @@ app.get("/profile/me", requireAuth, async (req, res) => {
     return res.json({ ok: true, profile });
   } catch (err) {
     return res.status(500).json({ ok: false, error: err.message });
-  }
-});
-
-app.post("/profile/me/email/request-verification", requireAuth, async (req, res) => {
-  const email = normalizeEmail(req.body?.email);
-  if (!email) {
-    return res.status(400).json({ ok: false, error: "Invalid email" });
-  }
-  try {
-    await createEmailVerificationRequestForUser(req.authUser.id, email);
-    return res.json({ ok: true });
-  } catch (err) {
-    const message = String(err.message || "");
-    if (message === "Invalid email" || message === "Email already in use" || message === "Email service unavailable") {
-      return res.status(400).json({ ok: false, error: message });
-    }
-    return res.status(500).json({ ok: false, error: message || "Failed to send verification code" });
-  }
-});
-
-app.post("/profile/me/email/verify", requireAuth, async (req, res) => {
-  const email = normalizeEmail(req.body?.email);
-  const code = String(req.body?.code || "").trim();
-  if (!email || !code) {
-    return res.status(400).json({ ok: false, error: "email and code are required" });
-  }
-  try {
-    const user = await verifyEmailCodeForUser(req.authUser.id, email, code);
-    const profile = await buildUserProfilePayload(req.authUser.id, { includeUsername: true });
-    return res.json({ ok: true, user: buildClientUser(user), profile });
-  } catch (err) {
-    const message = String(err.message || "");
-    if (
-      message === "Invalid email" ||
-      message === "Invalid verification code" ||
-      message === "Verification request not found" ||
-      message === "Verification code expired" ||
-      message === "Verification code already used"
-    ) {
-      return res.status(400).json({ ok: false, error: message });
-    }
-    return res.status(500).json({ ok: false, error: message || "Failed to verify email" });
   }
 });
 
