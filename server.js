@@ -1,6 +1,8 @@
 const crypto = require("crypto");
 const cors = require("cors");
+const dns = require("dns");
 const express = require("express");
+const net = require("net");
 const nodemailer = require("nodemailer");
 const { Pool } = require("pg");
 
@@ -661,21 +663,40 @@ function isEmailTransportConfigured() {
   return Boolean(SMTP_HOST && SMTP_PORT && SMTP_FROM);
 }
 
-let emailTransport = null;
-function getEmailTransport() {
-  if (emailTransport) return emailTransport;
+let emailTransportPromise = null;
+async function getEmailTransport() {
+  if (emailTransportPromise) return emailTransportPromise;
   if (!isEmailTransportConfigured()) return null;
-  emailTransport = nodemailer.createTransport({
-    host: SMTP_HOST,
-    port: SMTP_PORT,
-    secure: SMTP_SECURE,
-    auth: SMTP_USER ? { user: SMTP_USER, pass: SMTP_PASS } : undefined,
-  });
-  return emailTransport;
+  emailTransportPromise = (async () => {
+    let transportHost = SMTP_HOST;
+    let tlsOptions = undefined;
+    if (SMTP_HOST && !net.isIP(SMTP_HOST)) {
+      try {
+        const ipv4Addresses = await dns.promises.resolve4(SMTP_HOST);
+        if (Array.isArray(ipv4Addresses) && ipv4Addresses.length > 0) {
+          transportHost = String(ipv4Addresses[0] || SMTP_HOST).trim();
+          tlsOptions = { servername: SMTP_HOST };
+        }
+      } catch {
+        transportHost = SMTP_HOST;
+      }
+    }
+    return nodemailer.createTransport({
+      host: transportHost,
+      port: SMTP_PORT,
+      secure: SMTP_SECURE,
+      auth: SMTP_USER ? { user: SMTP_USER, pass: SMTP_PASS } : undefined,
+      connectionTimeout: 15000,
+      greetingTimeout: 15000,
+      socketTimeout: 20000,
+      tls: tlsOptions,
+    });
+  })();
+  return emailTransportPromise;
 }
 
 async function sendTransactionalEmail({ to, subject, text, html }) {
-  const transport = getEmailTransport();
+  const transport = await getEmailTransport();
   if (!transport) {
     throw new Error("Email service unavailable");
   }
