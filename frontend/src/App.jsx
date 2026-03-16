@@ -307,14 +307,6 @@ function getTierInfoByRating(ratingRaw, rankRaw = null) {
   return { key: "bronze", labelKo: "브론즈", labelEn: "Bronze" };
 }
 
-function getRankingTierInfoByRating(ratingRaw, rankRaw = null) {
-  const rank = Number(rankRaw || 0);
-  if (Number.isInteger(rank) && rank >= 1 && rank <= 5) {
-    return { key: "challenger", labelKo: "챌린저", labelEn: "Challenger" };
-  }
-  return getTierInfoByRating(ratingRaw);
-}
-
 function isGoldOrHigherTierKey(raw) {
   const tierKey = String(raw || "").trim().toLowerCase();
   return tierKey === "gold" || tierKey === "diamond" || tierKey === "master";
@@ -994,15 +986,6 @@ function App() {
   const [signupAgreeTerms, setSignupAgreeTerms] = useState(false);
   const [signupAgreePrivacy, setSignupAgreePrivacy] = useState(false);
   const [signupPolicyModal, setSignupPolicyModal] = useState(""); // "" | terms | privacy
-  const [resetUsername, setResetUsername] = useState("");
-  const [resetEmail, setResetEmail] = useState("");
-  const [resetCode, setResetCode] = useState("");
-  const [resetNewPassword, setResetNewPassword] = useState("");
-  const [resetError, setResetError] = useState("");
-  const [resetNotice, setResetNotice] = useState("");
-  const [resetFieldErrors, setResetFieldErrors] = useState({ username: "", email: "", code: "", password: "" });
-  const [resetRequesting, setResetRequesting] = useState(false);
-  const [resetSubmitting, setResetSubmitting] = useState(false);
   const [chatInput, setChatInput] = useState("");
   const [chatSending, setChatSending] = useState(false);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
@@ -1033,12 +1016,6 @@ function App() {
   const [profileDraftAvatarKey, setProfileDraftAvatarKey] = useState(DEFAULT_PROFILE_AVATAR_KEY);
   const [profileAvatarTab, setProfileAvatarTab] = useState("default"); // default | special
   const [profilePickerOpen, setProfilePickerOpen] = useState(false);
-  const [profileEmailDraft, setProfileEmailDraft] = useState("");
-  const [profileEmailCode, setProfileEmailCode] = useState("");
-  const [profileEmailError, setProfileEmailError] = useState("");
-  const [profileEmailNotice, setProfileEmailNotice] = useState("");
-  const [profileEmailSending, setProfileEmailSending] = useState(false);
-  const [profileEmailVerifying, setProfileEmailVerifying] = useState(false);
   const [publicProfileAvatarCache, setPublicProfileAvatarCache] = useState({});
   const [pvpTicketId, setPvpTicketId] = useState("");
   const [pvpSearching, setPvpSearching] = useState(false);
@@ -1125,47 +1102,6 @@ function App() {
   const deferredCells = useDeferredValue(cells);
   const L = (ko, en) => (lang === "ko" ? ko : en);
   const normalizeClientEmail = (value) => String(value || "").trim().toLowerCase();
-  const clearResetState = () => {
-    setResetUsername("");
-    setResetEmail("");
-    setResetCode("");
-    setResetNewPassword("");
-    setResetError("");
-    setResetNotice("");
-    setResetFieldErrors({ username: "", email: "", code: "", password: "" });
-    setResetRequesting(false);
-    setResetSubmitting(false);
-  };
-  const clearProfileEmailState = () => {
-    setProfileEmailCode("");
-    setProfileEmailError("");
-    setProfileEmailNotice("");
-    setProfileEmailSending(false);
-    setProfileEmailVerifying(false);
-  };
-  const mapProfileEmailError = (message) => {
-    const msg = String(message || "");
-    if (!msg) return L("이메일 처리에 실패했습니다.", "Failed to process email request.");
-    if (msg.includes("Invalid email")) return L("올바른 이메일 주소를 입력해 주세요.", "Enter a valid email address.");
-    if (msg.includes("Email already in use")) return L("이미 다른 계정에서 사용 중인 이메일입니다.", "This email is already used by another account.");
-    if (msg.includes("Verification code invalid")) return L("인증 코드가 올바르지 않습니다.", "The verification code is invalid.");
-    if (msg.includes("Verification code expired")) return L("인증 코드가 만료되었습니다. 다시 요청해 주세요.", "The verification code expired. Request a new one.");
-    if (msg.includes("Email service unavailable")) return L("이메일 발송 설정이 아직 완료되지 않았습니다.", "Email delivery is not configured yet.");
-    return msg;
-  };
-  const mapPasswordResetError = (message) => {
-    const msg = String(message || "");
-    if (!msg) return L("비밀번호 재설정에 실패했습니다.", "Failed to reset password.");
-    if (msg.includes("username/email are required")) return L("아이디와 이메일을 모두 입력해 주세요.", "Enter both username and email.");
-    if (msg.includes("Account not found")) return L("일치하는 계정을 찾지 못했습니다.", "No matching account was found.");
-    if (msg.includes("Reset code invalid")) return L("재설정 코드가 올바르지 않습니다.", "The reset code is invalid.");
-    if (msg.includes("Reset code expired")) return L("재설정 코드가 만료되었습니다. 다시 요청해 주세요.", "The reset code expired. Request a new one.");
-    if (msg.includes("Email service unavailable")) return L("이메일 발송 설정이 아직 완료되지 않았습니다.", "Email delivery is not configured yet.");
-    if (msg.includes("password must be 8+ chars")) {
-      return L("비밀번호는 영문과 숫자를 포함해 8자 이상이어야 합니다.", "Password must be at least 8 characters with letters and numbers.");
-    }
-    return msg;
-  };
 
   const applyUiPreferences = (prefUser) => {
     if (!prefUser || typeof prefUser !== "object") return;
@@ -1400,8 +1336,6 @@ function App() {
       win_streak_best: Number(baseUser?.win_streak_best || 0),
       winRate: games > 0 ? (wins / games) * 100 : 0,
       profile_avatar_key: normalizeProfileAvatarKey(baseUser?.profile_avatar_key || DEFAULT_PROFILE_AVATAR_KEY),
-      email: normalizeClientEmail(baseUser?.email || ""),
-      email_verified: baseUser?.email_verified === true,
       hallRewards,
       specialRewards,
       unlockedHallAvatarKeys: hallRewards.map((reward) => reward.key),
@@ -1516,8 +1450,6 @@ function App() {
     setProfileDraftAvatarKey(DEFAULT_PROFILE_AVATAR_KEY);
     setProfileAvatarTab("default");
     setProfilePickerOpen(false);
-    setProfileEmailDraft("");
-    clearProfileEmailState();
   };
 
   const openOwnProfile = async () => {
@@ -1532,8 +1464,6 @@ function App() {
     setProfileDraftAvatarKey(initialAvatarKey);
     setProfileAvatarTab(isSpecialProfileAvatarKey(initialAvatarKey) ? "special" : "default");
     setProfilePickerOpen(false);
-    setProfileEmailDraft(normalizeClientEmail(authUser?.email || ""));
-    clearProfileEmailState();
     try {
       const res = await fetch(`${API_BASE}/profile/me`, { headers: { ...authHeaders } });
       if (res.status === 404) {
@@ -1554,7 +1484,6 @@ function App() {
       setProfileModalData(profile);
       setProfileDraftAvatarKey(nextAvatarKey);
       setProfileAvatarTab(isSpecialProfileAvatarKey(nextAvatarKey) ? "special" : "default");
-      setProfileEmailDraft(normalizeClientEmail(profile?.email || ""));
     } catch (err) {
       const rewardSnapshot = await ensureHallSnapshotForProfile();
       const ratingSnapshot = await ensureRatingSnapshotForProfile();
@@ -1565,7 +1494,6 @@ function App() {
       setProfileAvatarTab(
         isSpecialProfileAvatarKey(nextAvatarKey) || fallbackProfile.unlockedSpecialAvatarKeys.length > 0 ? "special" : "default"
       );
-      setProfileEmailDraft(normalizeClientEmail(fallbackProfile?.email || authUser?.email || ""));
       setProfileModalError("");
     } finally {
       setProfileModalLoading(false);
@@ -1707,151 +1635,6 @@ function App() {
       setStatus(L("프로필 저장에 실패했습니다.", "Failed to save profile."));
     } finally {
       setProfileModalSaving(false);
-    }
-  };
-
-  const requestProfileEmailVerification = async () => {
-    if (!isLoggedIn || profileModalMode !== "self") return;
-    const email = normalizeClientEmail(profileEmailDraft);
-    if (!email) {
-      setProfileEmailError(L("올바른 이메일 주소를 입력해 주세요.", "Enter a valid email address."));
-      setProfileEmailNotice("");
-      return;
-    }
-    setProfileEmailSending(true);
-    setProfileEmailError("");
-    setProfileEmailNotice("");
-    try {
-      const res = await fetch(`${API_BASE}/profile/me/email/request-verification`, {
-        method: "POST",
-        headers: { ...authHeaders, "Content-Type": "application/json" },
-        body: JSON.stringify({ email }),
-      });
-      const data = await parseJsonSafe(res);
-      if (!res.ok || !data?.ok) throw new Error(data?.error || "Failed to send verification email");
-      setProfileEmailDraft(email);
-      setProfileEmailNotice(L("인증 코드를 이메일로 보냈습니다.", "A verification code has been sent to your email."));
-      setStatus(L("이메일 인증 코드를 보냈습니다.", "Verification email sent."));
-    } catch (err) {
-      setProfileEmailError(mapProfileEmailError(err?.message));
-    } finally {
-      setProfileEmailSending(false);
-    }
-  };
-
-  const verifyProfileEmailCode = async () => {
-    if (!isLoggedIn || profileModalMode !== "self") return;
-    const email = normalizeClientEmail(profileEmailDraft);
-    const code = String(profileEmailCode || "").trim();
-    if (!email) {
-      setProfileEmailError(L("올바른 이메일 주소를 입력해 주세요.", "Enter a valid email address."));
-      setProfileEmailNotice("");
-      return;
-    }
-    if (!/^\d{6}$/.test(code)) {
-      setProfileEmailError(L("6자리 인증 코드를 입력해 주세요.", "Enter the 6-digit verification code."));
-      setProfileEmailNotice("");
-      return;
-    }
-    setProfileEmailVerifying(true);
-    setProfileEmailError("");
-    setProfileEmailNotice("");
-    try {
-      const res = await fetch(`${API_BASE}/profile/me/email/verify`, {
-        method: "POST",
-        headers: { ...authHeaders, "Content-Type": "application/json" },
-        body: JSON.stringify({ email, code }),
-      });
-      const data = await parseJsonSafe(res);
-      if (!res.ok || !data?.ok) throw new Error(data?.error || "Failed to verify email");
-      if (data.user) {
-        writeLocalProfileAvatarOverride(data.user, data.profile?.profile_avatar_key || profileDraftAvatarKey);
-        cacheAuthUser(data.user, { applyPrefs: false });
-      }
-      if (data.profile) {
-        setProfileModalData(data.profile);
-        setProfileDraftAvatarKey(normalizeProfileAvatarKey(data.profile?.profile_avatar_key || profileDraftAvatarKey));
-      }
-      setProfileEmailCode("");
-      setProfileEmailDraft(email);
-      setProfileEmailNotice(L("이메일 인증이 완료되었습니다.", "Your email has been verified."));
-      setStatus(L("이메일 인증이 완료되었습니다.", "Email verified."));
-    } catch (err) {
-      setProfileEmailError(mapProfileEmailError(err?.message));
-    } finally {
-      setProfileEmailVerifying(false);
-    }
-  };
-
-  const requestPasswordResetCode = async () => {
-    const username = String(resetUsername || "").trim().toLowerCase();
-    const email = normalizeClientEmail(resetEmail);
-    const nextErrors = { username: "", email: "", code: "", password: "" };
-    if (!username) nextErrors.username = L("아이디를 입력해 주세요.", "Enter your username.");
-    if (!email) nextErrors.email = L("이메일을 입력해 주세요.", "Enter your email.");
-    setResetFieldErrors(nextErrors);
-    if (nextErrors.username || nextErrors.email) {
-      setResetError(L("아이디와 이메일을 확인해 주세요.", "Check your username and email."));
-      setResetNotice("");
-      return;
-    }
-    setResetRequesting(true);
-    setResetError("");
-    setResetNotice("");
-    try {
-      const res = await fetch(`${API_BASE}/auth/password-reset/request`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ username, email }),
-      });
-      const data = await parseJsonSafe(res);
-      if (!res.ok || !data?.ok) throw new Error(data?.error || "Failed to send reset code");
-      setResetNotice(L("재설정 코드를 이메일로 보냈습니다.", "A reset code has been sent to your email."));
-      setStatus(L("비밀번호 재설정 코드를 보냈습니다.", "Password reset code sent."));
-    } catch (err) {
-      setResetError(mapPasswordResetError(err?.message));
-    } finally {
-      setResetRequesting(false);
-    }
-  };
-
-  const confirmPasswordReset = async () => {
-    const username = String(resetUsername || "").trim().toLowerCase();
-    const email = normalizeClientEmail(resetEmail);
-    const code = String(resetCode || "").trim();
-    const password = String(resetNewPassword || "");
-    const nextErrors = { username: "", email: "", code: "", password: "" };
-    if (!username) nextErrors.username = L("아이디를 입력해 주세요.", "Enter your username.");
-    if (!email) nextErrors.email = L("이메일을 입력해 주세요.", "Enter your email.");
-    if (!/^\d{6}$/.test(code)) nextErrors.code = L("6자리 코드를 입력해 주세요.", "Enter the 6-digit code.");
-    if (!password) nextErrors.password = L("새 비밀번호를 입력해 주세요.", "Enter a new password.");
-    setResetFieldErrors(nextErrors);
-    if (Object.values(nextErrors).some(Boolean)) {
-      setResetError(L("입력값을 확인해 주세요.", "Please check the fields."));
-      setResetNotice("");
-      return;
-    }
-    setResetSubmitting(true);
-    setResetError("");
-    setResetNotice("");
-    try {
-      const res = await fetch(`${API_BASE}/auth/password-reset/confirm`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ username, email, code, password }),
-      });
-      const data = await parseJsonSafe(res);
-      if (!res.ok || !data?.ok) throw new Error(data?.error || "Failed to reset password");
-      setLoginUsername(username);
-      setLoginPassword("");
-      setAuthTab("login");
-      clearResetState();
-      setLoginError(L("비밀번호가 변경되었습니다. 새 비밀번호로 로그인해 주세요.", "Password changed. Log in with your new password."));
-      setStatus(L("비밀번호가 변경되었습니다.", "Password changed."));
-    } catch (err) {
-      setResetError(mapPasswordResetError(err?.message));
-    } finally {
-      setResetSubmitting(false);
     }
   };
 
@@ -2197,7 +1980,7 @@ function App() {
   const placementAssignedTier = hasPlacementQualification
     ? getTierInfoByRating(placementAssignedRating, myRatingRank)
     : null;
-  const myTierInfo = isLoggedIn ? getRankingTierInfoByRating(authUser?.rating, myRatingRank) : null;
+  const myTierInfo = isLoggedIn ? getTierInfoByRating(authUser?.rating, myRatingRank) : null;
   const isInRaceRoom = Boolean(raceRoomCode);
   const isSingleSoloMode = (isModeSingle || isModeTutorial || isModePlacementTest) && !isInRaceRoom;
   const shouldShowPuzzleBoard = Boolean(
@@ -5774,7 +5557,6 @@ function App() {
                   setAuthTab("login");
                   setLoginError("");
                   setLoginFieldErrors({ username: "", password: "" });
-                  clearResetState();
                   setSignupPolicyModal("");
                 }}
               >
@@ -5786,22 +5568,9 @@ function App() {
                   setAuthTab("signup");
                   setSignupError("");
                   setSignupFieldErrors({ username: "", nickname: "", password: "", terms: "", privacy: "" });
-                  clearResetState();
-                  setSignupPolicyModal("");
                 }}
               >
                 {L("회원가입", "Sign Up")}
-              </button>
-              <button
-                className={authTab === "reset" ? "active" : ""}
-                onClick={() => {
-                  setAuthTab("reset");
-                  clearResetState();
-                  setLoginError("");
-                  setSignupPolicyModal("");
-                }}
-              >
-                {L("비밀번호 찾기", "Reset Password")}
               </button>
               <button onClick={backToMenu}>{L("메인으로", "Home")}</button>
             </div>
@@ -5846,21 +5615,6 @@ function App() {
                   {loginFieldErrors.password && <span className="fieldErrorText">{loginFieldErrors.password}</span>}
                 </label>
                 {loginError && <div className="modalError">{loginError}</div>}
-                <div className="authInlineActions">
-                  <button
-                    type="button"
-                    className="authInlineLink"
-                    onClick={() => {
-                      setAuthTab("reset");
-                      setResetUsername(loginUsername.trim().toLowerCase());
-                      setResetError("");
-                      setResetNotice("");
-                      setResetFieldErrors({ username: "", email: "", code: "", password: "" });
-                    }}
-                  >
-                    {L("비밀번호를 잊으셨나요?", "Forgot your password?")}
-                  </button>
-                </div>
                 <div className="modalActions">
                   <button type="button" onClick={backToMenu}>{L("취소", "Cancel")}</button>
                   <button type="submit" disabled={isLoading || !loginUsername.trim() || !loginPassword}>
@@ -5983,98 +5737,6 @@ function App() {
                     }
                   >
                     {isLoading ? L("가입 중...", "Signing up...") : L("회원가입", "Sign Up")}
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {authTab === "reset" && (
-              <div className="authCard">
-                <div className="authCardIntro">
-                  {L(
-                    "가입할 때 등록한 이메일로 6자리 재설정 코드를 보냅니다.",
-                    "We'll send a 6-digit reset code to the email registered with your account."
-                  )}
-                </div>
-                <label>
-                  {L("아이디", "Username")}
-                  <input
-                    type="text"
-                    className={resetFieldErrors.username ? "fieldError" : ""}
-                    value={resetUsername}
-                    onChange={(e) => {
-                      setResetUsername(e.target.value);
-                      setResetFieldErrors((prev) => ({ ...prev, username: "" }));
-                      if (resetError) setResetError("");
-                    }}
-                    placeholder={L("아이디", "Username")}
-                  />
-                  {resetFieldErrors.username && <span className="fieldErrorText">{resetFieldErrors.username}</span>}
-                </label>
-                <label>
-                  {L("이메일", "Email")}
-                  <input
-                    type="email"
-                    className={resetFieldErrors.email ? "fieldError" : ""}
-                    value={resetEmail}
-                    onChange={(e) => {
-                      setResetEmail(e.target.value);
-                      setResetFieldErrors((prev) => ({ ...prev, email: "" }));
-                      if (resetError) setResetError("");
-                    }}
-                    placeholder={L("이메일", "Email")}
-                  />
-                  {resetFieldErrors.email && <span className="fieldErrorText">{resetFieldErrors.email}</span>}
-                </label>
-                <div className="authInlineActions">
-                  <button type="button" onClick={requestPasswordResetCode} disabled={resetRequesting}>
-                    {resetRequesting ? L("전송 중...", "Sending...") : L("코드 보내기", "Send Code")}
-                  </button>
-                </div>
-                <label>
-                  {L("재설정 코드", "Reset Code")}
-                  <input
-                    type="text"
-                    className={resetFieldErrors.code ? "fieldError" : ""}
-                    value={resetCode}
-                    onChange={(e) => {
-                      setResetCode(e.target.value.replace(/[^\d]/g, "").slice(0, 6));
-                      setResetFieldErrors((prev) => ({ ...prev, code: "" }));
-                      if (resetError) setResetError("");
-                    }}
-                    placeholder={L("6자리 코드", "6-digit code")}
-                  />
-                  {resetFieldErrors.code && <span className="fieldErrorText">{resetFieldErrors.code}</span>}
-                </label>
-                <label>
-                  {L("새 비밀번호", "New Password")}
-                  <input
-                    type="password"
-                    className={resetFieldErrors.password ? "fieldError" : ""}
-                    value={resetNewPassword}
-                    onChange={(e) => {
-                      setResetNewPassword(e.target.value);
-                      setResetFieldErrors((prev) => ({ ...prev, password: "" }));
-                      if (resetError) setResetError("");
-                    }}
-                    placeholder={L("영문+숫자 포함 8자 이상", "At least 8 chars with letters and numbers")}
-                  />
-                  {resetFieldErrors.password && <span className="fieldErrorText">{resetFieldErrors.password}</span>}
-                </label>
-                {resetNotice && <div className="inlineNotice">{resetNotice}</div>}
-                {resetError && <div className="modalError">{resetError}</div>}
-                <div className="modalActions">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setAuthTab("login");
-                      clearResetState();
-                    }}
-                  >
-                    {L("로그인으로", "Back to Login")}
-                  </button>
-                  <button type="button" onClick={confirmPasswordReset} disabled={resetSubmitting}>
-                    {resetSubmitting ? L("변경 중...", "Updating...") : L("비밀번호 변경", "Change Password")}
                   </button>
                 </div>
               </div>
@@ -6212,9 +5874,7 @@ function App() {
                       const wins = Number(u.rating_wins || 0);
                       const losses = Number(u.rating_losses || 0);
                       const winRate = games > 0 ? Math.round((wins / games) * 100) : 0;
-                      const tierInfo = isModeLegacyRanking
-                        ? getTierInfoByRating(u.rating, idx + 1)
-                        : getRankingTierInfoByRating(u.rating, idx + 1);
+                      const tierInfo = getTierInfoByRating(u.rating, idx + 1);
                       return (
                         <tr key={u.id}>
                           <td>{idx + 1}</td>
@@ -7647,61 +7307,6 @@ function App() {
 
                   {profileModalData && (
                     <>
-                      {profileModalMode === "self" && (
-                        <div className="profileSection profileEmailPanel">
-                          <div className="profileSectionHead">
-                            <div className="profileSectionTitle">{L("이메일 인증", "Email Verification")}</div>
-                            <span className={`profileEmailBadge ${profileModalData.email_verified ? "verified" : ""}`}>
-                              {profileModalData.email_verified ? L("인증 완료", "Verified") : L("미인증", "Unverified")}
-                            </span>
-                          </div>
-                          <div className="profileEmailHint">
-                            {L(
-                              "이메일을 인증해두면 비밀번호를 잊어버렸을 때 재설정 코드를 받을 수 있습니다.",
-                              "Verify your email to receive a reset code if you forget your password."
-                            )}
-                          </div>
-                          <div className="profileEmailRow">
-                            <label className="profileEmailField">
-                              <span>{L("이메일", "Email")}</span>
-                              <input
-                                type="email"
-                                value={profileEmailDraft}
-                                onChange={(e) => {
-                                  setProfileEmailDraft(e.target.value);
-                                  if (profileEmailError) setProfileEmailError("");
-                                  if (profileEmailNotice) setProfileEmailNotice("");
-                                }}
-                                placeholder={L("이메일", "Email")}
-                              />
-                            </label>
-                            <button type="button" onClick={requestProfileEmailVerification} disabled={profileEmailSending}>
-                              {profileEmailSending ? L("전송 중...", "Sending...") : L("코드 보내기", "Send Code")}
-                            </button>
-                          </div>
-                          <div className="profileEmailRow">
-                            <label className="profileEmailField">
-                              <span>{L("인증 코드", "Verification Code")}</span>
-                              <input
-                                type="text"
-                                value={profileEmailCode}
-                                onChange={(e) => {
-                                  setProfileEmailCode(e.target.value.replace(/[^\d]/g, "").slice(0, 6));
-                                  if (profileEmailError) setProfileEmailError("");
-                                  if (profileEmailNotice) setProfileEmailNotice("");
-                                }}
-                                placeholder={L("6자리 코드", "6-digit code")}
-                              />
-                            </label>
-                            <button type="button" onClick={verifyProfileEmailCode} disabled={profileEmailVerifying}>
-                              {profileEmailVerifying ? L("확인 중...", "Verifying...") : L("이메일 인증", "Verify Email")}
-                            </button>
-                          </div>
-                          {profileEmailNotice && <div className="inlineNotice">{profileEmailNotice}</div>}
-                          {profileEmailError && <div className="modalError">{profileEmailError}</div>}
-                        </div>
-                      )}
-
                       <div className="profileStatsGrid">
                         <div className="profileStatCard">
                           <span>{L("판수", "Games")}</span>
