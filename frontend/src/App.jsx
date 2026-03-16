@@ -7655,6 +7655,12 @@ function App() {
                               {profileModalData.email_verified ? L("인증 완료", "Verified") : L("미인증", "Unverified")}
                             </span>
                           </div>
+                          <div className="profileEmailHint">
+                            {L(
+                              "이메일을 인증해두면 비밀번호를 잊어버렸을 때 재설정 코드를 받을 수 있습니다.",
+                              "Verify your email to receive a reset code if you forget your password."
+                            )}
+                          </div>
                           <div className="profileEmailRow">
                             <label className="profileEmailField">
                               <span>{L("이메일", "Email")}</span>

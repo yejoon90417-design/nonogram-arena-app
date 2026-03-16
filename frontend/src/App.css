@@ -5651,6 +5651,16 @@
   gap: 0.65rem;
 }
 
+.profileEmailHint {
+  border: 1px solid #d7e3ef;
+  background: #f6faff;
+  color: #506783;
+  border-radius: 10px;
+  padding: 0.58rem 0.72rem;
+  font-size: 0.8rem;
+  line-height: 1.55;
+}
+
 .profileEmailBadge {
   display: inline-flex;
   align-items: center;
