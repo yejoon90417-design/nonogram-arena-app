@@ -2,6 +2,7 @@ const crypto = require("crypto");
 const cors = require("cors");
 const express = require("express");
 const { Pool } = require("pg");
+const { Resend } = require("resend");
 
 const PORT = Number(process.env.PORT || 3000);
 const USE_SSL =
@@ -87,6 +88,11 @@ const PVP_BOT_RECENT_APPEARANCE_LIMIT = Math.max(
   20,
   Number(process.env.PVP_BOT_RECENT_APPEARANCE_LIMIT || 160)
 );
+const EMAIL_VERIFICATION_TTL_MIN = Math.max(3, Number(process.env.EMAIL_VERIFICATION_TTL_MIN || 10));
+const PASSWORD_RESET_TTL_MIN = Math.max(3, Number(process.env.PASSWORD_RESET_TTL_MIN || 10));
+const RESEND_API_KEY = String(process.env.RESEND_API_KEY || "").trim();
+const RESEND_FROM = String(process.env.RESEND_FROM || "Nonogram Arena <onboarding@resend.dev>").trim();
+const resend = RESEND_API_KEY ? new Resend(RESEND_API_KEY) : null;
 const REPLAY_FRAME_MIN_INTERVAL_MS = Math.max(80, Number(process.env.REPLAY_FRAME_MIN_INTERVAL_MS || 140));
 const REPLAY_MAX_FRAMES = Math.max(200, Number(process.env.REPLAY_MAX_FRAMES || 2400));
 const PVP_FAKE_QUEUE_ENABLED = process.env.PVP_FAKE_QUEUE_ENABLED !== "false";
@@ -618,6 +624,11 @@ function normalizeEmail(raw) {
   return s;
 }
 
+function normalizeOneTimeCode(raw) {
+  const s = String(raw || "").trim();
+  return /^\d{6}$/.test(s) ? s : "";
+}
+
 function hashPassword(password) {
   return crypto.createHash("sha256").update(password).digest("hex");
 }
@@ -641,6 +652,288 @@ function verifyUserPassword(password, stored) {
   const actual = crypto.scryptSync(password, salt, expected.length);
   if (actual.length !== expected.length) return false;
   return crypto.timingSafeEqual(actual, expected);
+}
+
+function isEmailDeliveryConfigured() {
+  return Boolean(resend && RESEND_FROM);
+}
+
+function createOneTimeCode() {
+  return String(Math.floor(100000 + Math.random() * 900000));
+}
+
+function hashOneTimeCode(code) {
+  return crypto.createHash("sha256").update(String(code || "")).digest("hex");
+}
+
+async function sendEmailViaResend({ to, subject, text, html }) {
+  if (!isEmailDeliveryConfigured()) {
+    throw new Error("Email service unavailable");
+  }
+  const { data, error } = await resend.emails.send({
+    from: RESEND_FROM,
+    to: [to],
+    subject,
+    text,
+    html,
+  });
+  if (error) {
+    throw new Error(error.message || "Failed to send email");
+  }
+  return data;
+}
+
+async function createEmailVerificationRequestForUser(userId, email) {
+  const numericUserId = Number(userId || 0);
+  if (!Number.isInteger(numericUserId) || numericUserId <= 0) {
+    throw new Error("User not found");
+  }
+  const normalizedEmail = normalizeEmail(email);
+  if (!normalizedEmail) {
+    throw new Error("Invalid email");
+  }
+  const { rows: conflictRows } = await pool.query(
+    `SELECT id
+     FROM users
+     WHERE email = $1
+       AND id <> $2
+     LIMIT 1`,
+    [normalizedEmail, numericUserId]
+  );
+  if (conflictRows.length) {
+    throw new Error("Email already in use");
+  }
+  const code = createOneTimeCode();
+  const expiresAt = new Date(Date.now() + EMAIL_VERIFICATION_TTL_MIN * 60 * 1000).toISOString();
+  await pool.query(
+    `INSERT INTO email_verification_requests (user_id, email, code_hash, expires_at, used_at)
+     VALUES ($1, $2, $3, $4, NULL)
+     ON CONFLICT (user_id)
+     DO UPDATE SET
+       email = EXCLUDED.email,
+       code_hash = EXCLUDED.code_hash,
+       expires_at = EXCLUDED.expires_at,
+       created_at = now(),
+       used_at = NULL`,
+    [numericUserId, normalizedEmail, hashOneTimeCode(code), expiresAt]
+  );
+  const subject = "Nonogram Arena email verification code";
+  const text =
+    `Your Nonogram Arena verification code is ${code}.\n\n` +
+    `This code expires in ${EMAIL_VERIFICATION_TTL_MIN} minutes.`;
+  const html =
+    `<div style="font-family:Arial,sans-serif;line-height:1.6;color:#1f2f3f">` +
+    `<h2 style="margin:0 0 12px">Nonogram Arena</h2>` +
+    `<p style="margin:0 0 12px">Your email verification code is:</p>` +
+    `<div style="display:inline-block;padding:12px 18px;border-radius:12px;background:#f4f8ff;border:1px solid #c9d8ef;font-size:28px;font-weight:800;letter-spacing:0.12em">${code}</div>` +
+    `<p style="margin:16px 0 0">This code expires in ${EMAIL_VERIFICATION_TTL_MIN} minutes.</p>` +
+    `</div>`;
+  await sendEmailViaResend({
+    to: normalizedEmail,
+    subject,
+    text,
+    html,
+  });
+}
+
+async function verifyEmailCodeForUser(userId, email, code) {
+  const numericUserId = Number(userId || 0);
+  if (!Number.isInteger(numericUserId) || numericUserId <= 0) {
+    throw new Error("User not found");
+  }
+  const normalizedEmail = normalizeEmail(email);
+  const normalizedCode = normalizeOneTimeCode(code);
+  if (!normalizedEmail) throw new Error("Invalid email");
+  if (!normalizedCode) throw new Error("Verification code invalid");
+
+  const { rows } = await pool.query(
+    `SELECT email, code_hash, expires_at, used_at
+     FROM email_verification_requests
+     WHERE user_id = $1
+     LIMIT 1`,
+    [numericUserId]
+  );
+  if (!rows.length) {
+    throw new Error("Verification code invalid");
+  }
+  const request = rows[0];
+  if (request.used_at) {
+    throw new Error("Verification code invalid");
+  }
+  if (normalizeEmail(request.email) !== normalizedEmail) {
+    throw new Error("Verification code invalid");
+  }
+  if (new Date(request.expires_at).getTime() <= Date.now()) {
+    throw new Error("Verification code expired");
+  }
+  if (hashOneTimeCode(normalizedCode) !== String(request.code_hash || "")) {
+    throw new Error("Verification code invalid");
+  }
+
+  const { rows: conflictRows } = await pool.query(
+    `SELECT id
+     FROM users
+     WHERE email = $1
+       AND id <> $2
+     LIMIT 1`,
+    [normalizedEmail, numericUserId]
+  );
+  if (conflictRows.length) {
+    throw new Error("Email already in use");
+  }
+
+  await pool.query("BEGIN");
+  try {
+    await pool.query(
+      `UPDATE users
+       SET email = $2,
+           email_verified = true,
+           email_verified_at = now()
+       WHERE id = $1`,
+      [numericUserId, normalizedEmail]
+    );
+    await pool.query(
+      `UPDATE email_verification_requests
+       SET used_at = now()
+       WHERE user_id = $1`,
+      [numericUserId]
+    );
+    await pool.query(
+      `DELETE FROM password_reset_requests
+       WHERE user_id = $1
+         AND email <> $2`,
+      [numericUserId, normalizedEmail]
+    );
+    await pool.query("COMMIT");
+  } catch (err) {
+    await pool.query("ROLLBACK");
+    throw err;
+  }
+}
+
+async function createPasswordResetRequest(username, email) {
+  const normalizedUsername = normalizeUsername(username);
+  const normalizedEmail = normalizeEmail(email);
+  if (!normalizedUsername || !normalizedEmail) {
+    throw new Error("username/email are required");
+  }
+  const { rows } = await pool.query(
+    `SELECT id, nickname
+     FROM users
+     WHERE username = $1
+       AND email = $2
+       AND email_verified = true
+       AND is_bot = false
+     LIMIT 1`,
+    [normalizedUsername, normalizedEmail]
+  );
+  if (!rows.length) {
+    throw new Error("Account not found");
+  }
+  const user = rows[0];
+  const code = createOneTimeCode();
+  const expiresAt = new Date(Date.now() + PASSWORD_RESET_TTL_MIN * 60 * 1000).toISOString();
+  await pool.query(
+    `INSERT INTO password_reset_requests (user_id, email, code_hash, expires_at, used_at)
+     VALUES ($1, $2, $3, $4, NULL)
+     ON CONFLICT (user_id)
+     DO UPDATE SET
+       email = EXCLUDED.email,
+       code_hash = EXCLUDED.code_hash,
+       expires_at = EXCLUDED.expires_at,
+       created_at = now(),
+       used_at = NULL`,
+    [Number(user.id), normalizedEmail, hashOneTimeCode(code), expiresAt]
+  );
+  const subject = "Nonogram Arena password reset code";
+  const text =
+    `Your Nonogram Arena password reset code is ${code}.\n\n` +
+    `This code expires in ${PASSWORD_RESET_TTL_MIN} minutes.`;
+  const html =
+    `<div style="font-family:Arial,sans-serif;line-height:1.6;color:#1f2f3f">` +
+    `<h2 style="margin:0 0 12px">Nonogram Arena</h2>` +
+    `<p style="margin:0 0 12px">Hello ${String(user.nickname || normalizedUsername)}, your password reset code is:</p>` +
+    `<div style="display:inline-block;padding:12px 18px;border-radius:12px;background:#f4f8ff;border:1px solid #c9d8ef;font-size:28px;font-weight:800;letter-spacing:0.12em">${code}</div>` +
+    `<p style="margin:16px 0 0">This code expires in ${PASSWORD_RESET_TTL_MIN} minutes.</p>` +
+    `</div>`;
+  await sendEmailViaResend({
+    to: normalizedEmail,
+    subject,
+    text,
+    html,
+  });
+}
+
+async function resetPasswordWithCode(username, email, code, newPassword) {
+  const normalizedUsername = normalizeUsername(username);
+  const normalizedEmail = normalizeEmail(email);
+  const normalizedCode = normalizeOneTimeCode(code);
+  const normalizedPassword = normalizeUserPassword(newPassword);
+  if (!normalizedUsername || !normalizedEmail || !normalizedCode) {
+    throw new Error("username/email/code are required");
+  }
+  if (!normalizedPassword) {
+    throw new Error("password must be 8+ chars and include letters and numbers");
+  }
+
+  const { rows } = await pool.query(
+    `SELECT id
+     FROM users
+     WHERE username = $1
+       AND email = $2
+       AND email_verified = true
+       AND is_bot = false
+     LIMIT 1`,
+    [normalizedUsername, normalizedEmail]
+  );
+  if (!rows.length) {
+    throw new Error("Account not found");
+  }
+  const numericUserId = Number(rows[0].id || 0);
+  const { rows: requestRows } = await pool.query(
+    `SELECT email, code_hash, expires_at, used_at
+     FROM password_reset_requests
+     WHERE user_id = $1
+     LIMIT 1`,
+    [numericUserId]
+  );
+  if (!requestRows.length) {
+    throw new Error("Reset code invalid");
+  }
+  const request = requestRows[0];
+  if (request.used_at) {
+    throw new Error("Reset code invalid");
+  }
+  if (normalizeEmail(request.email) !== normalizedEmail) {
+    throw new Error("Reset code invalid");
+  }
+  if (new Date(request.expires_at).getTime() <= Date.now()) {
+    throw new Error("Reset code expired");
+  }
+  if (hashOneTimeCode(normalizedCode) !== String(request.code_hash || "")) {
+    throw new Error("Reset code invalid");
+  }
+
+  await pool.query("BEGIN");
+  try {
+    await pool.query(
+      `UPDATE users
+       SET password_hash = $2
+       WHERE id = $1`,
+      [numericUserId, hashUserPassword(normalizedPassword)]
+    );
+    await pool.query(
+      `UPDATE password_reset_requests
+       SET used_at = now()
+       WHERE user_id = $1`,
+      [numericUserId]
+    );
+    await pool.query(`DELETE FROM user_sessions WHERE user_id = $1`, [numericUserId]);
+    await pool.query("COMMIT");
+  } catch (err) {
+    await pool.query("ROLLBACK");
+    throw err;
+  }
 }
 
 async function createSessionForUser(userId) {
@@ -1283,6 +1576,8 @@ function buildClientUser(user) {
     ui_theme: user.ui_theme,
     ui_sound_on: user.ui_sound_on,
     ui_sound_volume: user.ui_sound_volume,
+    email: String(user.email || ""),
+    email_verified: user.email_verified === true,
     placement_done: placementActive,
     placement_rating: placementActive ? Number(user.placement_rating || 0) : null,
     placement_tier_key: placementActive ? String(user.placement_tier_key || "") : "",
@@ -3222,6 +3517,8 @@ setInterval(async () => {
 setInterval(async () => {
   try {
     await pool.query(`DELETE FROM user_sessions WHERE expires_at <= now()`);
+    await pool.query(`DELETE FROM email_verification_requests WHERE expires_at <= now() OR used_at IS NOT NULL`);
+    await pool.query(`DELETE FROM password_reset_requests WHERE expires_at <= now() OR used_at IS NOT NULL`);
   } catch {
     // ignore cleanup failures
   }
@@ -3485,6 +3782,130 @@ app.put("/profile/me", requireAuth, async (req, res) => {
     return res.json({ ok: true, user: buildClientUser(rows[0]), profile });
   } catch (err) {
     return res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+app.post("/profile/me/email/request-verification", requireAuth, async (req, res) => {
+  const email = normalizeEmail(req.body?.email);
+  if (!email) {
+    return res.status(400).json({ ok: false, error: "Invalid email" });
+  }
+  try {
+    await createEmailVerificationRequestForUser(req.authUser.id, email);
+    return res.json({ ok: true, email });
+  } catch (err) {
+    const message = String(err?.message || "");
+    if (message === "Invalid email") {
+      return res.status(400).json({ ok: false, error: message });
+    }
+    if (message === "Email already in use") {
+      return res.status(409).json({ ok: false, error: message });
+    }
+    if (message === "Email service unavailable") {
+      return res.status(503).json({ ok: false, error: message });
+    }
+    return res.status(500).json({ ok: false, error: message || "Failed to send verification email" });
+  }
+});
+
+app.post("/profile/me/email/verify", requireAuth, async (req, res) => {
+  const email = normalizeEmail(req.body?.email);
+  const code = normalizeOneTimeCode(req.body?.code);
+  if (!email) {
+    return res.status(400).json({ ok: false, error: "Invalid email" });
+  }
+  if (!code) {
+    return res.status(400).json({ ok: false, error: "Verification code invalid" });
+  }
+  try {
+    await verifyEmailCodeForUser(req.authUser.id, email, code);
+    const profile = await buildUserProfilePayload(req.authUser.id, { includeUsername: true });
+    const { rows } = await pool.query(
+      `SELECT id, username, nickname, rating, rating_games, rating_wins, rating_losses,
+              win_streak_current, win_streak_best, profile_avatar_key,
+              ui_lang, ui_theme, ui_sound_on, ui_sound_volume,
+              email, email_verified,
+              placement_done, placement_rating, placement_tier_key, placement_version,
+              placement_completed_at_ms, placement_solved_sequential, placement_elapsed_sec
+       FROM users
+       WHERE id = $1
+       LIMIT 1`,
+      [Number(req.authUser.id)]
+    );
+    if (!rows.length || !profile) {
+      return res.status(404).json({ ok: false, error: "User not found" });
+    }
+    return res.json({ ok: true, user: buildClientUser(rows[0]), profile });
+  } catch (err) {
+    const message = String(err?.message || "");
+    if (
+      ["Invalid email", "Verification code invalid", "Verification code expired"].includes(message)
+    ) {
+      return res.status(400).json({ ok: false, error: message });
+    }
+    if (message === "Email already in use") {
+      return res.status(409).json({ ok: false, error: message });
+    }
+    return res.status(500).json({ ok: false, error: message || "Failed to verify email" });
+  }
+});
+
+app.post("/auth/password-reset/request", async (req, res) => {
+  const username = normalizeUsername(req.body?.username);
+  const email = normalizeEmail(req.body?.email);
+  if (!username || !email) {
+    return res.status(400).json({ ok: false, error: "username/email are required" });
+  }
+  try {
+    await createPasswordResetRequest(username, email);
+    return res.json({ ok: true });
+  } catch (err) {
+    const message = String(err?.message || "");
+    if (message === "username/email are required") {
+      return res.status(400).json({ ok: false, error: message });
+    }
+    if (message === "Account not found") {
+      return res.status(404).json({ ok: false, error: message });
+    }
+    if (message === "Email service unavailable") {
+      return res.status(503).json({ ok: false, error: message });
+    }
+    return res.status(500).json({ ok: false, error: message || "Failed to send reset email" });
+  }
+});
+
+app.post("/auth/password-reset/confirm", async (req, res) => {
+  const username = normalizeUsername(req.body?.username);
+  const email = normalizeEmail(req.body?.email);
+  const code = normalizeOneTimeCode(req.body?.code);
+  const password = normalizeUserPassword(req.body?.password);
+  if (!username || !email || !code || !password) {
+    return res.status(400).json({
+      ok: false,
+      error: !password
+        ? "password must be 8+ chars and include letters and numbers"
+        : "username/email/code are required",
+    });
+  }
+  try {
+    await resetPasswordWithCode(username, email, code, password);
+    return res.json({ ok: true });
+  } catch (err) {
+    const message = String(err?.message || "");
+    if (
+      [
+        "username/email/code are required",
+        "password must be 8+ chars and include letters and numbers",
+        "Reset code invalid",
+        "Reset code expired",
+      ].includes(message)
+    ) {
+      return res.status(400).json({ ok: false, error: message });
+    }
+    if (message === "Account not found") {
+      return res.status(404).json({ ok: false, error: message });
+    }
+    return res.status(500).json({ ok: false, error: message || "Failed to reset password" });
   }
 });
 
