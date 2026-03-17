@@ -1,4 +1,5 @@
-﻿import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
+﻿import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
+import confetti from "canvas-confetti";
 import EmojiPicker from "emoji-picker-react";
 import { motion } from "framer-motion";
 import { ChevronDown, Eraser, GripHorizontal, Home, Lock, LogIn, Maximize2, Minimize2, Minus, Moon, Plus, Redo2, Settings, Sun, Trophy, Undo2, User, UserPlus, Volume2, VolumeX } from "lucide-react";
@@ -1107,9 +1108,70 @@ function App() {
   const lastPaintSfxAtRef = useRef(0);
   const tutorialCompleteShownRef = useRef(false);
   const multiResultShownKeyRef = useRef("");
+  const victoryConfettiTimersRef = useRef([]);
   const deferredCells = useDeferredValue(cells);
   const L = (ko, en) => (lang === "ko" ? ko : en);
   const normalizeClientEmail = (value) => String(value || "").trim().toLowerCase();
+
+  const clearVictoryConfettiTimers = useCallback(() => {
+    if (!victoryConfettiTimersRef.current.length) return;
+    victoryConfettiTimersRef.current.forEach((timerId) => clearTimeout(timerId));
+    victoryConfettiTimersRef.current = [];
+  }, []);
+
+  const triggerVictoryFx = useCallback((mode = "single") => {
+    if (typeof window === "undefined") return;
+    clearVictoryConfettiTimers();
+
+    const isMulti = mode === "multi";
+    const colors = ["#ffca1f", "#1ecbff", "#ff3f86", "#63ff4f", "#7a4dff", "#ff6f1f"];
+    const defaults = {
+      zIndex: 1600,
+      colors,
+      ticks: isMulti ? 390 : 320,
+      gravity: isMulti ? 0.9 : 0.95,
+      startVelocity: isMulti ? 58 : 50,
+      spread: isMulti ? 84 : 70,
+      scalar: isMulti ? 1.24 : 1.1,
+      drift: 0,
+      disableForReducedMotion: true,
+    };
+
+    const bursts = isMulti
+      ? [
+          { delay: 0, origin: { x: 0.12, y: 0.82 }, angle: 62, particleCount: 135 },
+          { delay: 0, origin: { x: 0.88, y: 0.82 }, angle: 118, particleCount: 135 },
+          { delay: 110, origin: { x: 0.5, y: 0.2 }, angle: 90, particleCount: 115, spread: 108, startVelocity: 48, scalar: 1.1 },
+          { delay: 230, origin: { x: 0.3, y: 0.1 }, angle: 76, particleCount: 84, spread: 98, startVelocity: 42, scalar: 1.06 },
+          { delay: 230, origin: { x: 0.7, y: 0.1 }, angle: 104, particleCount: 84, spread: 98, startVelocity: 42, scalar: 1.06 },
+          { delay: 360, origin: { x: 0.5, y: 0.72 }, angle: 90, particleCount: 76, spread: 76, startVelocity: 38, scalar: 1.02 },
+        ]
+      : [
+          { delay: 0, origin: { x: 0.16, y: 0.82 }, angle: 62, particleCount: 96 },
+          { delay: 0, origin: { x: 0.84, y: 0.82 }, angle: 118, particleCount: 96 },
+          { delay: 130, origin: { x: 0.5, y: 0.18 }, angle: 90, particleCount: 76, spread: 96, startVelocity: 40, scalar: 1.04 },
+          { delay: 260, origin: { x: 0.5, y: 0.74 }, angle: 90, particleCount: 44, spread: 74, startVelocity: 32, scalar: 0.96 },
+        ];
+
+    bursts.forEach((burst) => {
+      const fire = () => {
+        confetti({
+          ...defaults,
+          ...burst,
+        });
+      };
+      if (burst.delay > 0) {
+        const timerId = window.setTimeout(fire, burst.delay);
+        victoryConfettiTimersRef.current.push(timerId);
+      } else {
+        fire();
+      }
+    });
+  }, [clearVictoryConfettiTimers]);
+
+  useEffect(() => () => {
+    clearVictoryConfettiTimers();
+  }, [clearVictoryConfettiTimers]);
 
   const applyUiPreferences = (prefUser) => {
     if (!prefUser || typeof prefUser !== "object") return;
@@ -4878,6 +4940,7 @@ function App() {
       } else {
         setStatus("Success! Puzzle solved.");
         if (isModeSingle && !isInRaceRoom) {
+          triggerVictoryFx("single");
           submitSingleFinish();
         }
       }
@@ -4894,12 +4957,16 @@ function App() {
     placementRunning,
     isModeTutorial,
     isModeSingle,
+    triggerVictoryFx,
   ]);
 
   useEffect(() => {
     if (!isInRaceRoom || racePhase !== "finished" || !raceState?.winnerPlayerId || raceResultShownRef.current) return;
     raceResultShownRef.current = true;
     if (raceState.winnerPlayerId === racePlayerId) {
+      if (isModeMulti || isModePvp) {
+        triggerVictoryFx("multi");
+      }
       setStatus(L("승리하였습니다.", "Victory."));
       playSfx("win");
     } else {
@@ -4916,7 +4983,7 @@ function App() {
       setTimerRunning(false);
       playSfx("lose");
     }
-  }, [isInRaceRoom, racePhase, raceState, racePlayerId, myRacePlayer, L]);
+  }, [isInRaceRoom, racePhase, raceState, racePlayerId, myRacePlayer, isModeMulti, isModePvp, L, triggerVictoryFx]);
 
   useEffect(() => {
     if (!showMultiResultModal) return;
