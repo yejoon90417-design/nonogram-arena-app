@@ -85,7 +85,8 @@ const CREATOR_SAMPLES_PATH = path.join(__dirname, "creator-samples.generated.jso
 const CREATOR_SIZE_GROUPS = {
   small: { titleKo: "스몰", titleEn: "Small", maxSide: 14 },
   medium: { titleKo: "미디엄", titleEn: "Medium", maxSide: 20 },
-  large: { titleKo: "라지", titleEn: "Large", maxSide: Infinity },
+  large: { titleKo: "라지", titleEn: "Large", maxSide: 24 },
+  xlarge: { titleKo: "엑스라지", titleEn: "XLarge", maxSide: Infinity },
 };
 const PVP_BOT_RECENT_APPEARANCE_TTL_MS = Math.max(
   1000 * 60 * 45,
@@ -960,7 +961,8 @@ function getCreatorSizeGroup(width, height) {
   const maxSide = Math.max(Number(width) || 0, Number(height) || 0);
   if (maxSide <= CREATOR_SIZE_GROUPS.small.maxSide) return "small";
   if (maxSide <= CREATOR_SIZE_GROUPS.medium.maxSide) return "medium";
-  return "large";
+  if (maxSide <= CREATOR_SIZE_GROUPS.large.maxSide) return "large";
+  return "xlarge";
 }
 
 function getCreatorGroupTitles(sizeGroup) {
@@ -3794,6 +3796,7 @@ async function fetchCreatorCommunityPuzzleRows(viewerUserId = null) {
          WHEN 'small' THEN 1
          WHEN 'medium' THEN 2
          WHEN 'large' THEN 3
+         WHEN 'xlarge' THEN 4
          ELSE 99
        END,
        p.created_at DESC,
@@ -4573,6 +4576,7 @@ app.get("/creator-samples", async (req, res) => {
            WHEN 'small' THEN 1
            WHEN 'medium' THEN 2
            WHEN 'large' THEN 3
+           WHEN 'xlarge' THEN 4
            ELSE 99
          END,
          sort_index ASC,

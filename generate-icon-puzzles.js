@@ -6,6 +6,7 @@ const GROUPS = {
   small: { targetSize: 14, titleKo: '\uC2A4\uBAB0', titleEn: 'Small' },
   medium: { targetSize: 18, titleKo: '\uBBF8\uB514\uC5C4', titleEn: 'Medium' },
   large: { targetSize: 24, titleKo: '\uB77C\uC9C0', titleEn: 'Large' },
+  xlarge: { targetSize: 36, titleKo: '\uC5D1\uC2A4\uB77C\uC9C0', titleEn: 'XLarge' },
 };
 const TARGET_PER_GROUP = 50;
 
@@ -234,6 +235,48 @@ const GROUP_PRIORITY_NAMES = {
     'cloud-rain',
     'moon-stars',
   ],
+  xlarge: [
+    'airplane',
+    'ambulance',
+    'bus',
+    'car',
+    'cable-car',
+    'castle-turret',
+    'lighthouse',
+    'backpack',
+    'baby-carriage',
+    'camera',
+    'books',
+    'game-controller',
+    'guitar',
+    'microphone-stage',
+    'football-helmet',
+    'basketball',
+    'beach-ball',
+    'bowling-ball',
+    'chef-hat',
+    'ghost',
+    'cat',
+    'dog',
+    'bird',
+    'fish-simple',
+    'flower-lotus',
+    'cloud-lightning',
+    'moon-stars',
+    'hamburger',
+    'gift',
+    'cookie',
+    'cake',
+    'ice-cream',
+    'music-notes',
+    'lego-smiley',
+    'heart',
+    'leaf',
+    'cloud-sun',
+    'cloud-snow',
+    'cloud-rain',
+    'crown',
+  ],
 };
 
 const HEROICONS_FRIENDLY_POOL = [
@@ -281,6 +324,236 @@ const HEROICONS_FRIENDLY_POOL = [
   ['rocket-launch', '\uB85C\uCF13', 'Rocket'],
   ['building-library', '\uB3C4\uC11C\uAD00', 'Library'],
   ['trophy', '\uD2B8\uB85C\uD53C', 'Trophy'],
+];
+
+const LUCIDE_FRIENDLY_POOL = [
+  ['apple', '\uC0AC\uACFC', 'Apple'],
+  ['armchair', '\uC548\uB77D\uc758\uc790', 'Armchair'],
+  ['baby', '\uC544\uAE30', 'Baby'],
+  ['badge-help', '\uBB3C\uC74C\ud45c \ubc30\uc9c0', 'Help Badge'],
+  ['badge-plus', '\uD50C\ub7ec\uc2A4 \ubc30\uc9c0', 'Plus Badge'],
+  ['banana', '\uBC14\uB098\uB098', 'Banana'],
+  ['bean', '\uCF69', 'Bean'],
+  ['bird', '\uC0C8', 'Bird'],
+  ['bone', '\uBF08\ub2E4\uADC0', 'Bone'],
+  ['bug', '\uBC8C\uB808', 'Bug'],
+  ['cake-slice', '\uCF00\uC774\uD06C \ud55C\uc870\uac01', 'Cake Slice'],
+  ['candy', '\uC0AC\ud0D5', 'Candy'],
+  ['carrot', '\uB2F9\uADFC', 'Carrot'],
+  ['cherry', '\uCCB4\uB9AC', 'Cherry'],
+  ['clover', '\uD074\ub85C\ubc84', 'Clover'],
+  ['cloud', '\uAD6C\uB984', 'Cloud'],
+  ['cloud-rain', '\uBE44 \uAD6C\uB984', 'Rain Cloud'],
+  ['cloud-sun', '\uD574 \uAD6C\uB984', 'Sun Cloud'],
+  ['coffee', '\uCEE4\uD53C', 'Coffee'],
+  ['croissant', '\uD06C\ub8e8\uc544\uc0c1', 'Croissant'],
+  ['cup-soda', '\uC74C\ub8cc \uc794', 'Soda Cup'],
+  ['cupcake', '\uCEF5\ucf00\uc774\uD06C', 'Cupcake'],
+  ['donut', '\uB3C4\ub11b', 'Donut'],
+  ['flower', '\uAF43', 'Flower'],
+  ['flower-2', '\uAF43 \ub450\uc1a1\uc774', 'Flower Two'],
+  ['gift', '\uC120\ubb3c', 'Gift'],
+  ['grape', '\uD3EC\ub3C4', 'Grape'],
+  ['hand-heart', '\uD558\uD2B8 \uc190', 'Hand Heart'],
+  ['heart', '\uD558\uD2B8', 'Heart'],
+  ['ice-cream-bowl', '\uC544\uC774\uC2A4\uD06C\uB9BC \uADF8\uB987', 'Ice Cream Bowl'],
+  ['ice-cream-cone', '\uC544\uC774\uC2A4\uD06C\uB9BC \uCF58', 'Ice Cream Cone'],
+  ['key-round', '\uB3D9\uADF8\ub780 \uc5F4\uC1E0', 'Round Key'],
+  ['lamp', '\uC2A4\ud0E0\ub4dc', 'Lamp'],
+  ['leaf', '\uC78E\uc0ac\uADC0', 'Leaf'],
+  ['lollipop', '\uB864\ub9ac\ud31d', 'Lollipop'],
+  ['milk', '\uC6B0\uc720', 'Milk'],
+  ['moon-star', '\uBCC4 \uB2EC', 'Moon Star'],
+  ['paw-print', '\uBC1C\uc790\uAD6D', 'Paw Print'],
+  ['pear', '\uBC30', 'Pear'],
+  ['pizza', '\uD53C\uc790', 'Pizza'],
+  ['rabbit', '\uD1A0\ub07C', 'Rabbit'],
+  ['rainbow', '\uBB34\uc9C0\uAC1C', 'Rainbow'],
+  ['sandwich', '\uC0CC\ub4DC\uc704\uCE58', 'Sandwich'],
+  ['shell', '\uC870\uAC1C\uAECD\uB370\uAE30', 'Shell'],
+  ['shrimp', '\uC0C8\uc6b0', 'Shrimp'],
+  ['smile', '\uC2A4\ub9C8\uc77C', 'Smile'],
+  ['snowflake', '\uB208\uc1A1\uc774', 'Snowflake'],
+  ['sprout', '\uC0C8\uc2F9', 'Sprout'],
+  ['squirrel', '\uB2E4\ub78c\uc950', 'Squirrel'],
+  ['star', '\uBCC4', 'Star'],
+  ['strawberry', '\uB538\uae30', 'Strawberry'],
+  ['sun', '\uD574', 'Sun'],
+  ['tent-tree', '\uCEA0\ud551 \ud2b8\ub9ac', 'Tent Tree'],
+  ['tree-deciduous', '\uB098\ubb34', 'Tree'],
+  ['tree-palm', '\uC57C\uc790\ub098\ubb34', 'Palm Tree'],
+  ['tree-pine', '\uC18C\ub098\ubb34', 'Pine Tree'],
+  ['trees', '\uC232', 'Trees'],
+  ['turtle', '\uAC70\ubd81\uc774', 'Turtle'],
+  ['umbrella', '\uC6B0\uc0B0', 'Umbrella'],
+  ['watermelon', '\uC218\ubc15', 'Watermelon'],
+];
+
+const LUCIDE_LARGE_EXTRA_POOL = [
+  ['alarm-clock', '\uC54C\ub78c \uc2dc\uacc4', 'Alarm Clock'],
+  ['badge-alert', '\uACBD\uACE0 \ubc30\uc9c0', 'Alert Badge'],
+  ['badge-check', '\uCCB4\ud06c \ubc30\uc9c0', 'Check Badge'],
+  ['bath', '\uC695\uc870', 'Bath'],
+  ['bike', '\uC790\uc804\uAC70', 'Bike'],
+  ['candy-cane', '\uC0AC\ud0d5 \uc9c0\ud321\uc774', 'Candy Cane'],
+  ['citrus', '\uAC10\uADE4', 'Citrus'],
+  ['cookie', '\uCFE0\ud0A4', 'Cookie'],
+  ['drumstick', '\uB2ED\ub2E4\ub9AC', 'Drumstick'],
+  ['ferris-wheel', '\uB300\uAD00\ub78c\ucc28', 'Ferris Wheel'],
+  ['fish', '\uBB3C\uACE0\uAE30', 'Fish'],
+  ['hand-platter', '\uC11C\ube59 \uc190', 'Serving Hand'],
+  ['lamp-desk', '\uCC45\uc0C1 \uc2A4\ud0E0\ub4DC', 'Desk Lamp'],
+  ['mouse', '\uC0DD\uc950', 'Mouse'],
+  ['nut', '\uB3C4\ud1A0\ub9AC', 'Nut'],
+  ['origami', '\uC885\uc774\uc811\uae30', 'Origami'],
+  ['party-popper', '\uD30C\ud2F0 \ud3ED\uc8FD', 'Party Popper'],
+  ['popcorn', '\uD31D\ucf58', 'Popcorn'],
+  ['popsicle', '\uC544\uc774\uc2A4\ubc14', 'Popsicle'],
+  ['salad', '\uC0D0\ub7EC\ub4dc', 'Salad'],
+  ['snail', '\uB2EC\ud33D\uc774', 'Snail'],
+  ['sunrise', '\uC77C\ucd9c', 'Sunrise'],
+  ['sunset', '\uC77c\ubab0', 'Sunset'],
+  ['tent', '\uD150\ud2B8', 'Tent'],
+  ['toy-brick', '\uC7A5\ub09c\uAC10 \ube14\ub7ED', 'Toy Brick'],
+  ['train-front', '\uAE30\uCC28', 'Train'],
+  ['tram-front', '\uD2B8\ub7a8', 'Tram'],
+  ['utensils-crossed', '\uC218\uc800 \uc138\ud2b8', 'Utensils'],
+  ['vegan', '\uBE44\uAC74', 'Vegan'],
+];
+
+const LUCIDE_XLARGE_EXTRA_POOL = [
+  ['alarm-clock', '\uC54C\uB78C \uC2DC\uACC4', 'Alarm Clock'],
+  ['album', '\uC568\uBC94', 'Album'],
+  ['armchair', '\uC548\uB77D\uc758\uc790', 'Armchair'],
+  ['balloon', '\uD48D\uC120', 'Balloon'],
+  ['badge-alert', '\uACBD\uACE0 \uBC30\uC9C0', 'Alert Badge'],
+  ['badge-check', '\uCCB4\uD06C \uBC30\uC9C0', 'Check Badge'],
+  ['badge-help', '\uBB3C\uC74C\ud45c \ubc30\uc9c0', 'Help Badge'],
+  ['badge-plus', '\uD50C\ub7EC\uc2A4 \uBC30\uC9C0', 'Plus Badge'],
+  ['bath', '\uC695\uc870', 'Bath'],
+  ['bike', '\uC790\uC804\uAC70', 'Bike'],
+  ['bell-dot', '\uC54C\uB9BC \uC885', 'Bell Dot'],
+  ['bell-electric', '\uC804\uAE30 \uC885', 'Electric Bell'],
+  ['bell-ring', '\uC6B8\uB9AC\uB294 \uC885', 'Bell Ring'],
+  ['birdhouse', '\uC0C8\uc9D1', 'Birdhouse'],
+  ['blocks', '\uBE14\uB85D', 'Blocks'],
+  ['book-heart', '\uD558\uD2B8 \uCC45', 'Heart Book'],
+  ['book-headphones', '\uD5E4\uB4DC\uD3F0 \uCC45', 'Headphones Book'],
+  ['book-image', '\uADF8\uB9BC \uCC45', 'Picture Book'],
+  ['book-marked', '\uD45C\uC2DC \uCC45', 'Marked Book'],
+  ['book-open-check', '\uCCB4\uD06C \uCC45', 'Checked Book'],
+  ['book-open-text', '\uAE00 \uCC45', 'Text Book'],
+  ['book-template', '\uCC45 \uD15C\ud50c\ub9bf', 'Book Template'],
+  ['book-user', '\uC0AC\uC6A9\uC790 \uCC45', 'User Book'],
+  ['bus-front', '\uC815\uBA74 \uBC84\uC2A4', 'Bus Front'],
+  ['candy', '\uC0AC\uD0D5', 'Candy'],
+  ['candy-cane', '\uC0AC\uD0D5 \uC9C0\uD321\uC774', 'Candy Cane'],
+  ['calendar-heart', '\uD558\uD2B8 \uB2EC\uB825', 'Heart Calendar'],
+  ['camera-off', '\uCE74\uBA54\uB77C \uC624\uD504', 'Camera Off'],
+  ['car-front', '\uC815\uBA74 \uC790\uB3D9\uCC28', 'Car Front'],
+  ['car-taxi-front', '\uD0DD\uC2DC', 'Taxi'],
+  ['cat', '\uACE0\uC591\uC774', 'Cat'],
+  ['cherry', '\uCCB4\uB9AC', 'Cherry'],
+  ['citrus', '\uAC10\uADE4', 'Citrus'],
+  ['clover', '\uD074\uB85C\uBC84', 'Clover'],
+  ['circle-star', '\uC6D0\uD615 \uBCC4', 'Circle Star'],
+  ['concierge-bell', '\uD638\uD154 \uBCA8', 'Concierge Bell'],
+  ['credit-card', '\uCE74\uB4DC', 'Card'],
+  ['croissant', '\uD06C\uB8E8\uC544\uC0C1', 'Croissant'],
+  ['cup-soda', '\uC74C\uB8CC \uC794', 'Soda Cup'],
+  ['cupcake', '\uCEF5\uCF00\uC774\uD06C', 'Cupcake'],
+  ['dices', '\uC8FC\uC0AC\uC704 \uC138\uD2B8', 'Dice Set'],
+  ['disc-album', '\uB514\uc2A4\ud06c \uc568\ubc94', 'Disc Album'],
+  ['donut', '\uB3C4\uB11B', 'Donut'],
+  ['ferris-wheel', '\uB300\uAD00\uB78C\uCC28', 'Ferris Wheel'],
+  ['file-heart', '\uD558\uD2B8 \uD30C\uC77C', 'Heart File'],
+  ['fish', '\uBB3C\uACE0\uAE30', 'Fish'],
+  ['flower-2', '\uAF43 \uB450\uC1A1\uC774', 'Flower Two'],
+  ['gamepad', '\uAC8C\uC784\uD328\uB4DC', 'Gamepad'],
+  ['gamepad-2', '\uB354\ube14 \uAC8C\uC784\uD328\uB4DC', 'Gamepad Two'],
+  ['gamepad-directional', '\uBC29\ud5a5 \uAC8C\uC784\uD328\uB4DC', 'Directional Gamepad'],
+  ['glass-water', '\uBB3C \uC794', 'Water Glass'],
+  ['grape', '\uD3EC\uB3C4', 'Grape'],
+  ['hand-platter', '\uC11C\uBE59 \uC190', 'Serving Hand'],
+  ['heart-handshake', '\uD558\uD2B8 \uC57D\uC18D', 'Heart Handshake'],
+  ['heart-plus', '\uD558\uD2B8 \uD50C\uB7EC\uC2A4', 'Heart Plus'],
+  ['ice-cream-bowl', '\uC544\uC774\uC2A4\uD06C\uB9BC \uADF8\uB987', 'Ice Cream Bowl'],
+  ['ice-cream-cone', '\uC544\uC774\uC2A4\uD06C\uB9BC \uCF58', 'Ice Cream Cone'],
+  ['ice-cream', '\uC544\uC774\uC2A4\uD06C\uB9BC', 'Ice Cream'],
+  ['ice-cream-2', '\uC18C\uD504\ud2b8 \uC544\uC774\uC2A4\uD06C\uB9BC', 'Soft Ice Cream'],
+  ['house-heart', '\uD558\uD2B8 \uC9D1', 'Heart House'],
+  ['house-plus', '\uC0C8 \uC9D1', 'House Plus'],
+  ['house-wifi', '\uC640\uc774\ud30c\uc774 \uc9d1', 'WiFi House'],
+  ['keyboard-music', '\uC74C\uC545 \ud0a4\ubcf4\ub4dc', 'Music Keyboard'],
+  ['lamp-desk', '\uCC45\uC0C1 \uC2A4\uD0E0\uB4DC', 'Desk Lamp'],
+  ['lamp-ceiling', '\uCC9C\uc7a5 \uc2a4\ud0e0\ub4dc', 'Ceiling Lamp'],
+  ['lamp-floor', '\uBC14\ub2e5 \uc2a4\ud0e0\ub4dc', 'Floor Lamp'],
+  ['lollipop', '\uB864\uB9AC\uD31D', 'Lollipop'],
+  ['milk', '\uC6B0\uC720', 'Milk'],
+  ['moon-star', '\uBCC4 \uB2EC', 'Moon Star'],
+  ['moon', '\uB2EC', 'Moon'],
+  ['message-circle-heart', '\uD558\uD2B8 \uBA54\uc2dc\uc9c0', 'Heart Message'],
+  ['message-square-heart', '\uD558\uD2B8 \uB313\uae00', 'Heart Comment'],
+  ['mouse', '\uC0DD\uC950', 'Mouse'],
+  ['nut', '\uB3C4\uD1A0\uB9AC', 'Nut'],
+  ['music', '\uC74C\uC545', 'Music'],
+  ['music-2', '\uB450 \uAC1C \uC74C\uD45C', 'Music Two'],
+  ['notebook-pen', '\uD39C \uB178\uD2B8', 'Notebook Pen'],
+  ['notebook-tabs', '\uD0ED \uB178\uD2B8', 'Notebook Tabs'],
+  ['notebook-text', '\uAE00 \uB178\uD2B8', 'Notebook Text'],
+  ['origami', '\uC885\uC774\uC811\uAE30', 'Origami'],
+  ['palmtree', '\uC57C\uC790\uC218', 'Palm Tree'],
+  ['party-popper', '\uD30C\uD2F0 \uD3ED\uC8FD', 'Party Popper'],
+  ['paw-print', '\uBC1C\uC790\uAD6D', 'Paw Print'],
+  ['pear', '\uBC30', 'Pear'],
+  ['pizza', '\uD53C\uC790', 'Pizza'],
+  ['popcorn', '\uD31D\uCF58', 'Popcorn'],
+  ['popsicle', '\uC544\uC774\uC2A4\uBC14', 'Popsicle'],
+  ['rabbit', '\uD1A0\uB07C', 'Rabbit'],
+  ['rainbow', '\uBB34\uC9C0\uAC1C', 'Rainbow'],
+  ['rocket', '\uB85C\uCF13', 'Rocket'],
+  ['salad', '\uC0D0\uB7EC\uB4DC', 'Salad'],
+  ['sandwich', '\uC0CC\uB4DC\uC704\uCE58', 'Sandwich'],
+  ['shell', '\uC870\uAC1C\uAECD\uB370\uAE30', 'Shell'],
+  ['shopping-cart', '\uC7A5\uBC14\uAD6C\uB2C8', 'Shopping Cart'],
+  ['shrimp', '\uC0C8\uC6B0', 'Shrimp'],
+  ['slice', '\uC870\uAC01', 'Slice'],
+  ['smile', '\uC2A4\uB9C8\uC77C', 'Smile'],
+  ['smile-plus', '\uC2A4\uB9C8\uC77C \uD50C\uB7EC\uC2A4', 'Smile Plus'],
+  ['snail', '\uB2EC\uD33D\uC774', 'Snail'],
+  ['snowflake', '\uB208\uC1A1\uC774', 'Snowflake'],
+  ['sparkle', '\uC791\uC740 \uBC18\uC9DD\uC784', 'Sparkle'],
+  ['sprout', '\uC0C8\uC2F9', 'Sprout'],
+  ['squirrel', '\uB2E4\uB78C\uC950', 'Squirrel'],
+  ['strawberry', '\uB538\uAE30', 'Strawberry'],
+  ['stars', '\uBCC4\uB4E4', 'Stars'],
+  ['sun-dim', '\uBD80\ub4dc\ub7ec\uc6b4 \ud574', 'Dim Sun'],
+  ['sun-medium', '\uD070 \uD574', 'Medium Sun'],
+  ['sun-moon', '\uD574\uC640 \uB2EC', 'Sun Moon'],
+  ['sun-snow', '\uD574\uC640 \uB208', 'Sun Snow'],
+  ['sunrise', '\uC77C\uCD9C', 'Sunrise'],
+  ['sunset', '\uC77C\uBAB0', 'Sunset'],
+  ['swatch-book', '\uC0C9\uC0C1 \uCC45', 'Swatch Book'],
+  ['switch-camera', '\uCE74\uBA54\uB77C \uC804\uD658', 'Switch Camera'],
+  ['tent', '\uD150\uD2B8', 'Tent'],
+  ['tent-tree', '\uCEA0\uD551 \uD2B8\uB9AC', 'Tent Tree'],
+  ['tickets-plane', '\uBE44\uD589\uAE30 \uD2F0\uCF13', 'Plane Tickets'],
+  ['toy-brick', '\uC7A5\uB09C\uAC10 \uBE14\uB7ED', 'Toy Brick'],
+  ['train', '\uAE30\uCC28', 'Train'],
+  ['train-front', '\uAE30\uCC28', 'Train'],
+  ['train-front-tunnel', '\uD130\uB110 \uAE30\uCC28', 'Tunnel Train'],
+  ['train-track', '\uAE30\uCC28 \uB808\uC77C', 'Train Track'],
+  ['tram-front', '\uD2B8\uB7A8', 'Tram'],
+  ['tree-deciduous', '\uB098\uBB34', 'Tree'],
+  ['tree-palm', '\uC57C\uC790\uB098\uBB34', 'Palm Tree'],
+  ['tree-pine', '\uC18C\uB098\uBB34', 'Pine Tree'],
+  ['trees', '\uC232', 'Trees'],
+  ['turtle', '\uAC70\uBD81\uC774', 'Turtle'],
+  ['umbrella', '\uC6B0\uC0B0', 'Umbrella'],
+  ['utensils-crossed', '\uC218\uC800 \uC138\uD2B8', 'Utensils'],
+  ['wallet-cards', '\uCE74\uB4DC \uC9C0\uAC11', 'Wallet Cards'],
+  ['wand-sparkles', '\uB9C8\uBC95 \uBC29\uB9DD\uC774', 'Magic Wand'],
+  ['watermelon', '\uC218\uBC15', 'Watermelon'],
 ];
 
 const SPECIAL_TITLE_KO_MAP = {
@@ -502,7 +775,13 @@ function buildIconCandidate(sizeGroup, name, options = {}) {
   const sourceUrl =
     sourcePack === 'hero'
       ? `https://raw.githubusercontent.com/tailwindlabs/heroicons/master/src/24/solid/${name}.svg`
-      : `https://raw.githubusercontent.com/phosphor-icons/core/main/assets/regular/${name}.svg`;
+      : sourcePack === 'lucide'
+        ? `https://raw.githubusercontent.com/lucide-icons/lucide/main/icons/${name}.svg`
+        : sourcePack === 'phosphor-fill'
+          ? `https://raw.githubusercontent.com/phosphor-icons/core/main/assets/fill/${name}.svg`
+          : sourcePack === 'phosphor-bold'
+            ? `https://raw.githubusercontent.com/phosphor-icons/core/main/assets/bold/${name}.svg`
+            : `https://raw.githubusercontent.com/phosphor-icons/core/main/assets/regular/${name}.svg`;
   return {
     id: `${sourcePack}-${sizeGroup}-${name}`,
     sourceName: name,
@@ -523,14 +802,38 @@ function uniqueNames(names) {
 
 async function buildIconCandidates() {
   return Object.keys(GROUPS).flatMap((groupKey) => {
-    const phosphorCandidates = uniqueNames([
+    const phosphorNames = uniqueNames([
       ...GROUP_PRIORITY_NAMES[groupKey],
       ...PHOSPHOR_FRIENDLY_POOL,
-    ]).map((name) => buildIconCandidate(groupKey, name, { sourcePack: 'phosphor' }));
+    ]);
+    const phosphorCandidates = phosphorNames.map((name) =>
+      buildIconCandidate(groupKey, name, { sourcePack: 'phosphor' })
+    );
     const heroCandidates = HEROICONS_FRIENDLY_POOL.map(([name, titleKo, titleEn]) =>
       buildIconCandidate(groupKey, name, { sourcePack: 'hero', titleKo, titleEn })
     );
-    return [...phosphorCandidates, ...heroCandidates];
+    const lucideCandidates = LUCIDE_FRIENDLY_POOL.map(([name, titleKo, titleEn]) =>
+      buildIconCandidate(groupKey, name, { sourcePack: 'lucide', titleKo, titleEn })
+    );
+    const lucideLargeExtraCandidates =
+      groupKey === 'large'
+        ? LUCIDE_LARGE_EXTRA_POOL.map(([name, titleKo, titleEn]) =>
+            buildIconCandidate(groupKey, name, { sourcePack: 'lucide', titleKo, titleEn })
+          )
+        : [];
+    const lucideXLargeExtraCandidates =
+      groupKey === 'xlarge'
+        ? LUCIDE_XLARGE_EXTRA_POOL.map(([name, titleKo, titleEn]) =>
+            buildIconCandidate(groupKey, name, { sourcePack: 'lucide', titleKo, titleEn })
+          )
+        : [];
+    return [
+      ...phosphorCandidates,
+      ...heroCandidates,
+      ...lucideCandidates,
+      ...lucideLargeExtraCandidates,
+      ...lucideXLargeExtraCandidates,
+    ];
   });
 }
 
@@ -845,6 +1148,7 @@ async function renderIconRows(page, svgText, targetSize = 14) {
   const icons = await buildIconCandidates();
   const samples = [];
   const acceptedCounts = Object.fromEntries(Object.keys(GROUPS).map((groupKey) => [groupKey, 0]));
+  const acceptedTitles = new Set();
   for (const icon of icons) {
     if (acceptedCounts[icon.sizeGroup] >= TARGET_PER_GROUP) continue;
     const res = await fetch(icon.sourceUrl);
@@ -860,7 +1164,19 @@ async function renderIconRows(page, svgText, targetSize = 14) {
     }
     const analysis = analyzePuzzle(rows);
     if (analysis.unique && !analysis.needsGuess) {
+      const titleKoKey = String(icon.titleKo || '').trim().toLowerCase();
+      const titleEnKey = String(icon.titleEn || '').trim().toLowerCase();
+      if (titleKoKey && acceptedTitles.has(`ko:${titleKoKey}`)) {
+        console.log(icon.id, icon.sizeGroup, 'SKIP duplicate-title-ko');
+        continue;
+      }
+      if (titleEnKey && acceptedTitles.has(`en:${titleEnKey}`)) {
+        console.log(icon.id, icon.sizeGroup, 'SKIP duplicate-title-en');
+        continue;
+      }
       samples.push({ ...icon, rows, ...analysis });
+      if (titleKoKey) acceptedTitles.add(`ko:${titleKoKey}`);
+      if (titleEnKey) acceptedTitles.add(`en:${titleEnKey}`);
       acceptedCounts[icon.sizeGroup] += 1;
       console.log(icon.id, icon.sizeGroup, `${rows[0]?.length || 0}x${rows.length}`, 'PASS');
       if (Object.values(acceptedCounts).every((count) => count >= TARGET_PER_GROUP)) break;

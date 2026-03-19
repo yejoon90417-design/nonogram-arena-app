@@ -978,11 +978,12 @@ const DEFAULT_CREATOR_SAMPLE_PUZZLES = GENERATED_CREATOR_SAMPLE_PUZZLES.map((sam
   })
 );
 
-const CREATOR_SAMPLE_GROUP_ORDER = ["small", "medium", "large"];
+const CREATOR_SAMPLE_GROUP_ORDER = ["small", "medium", "large", "xlarge"];
 const CREATOR_GROUP_LABELS = {
   small: { ko: "스몰", en: "Small" },
   medium: { ko: "미디엄", en: "Medium" },
   large: { ko: "라지", en: "Large" },
+  xlarge: { ko: "엑스라지", en: "XLarge" },
 };
 
 async function parseJsonSafe(res) {
