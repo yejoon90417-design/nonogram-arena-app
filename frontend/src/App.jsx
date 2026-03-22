@@ -2299,7 +2299,7 @@ function App() {
   const isRaceFinished = isInRaceRoom && racePhase === "finished";
   const isRacePreStartMasked = isInRaceRoom && (isRaceLobby || isRaceCountdown);
   const canAutoOpenVoteModal = false;
-  const shouldEnableAds = isModeRanking || isModeLegacyRanking || isModeReplayHall;
+  const shouldEnableAds = true;
 
   useEffect(() => {
     if (typeof document === "undefined") return;
