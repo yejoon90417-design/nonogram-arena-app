@@ -1,8 +1,14 @@
 {
   "rewrites": [
-    {
-      "source": "/((?!.*\\..*).*)",
-      "destination": "/index.html"
-    }
+    { "source": "/single/:path*", "destination": "/index.html" },
+    { "source": "/create/:path*", "destination": "/index.html" },
+    { "source": "/multi/:path*", "destination": "/index.html" },
+    { "source": "/pvp/:path*", "destination": "/index.html" },
+    { "source": "/placement/:path*", "destination": "/index.html" },
+    { "source": "/auth/:path*", "destination": "/index.html" },
+    { "source": "/tutorial/:path*", "destination": "/index.html" },
+    { "source": "/ranking/:path*", "destination": "/index.html" },
+    { "source": "/ranking-legacy/:path*", "destination": "/index.html" },
+    { "source": "/hall/:path*", "destination": "/index.html" }
   ]
 }

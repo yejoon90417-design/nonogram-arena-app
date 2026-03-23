@@ -41,6 +41,17 @@ const CREATOR_REACTION_OPTIONS = [
 ];
 const ADSENSE_SCRIPT_ID = "adsense-auto-script";
 const ADSENSE_SRC = "https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-1492932683312516";
+const APP_AD_ALLOWED_MODES = [];
+const CONTENT_PAGE_REDIRECTS = {
+  "/about": "/about/index.html",
+  "/how-to-play": "/how-to-play/index.html",
+  "/pvp-guide": "/pvp-guide/index.html",
+  "/ranking-guide": "/ranking-guide/index.html",
+  "/updates": "/updates/index.html",
+  "/faq": "/faq/index.html",
+  "/privacy": "/privacy/index.html",
+  "/terms": "/terms/index.html",
+};
 const MODE_TO_PATH = {
   menu: "/",
   single: "/single",
@@ -258,6 +269,318 @@ const MATCH_SIM_STAGE_FLOW = [
   { key: "adjacent", startSec: 20, labelKo: "인접 티어 · ±350", labelEn: "Adjacent tier · ±350" },
   { key: "broad", startSec: 35, labelKo: "봇 후보 포함 · ±500", labelEn: "Bots included · ±500" },
   { key: "forced", startSec: 50, labelKo: "강제 매칭", labelEn: "Forced match" },
+];
+const CONTENT_PAGE_LINKS = [
+  { href: "/about/index.html", labelKo: "게임 소개", labelEn: "About the Game" },
+  { href: "/how-to-play/index.html", labelKo: "플레이 방법", labelEn: "How to Play" },
+  { href: "/pvp-guide/index.html", labelKo: "PvP 가이드", labelEn: "Ranked PvP Guide" },
+  { href: "/ranking-guide/index.html", labelKo: "랭킹 가이드", labelEn: "Ranking and Hall Guide" },
+  { href: "/updates/index.html", labelKo: "업데이트", labelEn: "Patch Notes" },
+  { href: "/faq/index.html", labelKo: "FAQ", labelEn: "FAQ" },
+];
+const HOME_MODE_CARDS = [
+  {
+    key: "single",
+    eyebrowKo: "혼자 즐기는 모드",
+    eyebrowEn: "Solo mode",
+    titleKo: "싱글은 퍼즐을 차분하게 익히고 기록을 쌓는 모드입니다.",
+    titleEn: "Practice clean solves and learn each board at your own pace.",
+    bodyKo: "튜토리얼부터 일반 퍼즐, 유저 제작 퍼즐까지 혼자 풀면서 풀이 감각과 완주 기록을 차근차근 다질 수 있습니다.",
+    bodyEn: "Single mode is built for repetition, timing, and puzzle understanding, from tutorial boards to larger clears and creator-made puzzles.",
+  },
+  {
+    key: "multi",
+    eyebrowKo: "함께 푸는 레이스",
+    eyebrowEn: "Multiplayer race",
+    titleKo: "멀티는 같은 보드를 동시에 시작해 먼저 끝내는 승부입니다.",
+    titleEn: "Start together, solve the same puzzle, and race under pressure.",
+    bodyKo: "로비에서 준비를 맞춘 뒤 같은 퍼즐을 동시에 열고, 속도와 정확도로 순위를 가르는 실시간 레이스를 즐길 수 있습니다.",
+    bodyEn: "Multiplayer rooms are designed around quick starts and shared boards, so the focus stays on pace, accuracy, and finishing first.",
+  },
+  {
+    key: "pvp",
+    eyebrowKo: "등급전 모드",
+    eyebrowEn: "Ranked PvP",
+    titleKo: "PvP는 배치고사와 밴 단계를 거치는 정식 대전 모드입니다.",
+    titleEn: "Queue into structured duels with placement, bans, reveal, and rating movement.",
+    bodyKo: "배치 결과로 시작 레이팅이 정해지고, 이후에는 비슷한 실력대의 상대와 싸우며 티어, 연승, 랭킹이 함께 움직입니다.",
+    bodyEn: "After placement, you face players around your skill band and play matches that feed directly into visible tiers, streaks, and ranking tables.",
+  },
+];
+const HOME_SYSTEM_CARDS = [
+  {
+    key: "rating",
+    titleKo: "티어와 레이팅",
+    titleEn: "Visible tiers and rating",
+    bodyKo: "브론즈부터 마스터까지 이어지는 티어 구조 위에서, 배치고사와 PvP 결과에 따라 레이팅이 오르내리며 내 위치가 분명하게 보이도록 설계했습니다.",
+    bodyEn: "Bronze through Master gives players a clear ladder to climb, while placement and match results move rating in a way that feels legible from game to game.",
+  },
+  {
+    key: "records",
+    titleKo: "기록 시스템",
+    titleEn: "Records worth chasing",
+    bodyKo: "싱글 완주 기록, 명예의 전당 최고 기록, 현재 연승, 랭킹표가 서로 다른 목표를 보여줘서 플레이 성과가 한 가지 점수로만 묶이지 않습니다.",
+    bodyEn: "Single clears, Hall of Fame best times, active streaks, and leaderboard positions each highlight a different kind of progress instead of collapsing everything into one score.",
+  },
+  {
+    key: "creator",
+    titleKo: "유저 제작 퍼즐",
+    titleEn: "Creator-made puzzles",
+    bodyKo: "직접 만든 퍼즐을 올리고 댓글과 리액션을 받으며, 공식 퍼즐 밖으로도 커뮤니티 퍼즐 라이브러리를 넓혀갈 수 있습니다.",
+    bodyEn: "Players can submit their own boards, collect comments and reactions, and help build a library that extends beyond the official rotation.",
+  },
+];
+const HOME_SCREEN_CARDS = [
+  {
+    key: "board",
+    titleKo: "보드 화면",
+    titleEn: "Board view",
+    bodyKo: "힌트, 셀, 타이머, 수정 도구를 한 화면에 모아 두어 풀이 흐름을 끊지 않고 읽고 표시하고 되돌릴 수 있게 했습니다.",
+    bodyEn: "Hints, cells, timer controls, and correction tools stay close to the solving surface so the player can read, mark, and recover without leaving the board.",
+  },
+  {
+    key: "rank",
+    titleKo: "랭킹 화면",
+    titleEn: "Ranking tables",
+    bodyKo: "현재 레이팅, 티어 분포, 내 순위를 빠르게 훑을 수 있도록 표 중심으로 정리한 화면입니다.",
+    bodyEn: "The ranking surface is built for scanning: current rating, visible tier context, and relative standing can all be checked quickly.",
+  },
+  {
+    key: "hall",
+    titleKo: "명예의 전당",
+    titleEn: "Hall of Fame",
+    bodyKo: "퍼즐 크기별 최고 기록과 상위 연승 기록을 따로 보여줘서, 한 판 승패를 넘는 장기 목표를 만들 수 있습니다.",
+    bodyEn: "Best times by board size and top streak lists create long-term goals for players who want something more durable than a single win.",
+  },
+];
+const HOME_FAQ_ITEMS = [
+  {
+    key: "placement",
+    questionKo: "PvP는 바로 플레이할 수 있나요?",
+    questionEn: "Can I jump straight into ranked PvP?",
+    answerKo: "처음에는 배치고사를 먼저 진행해야 합니다. 이 결과가 시작 티어와 레이팅 기준이 되어 이후 등급전 매칭에 반영됩니다.",
+    answerEn: "New players begin with placement. Those opening matches determine the starting rating band that the ranked queue uses afterward.",
+  },
+  {
+    key: "single",
+    questionKo: "싱글 기록과 명예의 전당 기록은 무엇이 다른가요?",
+    questionEn: "How are Single records different from Hall of Fame records?",
+    answerKo: "싱글은 내가 푼 퍼즐의 진행과 완주 기록을 중심으로 보고, 명예의 전당은 퍼즐 크기별 최고 타임 경쟁을 보여주는 공개 기록판입니다.",
+    answerEn: "Single mode tracks your own clears and progression across boards, while Hall of Fame is built around public best-time targets by puzzle size.",
+  },
+  {
+    key: "creator",
+    questionKo: "유저 제작 퍼즐은 누구나 올릴 수 있나요?",
+    questionEn: "Can players publish their own puzzles?",
+    answerKo: "로그인한 유저라면 제작기에서 퍼즐을 만들고 제출할 수 있지만, 공개 목록에 보이는 퍼즐은 승인과 검수를 거쳐야 합니다.",
+    answerEn: "Yes. Signed-in players can build and submit puzzles, but public listings are still filtered through approval and moderation.",
+  },
+  {
+    key: "guide",
+    questionKo: "처음 들어왔으면 어디부터 보면 좋나요?",
+    questionEn: "Where should I start if I am new to the site?",
+    answerKo: "플레이 방법 페이지부터 보고, 그다음 PvP 가이드와 랭킹 가이드를 읽으면 배치고사, 티어, 명예의 전당, 등급전 흐름을 빠르게 이해할 수 있습니다.",
+    answerEn: "Start with How to Play, then read the PvP and Ranking guides if you want to understand placement, tiers, Hall records, and ranked progression.",
+  },
+];
+const HOME_UPDATE_ITEMS = [
+  {
+    key: "2026-03-22",
+    date: "2026-03-22",
+    titleKo: "콘텐츠 페이지와 정책 페이지를 새로 정리했습니다.",
+    titleEn: "Content pages and policy pages were rebuilt.",
+    bodyKo: "홈에서 게임 구조를 더 또렷하게 소개하고, 가이드, FAQ, 개인정보처리방침, 이용약관으로 바로 이동할 수 있게 정리했습니다.",
+    bodyEn: "The home page now explains the game more clearly and points directly to dedicated guides, FAQ, privacy, and terms pages.",
+  },
+  {
+    key: "2026-03-18",
+    date: "2026-03-18",
+    titleKo: "배치고사와 등급전 흐름을 더 매끈하게 다듬었습니다.",
+    titleEn: "Placement and ranked flow were tightened.",
+    bodyKo: "수락, 밴, 퍼즐 공개 단계가 더 자연스럽게 이어지도록 상태 전환과 안내 흐름을 정리했습니다.",
+    bodyEn: "Accept, ban, and reveal phases were tuned so the state changes feel easier to follow before the actual solve begins.",
+  },
+  {
+    key: "2026-03-12",
+    date: "2026-03-12",
+    titleKo: "유저 제작 퍼즐과 토론 기능을 확장했습니다.",
+    titleEn: "Creator submissions and discussion tools expanded.",
+    bodyKo: "커뮤니티 목록, 댓글, 리액션, 승인 흐름을 넓혀서 유저 퍼즐을 공유하고 둘러보기 쉽게 만들었습니다.",
+    bodyEn: "Community listings, comments, reactions, and review flow were expanded to make sharing player-made puzzles easier.",
+  },
+];
+const MENU_TOUR_STEPS = [
+  {
+    key: "menu",
+    imageSrc: "/site-tour/menu.png",
+    shortKo: "메인",
+    shortEn: "Home",
+    summaryKo: "처음 들어왔을 때 전체 구조를 보는 시작 화면",
+    summaryEn: "The starting screen for modes, guides, and updates",
+    titleKo: "메인 화면에서 전체 구조를 먼저 파악합니다",
+    titleEn: "Start by reading the whole structure from the main screen.",
+    bodyKo:
+      "처음 들어오면 모드 버튼, 가이드 링크, 최근 업데이트가 한곳에 모여 있어 사이트가 어떤 구조로 움직이는지 빠르게 파악할 수 있습니다.",
+    bodyEn:
+      "On first entry, mode buttons, guide links, and recent updates are grouped together so the site's structure is easy to understand quickly.",
+    pointsKo: ["모드 선택", "가이드 링크", "최근 업데이트"],
+    pointsEn: ["Mode entry", "Guide links", "Recent updates"],
+    ctaKo: "메인에서 시작",
+    ctaEn: "Start from Home",
+    action: "menu",
+  },
+  {
+    key: "auth",
+    imageSrc: "/site-tour/auth.png",
+    shortKo: "로그인",
+    shortEn: "Auth",
+    summaryKo: "멀티, PvP, 제작 기능을 쓰기 전에 거치는 화면",
+    summaryEn: "The entry point for multiplayer, PvP, and creator features",
+    titleKo: "로그인과 회원가입은 상단 버튼 또는 보호된 모드 진입 시 열립니다",
+    titleEn: "Login and sign-up open from the top bar or when you enter protected modes.",
+    bodyKo:
+      "멀티, PvP, 제작 기능처럼 기록이 남는 화면은 계정 기반으로 동작합니다. 그래서 처음엔 로그인 화면을 거쳐 계정을 연결한 뒤 본격적인 경쟁과 제작 기능을 이용하게 됩니다.",
+    bodyEn:
+      "Persistent modes such as multiplayer, PvP, and creator tools are account-based, so you pass through the auth screen before using them fully.",
+    pointsKo: ["로그인", "회원가입", "보호된 기능 진입"],
+    pointsEn: ["Login", "Sign up", "Protected mode entry"],
+    ctaKo: "로그인 화면 열기",
+    ctaEn: "Open Auth",
+    action: "auth",
+  },
+  {
+    key: "tutorial",
+    imageSrc: "/site-tour/tutorial.png",
+    shortKo: "튜토리얼",
+    shortEn: "Tutorial",
+    summaryKo: "조작과 규칙을 짧게 익히는 입문 구간",
+    summaryEn: "A short onboarding flow for rules and controls",
+    titleKo: "튜토리얼로 조작과 힌트 읽는 법을 익힙니다",
+    titleEn: "Use the tutorial to learn controls and clue reading.",
+    bodyKo:
+      "노노그램이 낯설다면 튜토리얼에서 채우기, 표시하기, 되돌리기 흐름을 먼저 익히고 실제 퍼즐로 넘어가는 편이 훨씬 안정적입니다.",
+    bodyEn:
+      "If nonograms are new to you, learning fill, mark, and undo flow in the tutorial makes the jump to real puzzles much smoother.",
+    pointsKo: ["기본 규칙", "보드 조작", "실전 진입 준비"],
+    pointsEn: ["Basic rules", "Board controls", "Ready for real play"],
+    ctaKo: "튜토리얼 열기",
+    ctaEn: "Open Tutorial",
+    action: "tutorial",
+  },
+  {
+    key: "single",
+    imageSrc: "/site-tour/single.png",
+    shortKo: "싱글",
+    shortEn: "Single",
+    summaryKo: "혼자 풀면서 기록과 풀이 감각을 쌓는 모드",
+    summaryEn: "A solo mode for records and puzzle feel",
+    titleKo: "싱글에서 퍼즐 이해와 완주 기록을 쌓습니다",
+    titleEn: "Build puzzle understanding and clear records in Single.",
+    bodyKo:
+      "혼자 차분히 퍼즐을 풀면서 힌트 읽는 감각을 익히고, 더 빠르고 정확한 완주를 목표로 반복 연습하기 좋은 공간입니다.",
+    bodyEn:
+      "Single is the best place to learn clue flow, repeat boards, and improve clean, accurate clears at your own pace.",
+    pointsKo: ["차분한 풀이", "개인 기록", "반복 연습"],
+    pointsEn: ["Calm solving", "Personal records", "Repeat practice"],
+    ctaKo: "싱글 들어가기",
+    ctaEn: "Open Single",
+    action: "single",
+  },
+  {
+    key: "multi",
+    imageSrc: "/site-tour/multi.png",
+    shortKo: "멀티",
+    shortEn: "Multi",
+    summaryKo: "방을 만들거나 참가해 같은 보드를 동시에 푸는 화면",
+    summaryEn: "A live race on the same board",
+    titleKo: "멀티에서는 방을 만들고 같은 퍼즐을 동시에 시작합니다",
+    titleEn: "In Multi, everyone starts the same puzzle and races for placement.",
+    bodyKo:
+      "로비에서 준비를 맞춘 뒤 같은 보드를 열고, 누가 먼저 완주하는지 겨루는 방식이라 속도와 안정감이 동시에 중요해집니다.",
+    bodyEn:
+      "After readying in a room, everyone opens the same board together, making both pace and stability matter.",
+    pointsKo: ["로비 준비", "동시 시작", "실시간 순위"],
+    pointsEn: ["Lobby ready", "Shared start", "Live placement"],
+    ctaKo: "멀티 열기",
+    ctaEn: "Open Multi",
+    action: "multi",
+  },
+  {
+    key: "pvp",
+    imageSrc: "/site-tour/pvp.png",
+    shortKo: "PvP",
+    shortEn: "PvP",
+    summaryKo: "배치고사 이후 진입하는 정식 경쟁 모드",
+    summaryEn: "Structured ranked play with placement and bans",
+    titleKo: "PvP는 티어와 레이팅이 실제로 반영되는 경쟁 모드입니다",
+    titleEn: "PvP is the competitive mode where tiers and rating really move.",
+    bodyKo:
+      "배치고사 이후 비슷한 실력의 상대를 찾고, 수락과 밴 단계를 거쳐 퍼즐이 공개되면 승패와 함께 레이팅이 갱신됩니다.",
+    bodyEn:
+      "After placement, you face similar opponents, move through accept and ban phases, then play a rated match on the revealed puzzle.",
+    pointsKo: ["배치고사", "밴 단계", "레이팅 변화"],
+    pointsEn: ["Placement", "Ban phase", "Rating movement"],
+    ctaKo: "PvP 열기",
+    ctaEn: "Open PvP",
+    action: "pvp",
+  },
+  {
+    key: "ranking",
+    imageSrc: "/site-tour/ranking.png",
+    shortKo: "랭킹",
+    shortEn: "Ranking",
+    summaryKo: "현재 레이팅과 순위를 빠르게 확인하는 화면",
+    summaryEn: "A fast view of rating and leaderboard position",
+    titleKo: "랭킹 화면에서는 지금 내 위치를 빠르게 확인할 수 있습니다",
+    titleEn: "The ranking screen makes your current standing easy to check.",
+    bodyKo:
+      "레이팅, 티어, 순위가 표 중심으로 정리되어 있어 지금 어느 구간에 있는지, 누가 앞서 있는지를 한눈에 훑을 수 있습니다.",
+    bodyEn:
+      "Rating, tier, and rank are arranged in a scan-friendly table so you can quickly see where you stand.",
+    pointsKo: ["현재 순위", "티어 분포", "비교 확인"],
+    pointsEn: ["Current rank", "Tier spread", "Easy comparison"],
+    ctaKo: "랭킹 열기",
+    ctaEn: "Open Ranking",
+    action: "ranking",
+  },
+  {
+    key: "hall",
+    imageSrc: "/site-tour/hall.png",
+    shortKo: "명예의 전당",
+    shortEn: "Hall",
+    summaryKo: "퍼즐 크기별 최고 기록과 연승을 보는 화면",
+    summaryEn: "Best times and streaks by board size",
+    titleKo: "명예의 전당은 장기 목표를 보여주는 기록판입니다",
+    titleEn: "Hall of Fame is the board for long-term goals.",
+    bodyKo:
+      "퍼즐 크기별 최고 기록과 상위 연승 기록이 따로 모여 있어, 단순한 한 판 승패를 넘어서 꾸준한 실력을 추적할 수 있습니다.",
+    bodyEn:
+      "Best times by puzzle size and top streak lists create a longer-term target beyond a single match result.",
+    pointsKo: ["사이즈별 기록", "상위 연승", "장기 목표"],
+    pointsEn: ["Size records", "Top streaks", "Long-term goals"],
+    ctaKo: "명예의 전당 열기",
+    ctaEn: "Open Hall",
+    action: "hall",
+  },
+  {
+    key: "create",
+    imageSrc: "/site-tour/create.png",
+    shortKo: "제작기",
+    shortEn: "Creator",
+    summaryKo: "직접 퍼즐을 만들고 제출하는 공간",
+    summaryEn: "A place to build and submit your own puzzles",
+    titleKo: "제작기에서 유저 퍼즐을 만들고 커뮤니티에 공유할 수 있습니다",
+    titleEn: "Use Creator to build puzzles and share them with the community.",
+    bodyKo:
+      "퍼즐을 직접 설계하고 제출한 뒤 댓글과 리액션을 통해 반응을 볼 수 있어, 사이트 전체가 소비형 콘텐츠를 넘어 제작형 공간으로 확장됩니다.",
+    bodyEn:
+      "By creating boards, submitting them, and collecting reactions, the site expands from puzzle consumption into puzzle creation.",
+    pointsKo: ["직접 제작", "제출과 검수", "댓글과 리액션"],
+    pointsEn: ["Build directly", "Submit and review", "Comments and reactions"],
+    ctaKo: "제작기 열기",
+    ctaEn: "Open Creator",
+    action: "create",
+  },
 ];
 const TIER_ORDER = {
   bronze: 0,
@@ -1082,9 +1405,12 @@ function App() {
   const [replayLoading, setReplayLoading] = useState(false);
   const [replayError, setReplayError] = useState("");
   const [isRematchLoading, setIsRematchLoading] = useState(false);
+  const [menuTourIndex, setMenuTourIndex] = useState(0);
+  const [isMenuTourActive, setIsMenuTourActive] = useState(false);
+  const [activeMenuTopTab, setActiveMenuTopTab] = useState("");
   const [lang, setLang] = useState(() => {
     const saved = localStorage.getItem(LANG_KEY);
-    return saved === "ko" ? "ko" : "en";
+    return saved === "en" ? "en" : "ko";
   });
   const [isDarkMode, setIsDarkMode] = useState(() => localStorage.getItem(THEME_KEY) === "dark");
   const [uiStyleVariant, setUiStyleVariant] = useState(() =>
@@ -1901,8 +2227,19 @@ function App() {
 
   useEffect(() => {
     if (typeof window === "undefined") return;
+    const currentPath = normalizePath(window.location.pathname);
+    const redirectTarget = CONTENT_PAGE_REDIRECTS[currentPath];
+    if (!redirectTarget) return;
+    const normalizedCurrent = window.location.pathname.replace(/\/+$/, "");
+    if (normalizedCurrent === redirectTarget) return;
+    window.location.replace(redirectTarget);
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
     const targetPath = getPathFromMode(playMode);
     const currentPath = normalizePath(window.location.pathname);
+    if (CONTENT_PAGE_REDIRECTS[currentPath]) return;
     if (currentPath === targetPath) return;
     window.history.pushState({ mode: playMode }, "", targetPath);
   }, [playMode]);
@@ -2299,7 +2636,7 @@ function App() {
   const isRaceFinished = isInRaceRoom && racePhase === "finished";
   const isRacePreStartMasked = isInRaceRoom && (isRaceLobby || isRaceCountdown);
   const canAutoOpenVoteModal = false;
-  const shouldEnableAds = true;
+  const shouldEnableAds = APP_AD_ALLOWED_MODES.includes(playMode) && !isInRaceRoom;
 
   useEffect(() => {
     if (typeof document === "undefined") return;
@@ -3790,6 +4127,73 @@ function App() {
     setHallActiveSizeKey("10x10");
     setPlayMode("replay_hall");
     setStatus("");
+  };
+
+  const closeMenuTourTransientUi = () => {
+    setShowCreateModal(false);
+    setShowJoinModal(false);
+    setShowNeedLoginPopup(false);
+    setShowPlacementRequiredPopup(false);
+    setShowPatchNotesModal(false);
+    setPatchNotesSessionHidden(true);
+    setShowPvpTierGuideModal(false);
+    setShowSettingsModal(false);
+    setSignupPolicyModal("");
+    setCreatorMyPuzzlesOpen(false);
+  };
+
+  const moveMenuTourTo = (targetIndex) => {
+    const nextIndex = Math.max(0, Math.min(MENU_TOUR_STEPS.length - 1, targetIndex));
+    const step = MENU_TOUR_STEPS[nextIndex] || MENU_TOUR_STEPS[0];
+    closeMenuTourTransientUi();
+    if (pvpSearching && !isInRaceRoom) {
+      void cancelPvpQueue({ silent: true });
+    }
+    if (!isInRaceRoom) {
+      clearPuzzleViewState();
+    }
+    setStatus("");
+    setMenuTourIndex(nextIndex);
+    setIsMenuTourActive(true);
+
+    switch (step.action) {
+      case "auth":
+        openAuthScreen("login", "menu");
+        return;
+      case "tutorial":
+        startTutorialMode();
+        return;
+      case "single":
+        setSingleSection("home");
+        setPlayMode("single");
+        return;
+      case "multi":
+        setPlayMode("multi");
+        return;
+      case "pvp":
+        setPlayMode("pvp");
+        return;
+      case "ranking":
+        setPlayMode("ranking");
+        return;
+      case "hall":
+        setHallActiveSizeKey("10x10");
+        setPlayMode("replay_hall");
+        return;
+      case "create":
+        setPlayMode("create");
+        return;
+      default:
+        setPlayMode("menu");
+    }
+  };
+
+  const startMenuTour = () => {
+    moveMenuTourTo(0);
+  };
+
+  const closeMenuTour = () => {
+    setIsMenuTourActive(false);
   };
 
   const clearMatchSimState = () => {
@@ -6258,6 +6662,14 @@ function App() {
     profileModalMode === "self" &&
     normalizeProfileAvatarKey(profileModalData?.profile_avatar_key || DEFAULT_PROFILE_AVATAR_KEY) !==
       normalizeProfileAvatarKey(profileDraftAvatarKey);
+  const activeMenuTourStep = MENU_TOUR_STEPS[menuTourIndex % MENU_TOUR_STEPS.length] || MENU_TOUR_STEPS[0];
+  const activeMenuTourPoints = lang === "ko" ? activeMenuTourStep.pointsKo : activeMenuTourStep.pointsEn;
+  const aboutPageLink = CONTENT_PAGE_LINKS[0];
+  const howToPlayPageLink = CONTENT_PAGE_LINKS[1];
+  const pvpGuidePageLink = CONTENT_PAGE_LINKS[2];
+  const rankingGuidePageLink = CONTENT_PAGE_LINKS[3];
+  const updatesPageLink = CONTENT_PAGE_LINKS[4];
+  const faqPageLink = CONTENT_PAGE_LINKS[5];
 
   return (
     <main className={`page ${isExcelMode ? "excelSkin" : ""} ${isDarkThemeActive ? "themeDark" : ""} ${isModeCreate ? "pageCreateMode" : ""}`} style={excelMainStyle}>
@@ -6324,6 +6736,118 @@ function App() {
 
         {isModeMenu && (
           <section className="menuStage">
+            <div className="menuTopMeta">
+              <div className="menuTopTabs" role="tablist" aria-label={L("상단 메뉴", "Top menu")}>
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={activeMenuTopTab === "start"}
+                  className={`menuTopTab ${activeMenuTopTab === "start" ? "active" : ""}`}
+                  onClick={() => setActiveMenuTopTab((prev) => (prev === "start" ? "" : "start"))}
+                >
+                  {L("시작하기", "Start here")}
+                </button>
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={activeMenuTopTab === "guide"}
+                  className={`menuTopTab ${activeMenuTopTab === "guide" ? "active" : ""}`}
+                  onClick={() => setActiveMenuTopTab((prev) => (prev === "guide" ? "" : "guide"))}
+                >
+                  {L("가이드", "Guides")}
+                </button>
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={activeMenuTopTab === "community"}
+                  className={`menuTopTab ${activeMenuTopTab === "community" ? "active" : ""}`}
+                  onClick={() => setActiveMenuTopTab((prev) => (prev === "community" ? "" : "community"))}
+                >
+                  {L("참여", "Community")}
+                </button>
+              </div>
+
+              {activeMenuTopTab ? (
+                <motion.div
+                  key={activeMenuTopTab}
+                  className="menuTopPanel"
+                  initial={{ opacity: 0, y: -8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.2, ease: "easeOut" }}
+                >
+                  {activeMenuTopTab === "start" && (
+                    <div className="menuTopPanelGrid">
+                      <button type="button" className="menuTopLinkRow" onClick={startTutorialMode}>
+                        <span className="menuTopLinkCopy">
+                          <strong>{L("튜토리얼", "Tutorial")}</strong>
+                          <span>{L("조작과 규칙을 먼저 익히는 입문 화면", "Learn controls and rules first.")}</span>
+                        </span>
+                      </button>
+                      <a className="menuTopLinkRow" href={howToPlayPageLink.href}>
+                        <span className="menuTopLinkCopy">
+                          <strong>{lang === "ko" ? howToPlayPageLink.labelKo : howToPlayPageLink.labelEn}</strong>
+                          <span>{L("규칙과 기본 풀이 흐름 정리", "Read the rules and solving basics.")}</span>
+                        </span>
+                      </a>
+                      <a className="menuTopLinkRow" href={faqPageLink.href}>
+                        <span className="menuTopLinkCopy">
+                          <strong>{lang === "ko" ? faqPageLink.labelKo : faqPageLink.labelEn}</strong>
+                          <span>{L("자주 묻는 질문과 이용 팁 확인", "Check common questions and quick tips.")}</span>
+                        </span>
+                      </a>
+                    </div>
+                  )}
+
+                  {activeMenuTopTab === "guide" && (
+                    <div className="menuTopPanelGrid">
+                      {[aboutPageLink, pvpGuidePageLink, rankingGuidePageLink].map((link) => (
+                        <a key={link.href} className="menuTopLinkRow" href={link.href}>
+                          <span className="menuTopLinkCopy">
+                            <strong>{lang === "ko" ? link.labelKo : link.labelEn}</strong>
+                            <span>
+                              {link.href === aboutPageLink.href
+                                ? L("사이트 구조와 모드 차이를 한눈에 정리", "See the full site structure and mode overview.")
+                                : link.href === pvpGuidePageLink.href
+                                  ? L("등급전 규칙과 배치 흐름 확인", "Read ranked rules and placement flow.")
+                                  : L("랭킹과 명예의 전당 기록 체계 확인", "Understand rankings and hall records.")}
+                            </span>
+                          </span>
+                        </a>
+                      ))}
+                    </div>
+                  )}
+
+                  {activeMenuTopTab === "community" && (
+                    <div className="menuTopPanelGrid">
+                      <button type="button" className="menuTopLinkRow" onClick={goCreateMode}>
+                        <span className="menuTopLinkCopy">
+                          <strong>{L("퍼즐 만들기", "Create Puzzle")}</strong>
+                          <span>{L("직접 만든 퍼즐을 테스트하고 제출", "Build, test, and submit your own board.")}</span>
+                        </span>
+                      </button>
+                      <a
+                        className="menuTopLinkRow"
+                        href="https://discord.gg/42Mqmy9Ka"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                      >
+                        <span className="menuTopLinkCopy">
+                          <strong>{L("디스코드", "Discord")}</strong>
+                          <span>{L("공지, 피드백, 커뮤니티 소식을 확인", "Join the server for updates and feedback.")}</span>
+                        </span>
+                      </a>
+                      <a className="menuTopLinkRow" href={updatesPageLink.href}>
+                        <span className="menuTopLinkCopy">
+                          <strong>{lang === "ko" ? updatesPageLink.labelKo : updatesPageLink.labelEn}</strong>
+                          <span>{L("패치 노트와 최근 변경 사항 모아보기", "Browse patch notes and recent changes.")}</span>
+                        </span>
+                      </a>
+                    </div>
+                  )}
+                </motion.div>
+              ) : null}
+            </div>
+
             <div className="modeChooser">
               <motion.button
                 whileHover={{ y: -3 }}
@@ -6362,24 +6886,7 @@ function App() {
                 <span className="modeName">RANKING</span>
               </motion.button>
             </div>
-            <button className="menuTutorialBtn" onClick={startTutorialMode}>
-              {L("플레이 방법", "HOW TO PLAY")}
-            </button>
-            {!isExcelMode && (
-              <a
-                className="discordFab"
-                href="https://discord.gg/42Mqmy9Ka"
-                target="_blank"
-                rel="noopener noreferrer"
-                aria-label="Discord"
-                title="Discord"
-              >
-                <img
-                  src="/whitediscord.png"
-                  alt="Discord"
-                />
-              </a>
-            )}
+
             <div className="menuDust menuDustA" />
             <div className="menuDust menuDustB" />
             <div className="menuDust menuDustC" />
@@ -8630,6 +9137,72 @@ function App() {
               </div>
             </div>
           </div>
+        )}
+
+        {isMenuTourActive && (
+          <motion.aside
+            className="screenTourGuide"
+            initial={{ opacity: 0, y: 18, scale: 0.98 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            transition={{ duration: 0.28, ease: "easeOut" }}
+            aria-label={L("사이트 이용 흐름 안내", "Site flow guide")}
+          >
+            <div className="screenTourGuideHead">
+              <div className="screenTourGuideProgress">
+                <span>{L("사이트 이용 흐름", "Site flow guide")}</span>
+                <strong>
+                  {lang === "ko"
+                    ? `${menuTourIndex + 1} / ${MENU_TOUR_STEPS.length}`
+                    : `Step ${menuTourIndex + 1} / ${MENU_TOUR_STEPS.length}`}
+                </strong>
+              </div>
+              <button type="button" className="screenTourGuideClose" onClick={closeMenuTour}>
+                {L("끄기", "Close")}
+              </button>
+            </div>
+
+            <div className="screenTourGuideBody">
+              <div className="screenTourGuideLabel">
+                {lang === "ko" ? `${activeMenuTourStep.shortKo} 화면` : `${activeMenuTourStep.shortEn} screen`}
+              </div>
+              <h3>{lang === "ko" ? activeMenuTourStep.titleKo : activeMenuTourStep.titleEn}</h3>
+              <p className="screenTourGuideSummary">
+                {lang === "ko" ? activeMenuTourStep.summaryKo : activeMenuTourStep.summaryEn}
+              </p>
+              <p>{lang === "ko" ? activeMenuTourStep.bodyKo : activeMenuTourStep.bodyEn}</p>
+              <div className="menuTourPointRow">
+                {activeMenuTourPoints.map((point) => (
+                  <span key={`${activeMenuTourStep.key}-${point}`} className="menuTourPointChip">
+                    {point}
+                  </span>
+                ))}
+              </div>
+            </div>
+
+            <div className="screenTourGuideActions">
+              <button
+                type="button"
+                className="menuSecondaryCta menuTourResetBtn"
+                onClick={() => moveMenuTourTo(menuTourIndex - 1)}
+                disabled={menuTourIndex === 0}
+              >
+                {L("이전", "Previous")}
+              </button>
+              <button
+                type="button"
+                className="menuPrimaryCta"
+                onClick={() => {
+                  if (menuTourIndex >= MENU_TOUR_STEPS.length - 1) {
+                    closeMenuTour();
+                    return;
+                  }
+                  moveMenuTourTo(menuTourIndex + 1);
+                }}
+              >
+                {menuTourIndex >= MENU_TOUR_STEPS.length - 1 ? L("안내 종료", "Finish Guide") : L("다음 화면", "Next Screen")}
+              </button>
+            </div>
+          </motion.aside>
         )}
 
         {showCreateModal && (
