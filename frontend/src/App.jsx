@@ -3,6 +3,7 @@ import confetti from "canvas-confetti";
 import EmojiPicker from "emoji-picker-react";
 import { motion } from "framer-motion";
 import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, ChevronDown, Eraser, GripHorizontal, Home, Lock, LogIn, Maximize2, Minimize2, Minus, Moon, Plus, Redo2, Settings, Sun, Trophy, Undo2, User, UserPlus, Volume2, VolumeX } from "lucide-react";
+import { AdFitBanner } from "./components/AdFitBanner";
 import { GENERATED_CREATOR_SAMPLE_PUZZLES } from "./creatorSamples.generated";
 import "./App.css";
 
@@ -39,9 +40,6 @@ const SOUND_MASTER_GAIN_MAX = 0.34;
 const CREATOR_REACTION_OPTIONS = [
   { key: "like", emoji: "👍", labelKo: "좋아요", labelEn: "Like" },
 ];
-const ADSENSE_SCRIPT_ID = "adsense-auto-script";
-const ADSENSE_SRC = "https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-1492932683312516";
-const APP_AD_ALLOWED_MODES = [];
 const CONTENT_PAGE_REDIRECTS = {
   "/about": "/about/index.html",
   "/how-to-play": "/how-to-play/index.html",
@@ -2636,35 +2634,6 @@ function App() {
   const isRaceFinished = isInRaceRoom && racePhase === "finished";
   const isRacePreStartMasked = isInRaceRoom && (isRaceLobby || isRaceCountdown);
   const canAutoOpenVoteModal = false;
-  const shouldEnableAds = APP_AD_ALLOWED_MODES.includes(playMode) && !isInRaceRoom;
-
-  useEffect(() => {
-    if (typeof document === "undefined") return;
-    const existing = document.getElementById(ADSENSE_SCRIPT_ID);
-    const removeAdsArtifacts = () => {
-      document.querySelectorAll("ins.adsbygoogle").forEach((node) => node.remove());
-      document
-        .querySelectorAll(
-          'iframe[id^="aswift_"], iframe[id^="google_ads_iframe"], iframe[src*="googleads"], iframe[src*="doubleclick"]'
-        )
-        .forEach((node) => node.remove());
-    };
-
-    if (!shouldEnableAds) {
-      if (existing) existing.remove();
-      removeAdsArtifacts();
-      return;
-    }
-
-    if (existing) return;
-
-    const script = document.createElement("script");
-    script.id = ADSENSE_SCRIPT_ID;
-    script.async = true;
-    script.src = ADSENSE_SRC;
-    script.crossOrigin = "anonymous";
-    document.head.appendChild(script);
-  }, [shouldEnableAds]);
 
   useEffect(() => {
     if (isMobileBoardUi) return;
@@ -6885,6 +6854,15 @@ function App() {
               >
                 <span className="modeName">RANKING</span>
               </motion.button>
+            </div>
+
+            <div className="menuAdfitSection">
+              <AdFitBanner
+                className="menuAdfitShell"
+                adUnit="DAN-ivliYnZMv2yV3VVG"
+                width={728}
+                height={90}
+              />
             </div>
 
             <div className="menuDust menuDustA" />

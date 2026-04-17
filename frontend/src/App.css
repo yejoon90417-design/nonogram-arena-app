@@ -6941,6 +6941,27 @@
   z-index: 2;
 }
 
+.menuAdfitSection {
+  width: 100%;
+  display: flex;
+  justify-content: center;
+  z-index: 2;
+}
+
+.menuAdfitShell {
+  display: flex;
+  justify-content: center;
+  width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.menuAdfitShell::-webkit-scrollbar {
+  display: none;
+}
+
 .menuHeroCopy {
   display: grid;
   gap: 0.9rem;
@@ -10291,6 +10312,10 @@ button:disabled {
 
   .modeName {
     font-size: clamp(1.45rem, 9.3vw, 2.1rem);
+  }
+
+  .menuAdfitSection {
+    display: none;
   }
 
   .topBar {
