@@ -145,9 +145,9 @@ const THEME_KEY = "nonogram-ui-theme";
 const STYLE_VARIANT_KEY = "nonogram-ui-style-variant";
 const TUTORIAL_SEEN_KEY = "nonogram-tutorial-seen-v1";
 const DAILY_PUZZLE_HISTORY_KEY = "nonogram-daily-puzzle-history-v1";
-const SHOULD_PERSIST_DAILY_PUZZLE_HISTORY = false;
+const SHOULD_PERSIST_DAILY_PUZZLE_HISTORY = true;
 const MISSION_STATE_KEY = "nonogram-mission-state-v1";
-const SHOULD_PERSIST_MISSION_STATE = false;
+const SHOULD_PERSIST_MISSION_STATE = true;
 const CREATOR_ADMIN_KEY = "nonogram-creator-admin-key";
 const PVP_SIZE_KEYS = ["5x5", "10x10", "15x15", "20x20", "25x25"];
 const PVP_BATTLE_SIZE_KEYS = ["5x5", "10x10", "15x15"];
@@ -3727,6 +3727,7 @@ function App() {
     return Math.max(0, deadlineAt - effectiveNow);
   }, [pvpMatchState, pvpMatch, nowMs]);
   const pvpAcceptPercent = pvpMatchState === "accept" ? Math.max(0, Math.min(100, (pvpAcceptLeftMs / 12000) * 100)) : 0;
+  const pvpAcceptLeftSec = Math.max(0, Math.ceil(pvpAcceptLeftMs / 1000));
   const pvpBanPercent = pvpMatchState === "ban" ? Math.max(0, Math.min(100, (pvpBanLeftMs / 10000) * 100)) : 0;
   const pvpRevealLeftMs = useMemo(() => {
     if (pvpMatchState !== "reveal") return 0;
@@ -3743,6 +3744,17 @@ function App() {
       pvpMatchState === "reveal" ||
       (pvpMatchState === "accept" && pvpMatch?.me?.accepted === true)
     );
+  const pvpFlowStepIndex = isPvpShowdownActive
+    ? 2
+    : pvpMatchState === "reveal"
+      ? 3
+      : pvpMatchState === "accept"
+        ? pvpAllAccepted
+          ? 2
+          : 1
+        : pvpSearching
+          ? 0
+          : -1;
   const placementElapsedSec = useMemo(() => {
     if (!placementStartedAtMs) return 0;
     if (!placementRunning && placementResultCard?.elapsedSec != null) {
@@ -7831,6 +7843,8 @@ function App() {
   const dailyWeekdayLabels = lang === "ko" ? DAILY_WEEKDAY_LABELS_KO : DAILY_WEEKDAY_LABELS_EN;
   const missionStateSafe = normalizeMissionState(missionState, todayDailyDateKey);
   const missionLevelInfo = getMissionLevelInfo(missionStateSafe.totalXp);
+  const profileLevelLabel = `Lv.${missionLevelInfo.level}`;
+  const profileLevelXpText = `${missionLevelInfo.currentXp}/${missionLevelInfo.nextXp} XP`;
   const dailyMissionItems = buildMissionViewItems(DAILY_MISSION_DEFINITIONS, missionStateSafe.daily, lang);
   const weeklyMissionItems = buildMissionViewItems(WEEKLY_MISSION_DEFINITIONS, missionStateSafe.weekly, lang);
   const dailyMissionDoneCount = dailyMissionItems.filter((mission) => mission.isComplete).length;
@@ -9058,17 +9072,20 @@ function App() {
                 </div>
                 {isLoggedIn && (
                   <div className="rankingMeBadge">
-                    {myRatingRank
-                      ? isModeLegacyRanking
-                        ? L(
-                            `내 순위 ${myRatingRank}등${ratingTotalUsers > 0 ? ` / ${ratingTotalUsers}` : ""}`,
-                            `My Rank #${myRatingRank}${ratingTotalUsers > 0 ? ` / ${ratingTotalUsers}` : ""}`
-                          )
-                        : L(
-                            `내 순위 ${myRatingRank}등${ratingTotalUsers > 0 ? ` / ${ratingTotalUsers}` : ""} · ${myTierInfo?.labelKo || "브론즈"}`,
-                            `My Rank #${myRatingRank}${ratingTotalUsers > 0 ? ` / ${ratingTotalUsers}` : ""} · ${myTierInfo?.labelEn || "Bronze"}`
-                          )
-                      : L("내 순위: 집계 중", "My Rank: calculating")}
+                    <span>
+                      {myRatingRank
+                        ? isModeLegacyRanking
+                          ? L(
+                              `내 순위 ${myRatingRank}등${ratingTotalUsers > 0 ? ` / ${ratingTotalUsers}` : ""}`,
+                              `My Rank #${myRatingRank}${ratingTotalUsers > 0 ? ` / ${ratingTotalUsers}` : ""}`
+                            )
+                          : L(
+                              `내 순위 ${myRatingRank}등${ratingTotalUsers > 0 ? ` / ${ratingTotalUsers}` : ""} · ${myTierInfo?.labelKo || "브론즈"}`,
+                              `My Rank #${myRatingRank}${ratingTotalUsers > 0 ? ` / ${ratingTotalUsers}` : ""} · ${myTierInfo?.labelEn || "Bronze"}`
+                            )
+                        : L("내 순위: 집계 중", "My Rank: calculating")}
+                    </span>
+                    <strong className="rankingLevelMini">{profileLevelLabel}</strong>
                   </div>
                 )}
               </div>
@@ -9096,6 +9113,7 @@ function App() {
                   <tr>
                     <th>#</th>
                     <th>{L("닉네임", "Nickname")}</th>
+                    <th>{L("레벨", "Level")}</th>
                     <th>{L("티어", "Tier")}</th>
                     <th>{isModeLegacyRanking ? L("레이팅", "Rating") : L("점수", "Score")}</th>
                     {isModeLegacyRanking && <th>{L("전적", "Record")}</th>}
@@ -9105,7 +9123,7 @@ function App() {
                 <tbody>
                   {ratingUsers.length === 0 ? (
                     <tr>
-                      <td colSpan={isModeLegacyRanking ? 6 : 4} className="rankingEmpty">
+                      <td colSpan={isModeLegacyRanking ? 7 : 5} className="rankingEmpty">
                         {ratingLoading ? L("불러오는 중...", "Loading...") : L("표시할 유저가 없습니다.", "No users to display.")}
                       </td>
                     </tr>
@@ -9118,10 +9136,24 @@ function App() {
                       const tierInfo = isModeLegacyRanking
                         ? getTierInfoByRating(u.rating, idx + 1)
                         : getRankingTierInfoByRating(u.rating, idx + 1);
+                      const isMeRow = isLoggedIn && Number(u.id) > 0 && Number(u.id) === Number(authUser?.id || 0);
+                      const rawUserLevel = Number(u.mission_level || u.level || 0);
+                      const rowLevel = Number.isFinite(rawUserLevel) && rawUserLevel > 0
+                        ? Math.round(rawUserLevel)
+                        : isMeRow
+                          ? missionLevelInfo.level
+                          : 0;
                       return (
-                        <tr key={u.id}>
+                        <tr key={u.id} className={isMeRow ? "me" : ""}>
                           <td>{idx + 1}</td>
                           <td>{u.nickname}</td>
+                          <td>
+                            {rowLevel > 0 ? (
+                              <span className={`rankingLevelBadge ${isMeRow ? "me" : ""}`}>Lv.{rowLevel}</span>
+                            ) : (
+                              <span className="rankingLevelMuted">-</span>
+                            )}
+                          </td>
                           <td>
                             <span className={`tierBadge tier-${tierInfo.key}`}>
                               {lang === "ko" ? tierInfo.labelKo : tierInfo.labelEn}
@@ -10057,92 +10089,129 @@ function App() {
                   {pvpServerState === "idle" && L("대기 중", "Idle")}
                 </div>
 
+                {pvpSearching && pvpFlowStepIndex >= 0 && (
+                  <div className="pvpFlowSteps" aria-label={L("배틀 시작 단계", "Battle start flow")}>
+                    {[L("탐색", "Search"), L("수락", "Accept"), L("상대", "Opponent"), L("퍼즐", "Puzzle")].map((label, idx) => (
+                      <span
+                        key={`pvp-flow-${idx}`}
+                        className={`${idx < pvpFlowStepIndex ? "done" : ""} ${idx === pvpFlowStepIndex ? "active" : ""}`}
+                      >
+                        <i>{idx + 1}</i>
+                        <b>{label}</b>
+                      </span>
+                    ))}
+                  </div>
+                )}
+
                 {isPvpShowdownActive && (
                   <div className="pvpShowdownCard">
-                    <div className="pvpShowdownPlayer left">
-                      <span className="pvpShowdownName">{pvpShowdownPlayers[0]?.nickname || "Player A"}</span>
-                      <span className="pvpShowdownStat">
-                        {Number.isFinite(Number(pvpShowdownPlayers[0]?.rating))
-                          ? `R ${Math.round(Number(pvpShowdownPlayers[0]?.rating))}`
-                          : "R -"}
-                      </span>
-                      <span className="pvpShowdownStat">
-                        {(() => {
-                          const rank =
-                            Number.isInteger(Number(pvpShowdownPlayers[0]?.ratingRank)) &&
-                            Number(pvpShowdownPlayers[0]?.ratingRank) > 0
-                              ? Number(pvpShowdownPlayers[0]?.ratingRank)
-                              : null;
-                          return rank ? L(`${rank}등`, `Rank #${rank}`) : L("등수 미집계", "Unranked");
-                        })()}
-                      </span>
-                      <span className="pvpShowdownStat">
-                        {(() => {
-                          const t = getTierInfoByRating(pvpShowdownPlayers[0]?.rating, pvpShowdownPlayers[0]?.ratingRank);
-                          return lang === "ko" ? t.labelKo : t.labelEn;
-                        })()}
-                      </span>
-                    </div>
-                    <div className="pvpShowdownVs">VS</div>
-                    <div className="pvpShowdownPlayer right">
-                      <span className="pvpShowdownName">{pvpShowdownPlayers[1]?.nickname || "Player B"}</span>
-                      <span className="pvpShowdownStat">
-                        {Number.isFinite(Number(pvpShowdownPlayers[1]?.rating))
-                          ? `R ${Math.round(Number(pvpShowdownPlayers[1]?.rating))}`
-                          : "R -"}
-                      </span>
-                      <span className="pvpShowdownStat">
-                        {(() => {
-                          const rank =
-                            Number.isInteger(Number(pvpShowdownPlayers[1]?.ratingRank)) &&
-                            Number(pvpShowdownPlayers[1]?.ratingRank) > 0
-                              ? Number(pvpShowdownPlayers[1]?.ratingRank)
-                              : null;
-                          return rank ? L(`${rank}등`, `Rank #${rank}`) : L("등수 미집계", "Unranked");
-                        })()}
-                      </span>
-                      <span className="pvpShowdownStat">
-                        {(() => {
-                          const t = getTierInfoByRating(pvpShowdownPlayers[1]?.rating, pvpShowdownPlayers[1]?.ratingRank);
-                          return lang === "ko" ? t.labelKo : t.labelEn;
-                        })()}
-                      </span>
+                    <div className="pvpShowdownKicker">{L("상대 매칭 완료", "Opponent Found")}</div>
+                    <div className="pvpShowdownDuel">
+                      {pvpShowdownPlayers.slice(0, 1).map((player, idx) => {
+                        const playerTier = getTierInfoByRating(player?.rating, player?.ratingRank);
+                        const playerRank =
+                          Number.isInteger(Number(player?.ratingRank)) && Number(player.ratingRank) > 0
+                            ? Number(player.ratingRank)
+                            : null;
+                        return (
+                          <div key={`showdown-${player?.userId || idx}`} className="pvpShowdownPlayer left">
+                            <ProfileAvatar
+                              avatarKey={player?.profileAvatarKey || DEFAULT_PROFILE_AVATAR_KEY}
+                              nickname={player?.nickname}
+                              size="lg"
+                            />
+                            <span className="pvpShowdownName">{player?.nickname || "Player A"}</span>
+                            <span className="pvpShowdownStat">
+                              {Number.isFinite(Number(player?.rating)) ? `R ${Math.round(Number(player.rating))}` : "R -"}
+                            </span>
+                            <span className="pvpShowdownStat">{lang === "ko" ? playerTier.labelKo : playerTier.labelEn}</span>
+                            <span className="pvpShowdownStat">
+                              {playerRank ? L(`${playerRank}등`, `Rank #${playerRank}`) : L("랭킹 집계 중", "Ranking soon")}
+                            </span>
+                          </div>
+                        );
+                      })}
+                      <div className="pvpShowdownVs"><span>VS</span></div>
+                      {pvpShowdownPlayers.slice(1, 2).map((player, idx) => {
+                        const playerTier = getTierInfoByRating(player?.rating, player?.ratingRank);
+                        const playerRank =
+                          Number.isInteger(Number(player?.ratingRank)) && Number(player.ratingRank) > 0
+                            ? Number(player.ratingRank)
+                            : null;
+                        return (
+                          <div key={`showdown-${player?.userId || idx + 1}`} className="pvpShowdownPlayer right">
+                            <ProfileAvatar
+                              avatarKey={player?.profileAvatarKey || DEFAULT_PROFILE_AVATAR_KEY}
+                              nickname={player?.nickname}
+                              size="lg"
+                            />
+                            <span className="pvpShowdownName">{player?.nickname || "Player B"}</span>
+                            <span className="pvpShowdownStat">
+                              {Number.isFinite(Number(player?.rating)) ? `R ${Math.round(Number(player.rating))}` : "R -"}
+                            </span>
+                            <span className="pvpShowdownStat">{lang === "ko" ? playerTier.labelKo : playerTier.labelEn}</span>
+                            <span className="pvpShowdownStat">
+                              {playerRank ? L(`${playerRank}등`, `Rank #${playerRank}`) : L("랭킹 집계 중", "Ranking soon")}
+                            </span>
+                          </div>
+                        );
+                      })}
                     </div>
                   </div>
                 )}
 
                 {!isPvpShowdownActive && pvpMatchState === "accept" && (
-                  <div className="pvpStageCard">
-                    <div className="pvpStageTitle">{L("수락을 눌러야 게임이 시작됩니다", "Press accept to start the game")}</div>
-                    <div className="pvpGaugeWrap">
-                      <div className="pvpGaugeFill" style={{ width: `${pvpAcceptPercent}%` }} />
+                  <div className="pvpStageCard pvpAppStage pvpAcceptStage">
+                    <div className="pvpAppStageHead">
+                      <span>{L("매치 발견", "MATCH FOUND")}</span>
+                      <strong>{L("배틀 입장 확인", "Confirm Battle Entry")}</strong>
+                      <p>{L("둘 다 수락하면 상대 공개 후 퍼즐을 뽑습니다.", "When both players accept, opponent reveal and puzzle draw begin.")}</p>
                     </div>
-                    <div className="pvpDeadlineText">{(pvpAcceptLeftMs / 1000).toFixed(1)}s</div>
-                    <div className="pvpAcceptPlayers">
-                      {(pvpMatch?.players || []).map((p) => {
-                        return (
-                          <div key={p.userId} className={`pvpAcceptPlayer ${p.accepted ? "accepted" : ""}`}>
-                            <span>{p.nickname}</span>
-                            <span>{p.accepted ? L("수락 완료", "Accepted") : L("대기 중", "Waiting")}</span>
-                          </div>
-                        );
-                      })}
+                    <div className="pvpAcceptLayout">
+                      <div className="pvpCountdownDial" style={{ "--pvp-accept-left": `${pvpAcceptPercent}%` }}>
+                        <span>{pvpAcceptLeftSec}</span>
+                        <small>{L("초", "sec")}</small>
+                      </div>
+                      <div className="pvpAcceptPlayers">
+                        {(pvpMatch?.players || []).map((p) => {
+                          const isMe = Number(p.userId) > 0 && Number(p.userId) === Number(authUser?.id || 0);
+                          const tier = getTierInfoByRating(p.rating, p.ratingRank);
+                          return (
+                            <div key={p.userId} className={`pvpAcceptPlayer ${p.accepted ? "accepted" : ""} ${isMe ? "me" : ""}`}>
+                              <ProfileAvatar
+                                avatarKey={p.profileAvatarKey || DEFAULT_PROFILE_AVATAR_KEY}
+                                nickname={p.nickname}
+                                size="sm"
+                              />
+                              <span>
+                                <strong>{p.nickname}</strong>
+                                <em>{Number.isFinite(Number(p.rating)) ? `R ${Math.round(Number(p.rating))}` : "R -"} · {lang === "ko" ? tier.labelKo : tier.labelEn}</em>
+                              </span>
+                              <b>{p.accepted ? L("준비 완료", "Ready") : L("대기", "Waiting")}</b>
+                            </div>
+                          );
+                        })}
+                      </div>
                     </div>
                     <button
-                      className="singleActionBtn"
+                      className="pvpAcceptButton"
                       onClick={acceptPvpMatch}
                       disabled={pvpAcceptBusy || pvpMatch?.me?.accepted === true}
                     >
-                      {pvpMatch?.me?.accepted ? L("준비 완료", "Ready") : pvpAcceptBusy ? L("처리중...", "Processing...") : L("시작하기", "Start")}
+                      {pvpMatch?.me?.accepted ? L("수락 완료", "Ready") : pvpAcceptBusy ? L("처리중...", "Processing...") : L("수락하고 시작", "Accept and Start")}
                     </button>
                   </div>
                 )}
 
                 {!isPvpShowdownActive && pvpMatchState === "reveal" && (
-                  <div className="pvpStageCard">
-                    <div className="pvpStageTitle">{L("이번 판 크기를 뽑는 중", "Picking this battle size")}</div>
+                  <div className="pvpStageCard pvpAppStage pvpRevealStage">
+                    <div className="pvpAppStageHead">
+                      <span>{L("퍼즐 추첨", "PUZZLE DRAW")}</span>
+                      <strong>{L("이번 판 크기를 뽑는 중", "Picking this battle size")}</strong>
+                      <p>{L("같은 퍼즐로 동시에 시작합니다.", "Both players start on the same puzzle.")}</p>
+                    </div>
                     <div
-                      className={`pvpRevealTrack count-${Math.max(1, pvpDisplayOptions.length)}`}
+                      className={`pvpRevealTrack pvpAppRevealTrack count-${Math.max(1, pvpDisplayOptions.length)}`}
                       style={{ "--pvp-option-count": Math.max(1, pvpDisplayOptions.length) }}
                     >
                       {pvpDisplayOptions.map((option, idx) => {
@@ -10156,15 +10225,18 @@ function App() {
                               isChosen ? "chosen" : ""
                             }`}
                           >
+                            <small>{L("퍼즐", "Puzzle")}</small>
                             <span>{sizeKey}</span>
                           </div>
                         );
                       })}
                     </div>
-                    <div className="pvpRevealResult">
-                      {!isPvpRevealSpinning && pvpMatch?.chosenSizeKey
-                        ? L(`선택됨: ${pvpMatch.chosenSizeKey}`, `Selected: ${pvpMatch.chosenSizeKey}`)
-                        : L("결정 중...", "Deciding...")}
+                    <div className={`pvpRevealResult ${!isPvpRevealSpinning && pvpMatch?.chosenSizeKey ? "chosen" : ""}`}>
+                      <span>
+                        {!isPvpRevealSpinning && pvpMatch?.chosenSizeKey
+                          ? L(`${pvpMatch.chosenSizeKey} 확정`, `${pvpMatch.chosenSizeKey} selected`)
+                          : L("랜덤 추첨 중...", "Drawing randomly...")}
+                      </span>
                     </div>
                   </div>
                 )}
@@ -11080,6 +11152,19 @@ function App() {
 
                   {profileModalData && (
                     <>
+                      {profileModalMode === "self" && (
+                        <div className="profileLevelShowcase">
+                          <div className="profileLevelBadgeLarge">{profileLevelLabel}</div>
+                          <div className="profileLevelShowcaseCopy">
+                            <span>{L("내 성장 레벨", "My Growth Level")}</span>
+                            <strong>{profileLevelXpText}</strong>
+                            <b aria-hidden="true">
+                              <i style={{ width: `${missionLevelInfo.progressPercent}%` }} />
+                            </b>
+                          </div>
+                        </div>
+                      )}
+
                       <div className="profileStatsGrid">
                         <div className="profileStatCard">
                           <span>{L("판수", "Games")}</span>
