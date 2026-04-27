@@ -1206,14 +1206,6 @@ function toSheetColumnLabel(index) {
   return label;
 }
 
-const TUTORIAL_PUZZLE = {
-  id: "tutorial-5x5",
-  width: 5,
-  height: 5,
-  row_hints: [[1, 1], [5], [5], [1, 1, 1], [3]],
-  col_hints: [[3], [3, 1], [4], [3, 1], [3]],
-};
-
 const TUTORIAL_GUIDE_STEPS = [
   {
     key: "row2full",
@@ -1275,6 +1267,98 @@ const TUTORIAL_GUIDE_STEPS = [
     requireSolved: true,
   },
 ];
+
+const TUTORIAL_LESSONS = [
+  {
+    key: "row-full",
+    badge: "STEP 1",
+    titleKo: "기본 규칙 (가로)",
+    titleEn: "Basic Rule (Rows)",
+    bodyKo: ["숫자는 연속해서 칠해야 하는 칸의 수입니다.", "숫자 5는 5칸을 모두 칠하라는 뜻입니다."],
+    bodyEn: ["A number tells you how many connected cells to fill.", "A 5 means all five cells in the row are filled."],
+    width: 5,
+    height: 1,
+    rowHints: [[5]],
+    colHints: [[1], [1], [1], [1], [1]],
+    answer: [1, 1, 1, 1, 1],
+  },
+  {
+    key: "col-full",
+    badge: "STEP 2",
+    titleKo: "기본 규칙 (세로)",
+    titleEn: "Basic Rule (Columns)",
+    bodyKo: ["세로 줄도 똑같습니다.", "위쪽 숫자를 보고 아래로 5칸을 칠해보세요."],
+    bodyEn: ["Columns work the same way.", "Read the top clue and fill five cells downward."],
+    width: 1,
+    height: 5,
+    rowHints: [[1], [1], [1], [1], [1]],
+    colHints: [[5]],
+    answer: [1, 1, 1, 1, 1],
+  },
+  {
+    key: "split-hints",
+    badge: "STEP 3",
+    titleKo: "숫자가 여러 개일 때",
+    titleEn: "When There Are Multiple Numbers",
+    bodyKo: ["1 1처럼 숫자가 두 개 이상이면", "그 사이에는 최소 한 칸 이상의 빈칸이 필요합니다."],
+    bodyEn: ["When clues look like 1 1,", "there must be at least one empty cell between groups."],
+    width: 5,
+    height: 1,
+    rowHints: [[1, 1]],
+    colHints: [[1], [0], [0], [1], [0]],
+    answer: [1, 2, 2, 1, 2],
+  },
+  {
+    key: "use-x",
+    badge: "STEP 4",
+    titleKo: "X 표시 활용하기",
+    titleEn: "Use X Marks",
+    bodyKo: ["확실히 칠하지 않는 칸에는 X 표시를 해두면 편합니다.", "X 모드로 빈칸을 막아보세요."],
+    bodyEn: ["Mark cells that are definitely empty with X.", "Use X mode to block impossible cells."],
+    width: 1,
+    height: 5,
+    rowHints: [[1], [0], [1], [1], [0]],
+    colHints: [[3]],
+    answer: [1, 2, 1, 1, 2],
+  },
+  {
+    key: "heart-practice",
+    badge: "FINAL",
+    titleKo: "실전 연습: 하트",
+    titleEn: "Practice: Heart",
+    bodyKo: ["가로와 세로 숫자를 모두 확인하며", "하트 모양을 완성해보세요."],
+    bodyEn: ["Use both row and column clues", "to complete the heart shape."],
+    width: 5,
+    height: 5,
+    rowHints: [[1, 1], [5], [5], [1, 1, 1], [3]],
+    colHints: [[3], [3, 1], [4], [3, 1], [3]],
+    answer: [
+      2, 1, 2, 1, 2,
+      1, 1, 1, 1, 1,
+      1, 1, 1, 1, 1,
+      1, 2, 1, 2, 1,
+      2, 1, 1, 1, 2,
+    ],
+  },
+];
+
+function createTutorialLessonCells(lesson) {
+  const total = Math.max(0, Number(lesson?.width || 0) * Number(lesson?.height || 0));
+  return new Array(total).fill(0);
+}
+
+function normalizeTutorialLessonCells(lesson, cells) {
+  const total = Math.max(0, Number(lesson?.width || 0) * Number(lesson?.height || 0));
+  const next = Array.isArray(cells) ? cells.slice(0, total) : [];
+  while (next.length < total) next.push(0);
+  return next.map((value) => (value === 1 || value === 2 ? value : 0));
+}
+
+function isTutorialLessonSolved(lesson, cells) {
+  if (!lesson || !Array.isArray(lesson.answer)) return false;
+  const normalized = normalizeTutorialLessonCells(lesson, cells);
+  return lesson.answer.every((expected, index) => normalized[index] === expected);
+}
 
 function toBase64Bits(cells, width, height) {
   const byteLength = Math.ceil((width * height) / 8);
@@ -2235,6 +2319,9 @@ function App() {
   const [chatSending, setChatSending] = useState(false);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [mobilePaintMode, setMobilePaintMode] = useState("fill"); // fill | mark
+  const [tutorialLessonIndex, setTutorialLessonIndex] = useState(0);
+  const [tutorialTool, setTutorialTool] = useState("fill"); // fill | mark
+  const [tutorialLessonCells, setTutorialLessonCells] = useState(() => createTutorialLessonCells(TUTORIAL_LESSONS[0]));
   const [isCoarsePointer, setIsCoarsePointer] = useState(false);
   const [showMultiResultModal, setShowMultiResultModal] = useState(false);
   const [nowMs, setNowMs] = useState(Date.now());
@@ -3342,7 +3429,9 @@ function App() {
   const isInRaceRoom = Boolean(raceRoomCode);
   const isSingleSoloMode = (isModeSingle || isModeTutorial || isModePlacementTest) && !isInRaceRoom;
   const shouldShowPuzzleBoard = Boolean(
-    puzzle && (((isSingleSoloMode || isModeCreate) && !isInRaceRoom) || ((isModeMulti || isModePvp) && isInRaceRoom))
+    puzzle &&
+      ((((isModeSingle || isModePlacementTest) && !isInRaceRoom) || (isModeCreate && !isInRaceRoom)) ||
+        ((isModeMulti || isModePvp) && isInRaceRoom))
   );
   const isHpPuzzleMode = shouldShowPuzzleBoard && !isModeCreate && !isInRaceRoom;
   const shouldStopSoloElapsedTimer = !isInRaceRoom && (isModeSingle || isModeTutorial);
@@ -3408,14 +3497,14 @@ function App() {
   }, [isModeTutorial, cells, tutorialSolved]);
   const tutorialCurrentTask = TUTORIAL_GUIDE_STEPS[tutorialCurrentTaskIndex] || null;
   const tutorialAllDone = tutorialCurrentTaskIndex >= TUTORIAL_GUIDE_STEPS.length;
-  const tutorialCurrentPrompt = tutorialAllDone
-    ? L("완성!", "Complete!")
-    : lang === "ko"
-      ? tutorialCurrentTask?.prompt
-      : tutorialCurrentTask?.promptEn || tutorialCurrentTask?.prompt;
   const tutorialHighlightRows = isModeTutorial && tutorialCurrentTask?.rowHighlights ? tutorialCurrentTask.rowHighlights : [];
   const tutorialHighlightCells =
     isModeTutorial && tutorialCurrentTask?.cellHighlights ? tutorialCurrentTask.cellHighlights : [];
+  const tutorialLesson = TUTORIAL_LESSONS[tutorialLessonIndex] || TUTORIAL_LESSONS[0];
+  const tutorialLessonCellsNormalized = normalizeTutorialLessonCells(tutorialLesson, tutorialLessonCells);
+  const tutorialLessonSolved = isTutorialLessonSolved(tutorialLesson, tutorialLessonCellsNormalized);
+  const tutorialLessonIsFinal = tutorialLessonIndex >= TUTORIAL_LESSONS.length - 1;
+  const tutorialLessonProgress = Math.round(((tutorialLessonIndex + 1) / TUTORIAL_LESSONS.length) * 100);
 
   const myRacePlayer = useMemo(() => {
     if (!raceState || !racePlayerId) return null;
@@ -3890,6 +3979,14 @@ function App() {
     }
   };
 
+  const resetTutorialLesson = (nextIndex = tutorialLessonIndex) => {
+    const safeIndex = Math.max(0, Math.min(TUTORIAL_LESSONS.length - 1, Number(nextIndex) || 0));
+    const lesson = TUTORIAL_LESSONS[safeIndex] || TUTORIAL_LESSONS[0];
+    setTutorialLessonIndex(safeIndex);
+    setTutorialTool("fill");
+    setTutorialLessonCells(createTutorialLessonCells(lesson));
+  };
+
   const startTutorialMode = () => {
     if (isInRaceRoom) {
       setStatus(L("방 대전 중에는 튜토리얼을 시작할 수 없습니다.", "Tutorial is unavailable during a live match."));
@@ -3900,11 +3997,7 @@ function App() {
     tutorialCompleteShownRef.current = false;
     setSelectedSize("5x5");
     setPlayMode("tutorial");
-    initializePuzzle(TUTORIAL_PUZZLE, {
-      resume: false,
-      startTimer: true,
-      suppressStatus: true,
-    });
+    resetTutorialLesson(0);
     playSfx("ui");
   };
 
@@ -3912,6 +4005,58 @@ function App() {
     markTutorialSeen();
     tutorialCompleteShownRef.current = false;
     await backToMenu();
+    playSfx("ui");
+  };
+
+  const setTutorialToolMode = (tool) => {
+    setTutorialTool(tool === "mark" ? "mark" : "fill");
+    playSfx("ui");
+  };
+
+  const tapTutorialCell = (index) => {
+    const total = Number(tutorialLesson?.width || 0) * Number(tutorialLesson?.height || 0);
+    if (!Number.isInteger(index) || index < 0 || index >= total) return;
+    const current = normalizeTutorialLessonCells(tutorialLesson, tutorialLessonCells);
+    const wasSolved = isTutorialLessonSolved(tutorialLesson, current);
+    const nextValue = tutorialTool === "mark" ? 2 : 1;
+    const next = current.slice();
+    next[index] = next[index] === nextValue ? 0 : nextValue;
+    const solved = isTutorialLessonSolved(tutorialLesson, next);
+    setTutorialLessonCells(next);
+    if (solved && !wasSolved) {
+      playSfx(tutorialLessonIsFinal ? "win" : "ui");
+      if (tutorialLessonIsFinal) {
+        triggerVictoryFx("single");
+      } else if (typeof window !== "undefined") {
+        confetti({
+          particleCount: 46,
+          spread: 58,
+          startVelocity: 28,
+          scalar: 0.82,
+          origin: { x: 0.5, y: 0.62 },
+          zIndex: 1400,
+          disableForReducedMotion: true,
+        });
+      }
+    } else {
+      playSfx("ui");
+    }
+  };
+
+  const goNextTutorialLesson = () => {
+    if (!tutorialLessonSolved) {
+      setStatus(L("현재 단계의 정답을 먼저 완성해 주세요.", "Complete this step first."));
+      playSfx("lose");
+      return;
+    }
+    setStatus("");
+    if (tutorialLessonIsFinal) {
+      markTutorialSeen();
+      goSingleMode();
+      playSfx("ui");
+      return;
+    }
+    resetTutorialLesson(tutorialLessonIndex + 1);
     playSfx("ui");
   };
 
@@ -7999,6 +8144,137 @@ function App() {
   const rankingGuidePageLink = CONTENT_PAGE_LINKS[3];
   const updatesPageLink = CONTENT_PAGE_LINKS[4];
   const faqPageLink = CONTENT_PAGE_LINKS[5];
+  const renderTutorialHint = (hints, className = "") => {
+    const safeHints = Array.isArray(hints) && hints.length ? hints : [0];
+    return (
+      <span className={`tutorialLessonHint ${className}`}>
+        {safeHints.map((hint, index) => (
+          <b key={`${hint}-${index}`}>{hint}</b>
+        ))}
+      </span>
+    );
+  };
+  const renderTutorialMiniBoard = () => {
+    const width = Math.max(1, Number(tutorialLesson?.width || 1));
+    const height = Math.max(1, Number(tutorialLesson?.height || 1));
+    return (
+      <div
+        className={`tutorialLessonBoard tutorialLessonBoard-${tutorialLesson.key}`}
+        style={{ "--tutorial-cols": width, "--tutorial-rows": height }}
+      >
+        <div className="tutorialLessonCorner" aria-hidden="true" />
+        {Array.from({ length: width }).map((_, col) => (
+          <div key={`col-${col}`} className="tutorialLessonColHint">
+            {renderTutorialHint(tutorialLesson.colHints?.[col], "vertical")}
+          </div>
+        ))}
+        {Array.from({ length: height }).map((_, row) => (
+          <div key={`row-${row}`} className="tutorialLessonRow">
+            <div className="tutorialLessonRowHint">{renderTutorialHint(tutorialLesson.rowHints?.[row])}</div>
+            {Array.from({ length: width }).map((_, col) => {
+              const index = row * width + col;
+              const value = tutorialLessonCellsNormalized[index] || 0;
+              return (
+                <button
+                  key={`cell-${index}`}
+                  type="button"
+                  className={`tutorialLessonCell ${value === 1 ? "filled" : ""} ${value === 2 ? "marked" : ""}`}
+                  onClick={() => tapTutorialCell(index)}
+                  aria-label={L(`${row + 1}행 ${col + 1}열`, `Row ${row + 1}, column ${col + 1}`)}
+                >
+                  {value === 2 ? <span aria-hidden="true">×</span> : null}
+                </button>
+              );
+            })}
+          </div>
+        ))}
+      </div>
+    );
+  };
+  const renderTutorialLessons = () => (
+    <section className="tutorialStage tutorialLessonStage">
+      <div className="tutorialLessonHero">
+        <div className="tutorialLessonTitleRow">
+          <BookOpen size={24} />
+          <div>
+            <strong>{L("노노그램 튜토리얼", "Nonogram Tutorial")}</strong>
+            <span>{L("퍼즐의 규칙을 하나씩 배워봅니다", "Learn the puzzle rules one step at a time.")}</span>
+          </div>
+        </div>
+        <div className="tutorialLessonProgressTrack" aria-hidden="true">
+          <span style={{ width: `${tutorialLessonProgress}%` }} />
+        </div>
+        <div className="tutorialLessonProgressText">
+          {L(
+            `진행도 ${tutorialLessonIndex + 1} / ${TUTORIAL_LESSONS.length}`,
+            `Progress ${tutorialLessonIndex + 1} / ${TUTORIAL_LESSONS.length}`
+          )}
+        </div>
+      </div>
+
+      <div className="tutorialLessonTools" role="toolbar" aria-label={L("튜토리얼 도구", "Tutorial tools")}>
+        <button
+          type="button"
+          className={`tutorialLessonTool ${tutorialTool === "fill" ? "active" : ""}`}
+          onClick={() => setTutorialToolMode("fill")}
+        >
+          <span className="tutorialToolSwatch" aria-hidden="true" />
+          {L("채우기", "Fill")}
+        </button>
+        <button
+          type="button"
+          className={`tutorialLessonTool ${tutorialTool === "mark" ? "active" : ""}`}
+          onClick={() => setTutorialToolMode("mark")}
+        >
+          <X size={16} />
+          {L("X 표시", "X Mark")}
+        </button>
+      </div>
+
+      <div className="tutorialLessonControlHint">
+        {L("모바일: 원하는 도구를 고른 뒤 칸을 터치하세요.", "Mobile: choose a tool, then tap cells.")}
+      </div>
+
+      <div className={`tutorialLessonCard ${tutorialLessonSolved ? "solved" : ""}`}>
+        <span className={`tutorialLessonBadge ${tutorialLessonIsFinal ? "final" : ""}`}>{tutorialLesson.badge}</span>
+        <h2>{L(tutorialLesson.titleKo, tutorialLesson.titleEn)}</h2>
+        <div className="tutorialLessonBody">
+          {(lang === "ko" || IS_APPS_IN_TOSS ? tutorialLesson.bodyKo : tutorialLesson.bodyEn).map((line) => (
+            <p key={line}>{line}</p>
+          ))}
+        </div>
+        {renderTutorialMiniBoard()}
+        <div className={`tutorialLessonResult ${tutorialLessonSolved ? "show" : ""}`}>
+          <CheckCircle2 size={18} />
+          {L("정답입니다!", "Correct!")}
+        </div>
+        <div className="tutorialLessonActions">
+          <button type="button" className="tutorialLessonSubBtn" onClick={() => resetTutorialLesson(tutorialLessonIndex)}>
+            {L("다시 풀기", "Reset")}
+          </button>
+          <button
+            type="button"
+            className="tutorialLessonNextBtn"
+            onClick={goNextTutorialLesson}
+            disabled={!tutorialLessonSolved}
+          >
+            {tutorialLessonIsFinal ? L("게임 시작하기", "Start Game") : L("다음 단계", "Next Step")}
+            {tutorialLessonIsFinal ? null : <ArrowRight size={17} />}
+          </button>
+        </div>
+      </div>
+
+      <div className="tutorialLessonFooterActions">
+        <button type="button" onClick={backToMenu}>
+          <Home size={16} />
+          {L("메인", "Home")}
+        </button>
+        <button type="button" onClick={skipTutorial}>
+          {L("튜토리얼 종료", "Exit Tutorial")}
+        </button>
+      </div>
+    </section>
+  );
   const renderPuzzleHpCellFx = () => {
     if (!isHpPuzzleMode || !puzzle || !puzzleHpDamage) return null;
     const index = Number(puzzleHpDamage.index);
@@ -9746,37 +10022,7 @@ function App() {
           </section>
         )}
 
-        {isModeTutorial && (
-          <section className="tutorialStage">
-            <div className="tutorialCoachBar">
-              <div className="tutorialCoachProgress">
-                <span className={`tutorialCoachBadge ${tutorialAllDone ? "done" : ""}`}>
-                  {tutorialAllDone
-                    ? "CLEAR"
-                    : `${Math.min(tutorialCurrentTaskIndex + 1, TUTORIAL_GUIDE_STEPS.length)}/${TUTORIAL_GUIDE_STEPS.length}`}
-                </span>
-                <div className="tutorialCoachDots">
-                  {TUTORIAL_GUIDE_STEPS.map((step, idx) => (
-                    <span
-                      key={step.key}
-                      className={`tutorialCoachDot ${idx < tutorialCurrentTaskIndex ? "done" : ""} ${
-                        idx === tutorialCurrentTaskIndex ? "active" : ""
-                      }`}
-                    />
-                  ))}
-                </div>
-              </div>
-              <div className={`tutorialCoachPrompt ${tutorialAllDone ? "done" : ""}`}>
-                {tutorialCurrentPrompt}
-              </div>
-              <div className="tutorialStageActions">
-                <button onClick={startTutorialMode}>{L("다시 시작", "Restart")}</button>
-                <button onClick={skipTutorial}>{L("건너뛰기", "Skip")}</button>
-                <button onClick={backToMenu}>{L("종료", "Exit")}</button>
-              </div>
-            </div>
-          </section>
-        )}
+        {isModeTutorial && renderTutorialLessons()}
 
         {isModePvp && (
           <>
