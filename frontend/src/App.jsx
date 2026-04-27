@@ -1,9 +1,9 @@
-﻿import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
+﻿import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import confetti from "canvas-confetti";
 import { getAnonymousKey, GoogleAdMob } from "@apps-in-toss/web-framework";
 import EmojiPicker from "emoji-picker-react";
 import { motion } from "framer-motion";
-import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, BookOpen, CalendarDays, CheckCircle2, ChevronDown, Eraser, Flame, Home, Lightbulb, Lock, LogIn, Palette, Redo2, Shuffle, Trophy, Undo2, User, UserPlus, X } from "lucide-react";
+import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, BookOpen, CalendarDays, CheckCircle2, ChevronDown, Eraser, Flame, Home, Lightbulb, Lock, LogIn, Palette, Redo2, Shuffle, Square, Trophy, Undo2, User, UserPlus, X } from "lucide-react";
 import { GENERATED_CREATOR_SAMPLE_PUZZLES } from "./creatorSamples.generated";
 import "./App.css";
 
@@ -1500,6 +1500,26 @@ function cluesEqual(line, clues) {
   return true;
 }
 
+function collectSolvedLineSets(sourceCells, puzzle, rowHints, colHints) {
+  const rows = new Set();
+  const cols = new Set();
+  if (!puzzle || !Array.isArray(sourceCells) || sourceCells.length !== puzzle.width * puzzle.height) {
+    return { rows, cols };
+  }
+
+  for (let y = 0; y < puzzle.height; y += 1) {
+    const row = sourceCells.slice(y * puzzle.width, (y + 1) * puzzle.width);
+    if (cluesEqual(row, rowHints[y] || [])) rows.add(y);
+  }
+  for (let x = 0; x < puzzle.width; x += 1) {
+    const col = [];
+    for (let y = 0; y < puzzle.height; y += 1) col.push(sourceCells[y * puzzle.width + x]);
+    if (cluesEqual(col, colHints[x] || [])) cols.add(x);
+  }
+
+  return { rows, cols };
+}
+
 function clamp01(value) {
   return Math.max(0, Math.min(1, Number(value) || 0));
 }
@@ -2228,6 +2248,8 @@ function App() {
   const [puzzleHpDamage, setPuzzleHpDamage] = useState(null);
   const [puzzleHints, setPuzzleHints] = useState(PUZZLE_MAX_HINTS);
   const [puzzleHintReveal, setPuzzleHintReveal] = useState(null);
+  const [lineClearFx, setLineClearFx] = useState(null);
+  const [cellInputFxList, setCellInputFxList] = useState([]);
   const [hintAdLoading, setHintAdLoading] = useState(false);
   const [reviveAdLoading, setReviveAdLoading] = useState(false);
   const [reviveAdError, setReviveAdError] = useState("");
@@ -2380,6 +2402,8 @@ function App() {
   const cellValuesRef = useRef([]);
   const pendingPaintRef = useRef(new Map());
   const frameRef = useRef(0);
+  const autoCompletedLinesRef = useRef({ key: "", rows: new Set(), cols: new Set(), silent: true });
+  const lockedCellIndicesRef = useRef(new Set());
   const undoStackRef = useRef([]);
   const redoStackRef = useRef([]);
   const autoSolvedShownRef = useRef(false);
@@ -2425,7 +2449,8 @@ function App() {
   const missionToastTimerRef = useRef(0);
   const missionRewardFxTimerRef = useRef(0);
   const puzzleStartedAtMsRef = useRef(0);
-  const deferredCells = useDeferredValue(cells);
+  const cellInputFxIdRef = useRef(0);
+  const cellInputFxTimerRef = useRef(0);
   const createCellsForHints = playMode === "create" ? cells : null;
 
   const authHeaders = useMemo(() => {
@@ -3351,10 +3376,10 @@ function App() {
     if (!puzzle) return IS_APPS_IN_TOSS ? 20 : 24;
     if (IS_APPS_IN_TOSS && playMode !== "create") {
       const totalColumns = puzzle.width + Math.max(maxRowHintDepth, 1);
-      const reservedWidth = viewportWidth >= 700 ? 132 : 86;
-      const fittedSize = Math.floor((Math.max(320, viewportWidth) - reservedWidth) / Math.max(totalColumns, 1));
-      const maxSize = viewportWidth >= 700 ? 22 : 20;
-      return Math.max(10, Math.min(maxSize, fittedSize || maxSize));
+      const usableWidth = Math.max(320, viewportWidth) - (viewportWidth >= 700 ? 132 : 24);
+      const fittedSize = Math.floor(usableWidth / Math.max(totalColumns, 1));
+      const maxSize = puzzle.width <= 5 ? 44 : puzzle.width <= 10 ? 32 : 22;
+      return Math.max(12, Math.min(maxSize, fittedSize || maxSize));
     }
     return puzzle.width >= 25 ? 20 : 24;
   }, [maxRowHintDepth, playMode, puzzle, viewportWidth]);
@@ -3369,26 +3394,105 @@ function App() {
     return Array.from({ length: puzzle.height }, (_, idx) => idx + 1);
   }, [puzzle]);
 
-  const solvedRows = useMemo(() => {
-    if (!puzzle || playMode === "create") return new Set();
-    const solved = new Set();
-    for (let y = 0; y < puzzle.height; y += 1) {
-      const row = deferredCells.slice(y * puzzle.width, (y + 1) * puzzle.width);
-      if (cluesEqual(row, rowHints[y] || [])) solved.add(y);
-    }
-    return solved;
-  }, [deferredCells, playMode, puzzle, rowHints]);
+  const solvedLineSets = useMemo(() => {
+    if (!puzzle || playMode === "create") return { rows: new Set(), cols: new Set() };
+    return collectSolvedLineSets(cells, puzzle, rowHints, colHints);
+  }, [cells, playMode, puzzle, rowHints, colHints]);
+  const solvedRows = solvedLineSets.rows;
+  const solvedCols = solvedLineSets.cols;
 
-  const solvedCols = useMemo(() => {
-    if (!puzzle || playMode === "create") return new Set();
-    const solved = new Set();
-    for (let x = 0; x < puzzle.width; x += 1) {
-      const col = [];
-      for (let y = 0; y < puzzle.height; y += 1) col.push(deferredCells[y * puzzle.width + x]);
-      if (cluesEqual(col, colHints[x] || [])) solved.add(x);
+  useEffect(() => {
+    if (!puzzle || playMode === "create") {
+      lockedCellIndicesRef.current = new Set();
+      autoCompletedLinesRef.current = { key: "", rows: new Set(), cols: new Set(), silent: true };
+      setLineClearFx(null);
+      return;
     }
-    return solved;
-  }, [deferredCells, playMode, puzzle, colHints]);
+
+    const key = `${puzzle.id || "puzzle"}:${puzzle.width}x${puzzle.height}`;
+    const tracker = autoCompletedLinesRef.current;
+    if (tracker.key !== key) {
+      autoCompletedLinesRef.current = { key, rows: new Set(), cols: new Set(), silent: true };
+      setLineClearFx(null);
+    }
+  }, [playMode, puzzle?.id, puzzle?.width, puzzle?.height]);
+
+  useEffect(() => {
+    if (!puzzle || playMode === "create") {
+      lockedCellIndicesRef.current = new Set();
+      return;
+    }
+
+    let tracker = autoCompletedLinesRef.current;
+    const key = `${puzzle.id || "puzzle"}:${puzzle.width}x${puzzle.height}`;
+    if (tracker.key !== key) {
+      tracker = { key, rows: new Set(), cols: new Set(), silent: true };
+      autoCompletedLinesRef.current = tracker;
+    }
+    const solvedRowSet = new Set(solvedRows);
+    const solvedColSet = new Set(solvedCols);
+    for (const row of Array.from(tracker.rows)) {
+      if (!solvedRowSet.has(row)) tracker.rows.delete(row);
+    }
+    for (const col of Array.from(tracker.cols)) {
+      if (!solvedColSet.has(col)) tracker.cols.delete(col);
+    }
+
+    const locked = new Set();
+    for (const row of solvedRowSet) {
+      for (let x = 0; x < puzzle.width; x += 1) locked.add(row * puzzle.width + x);
+    }
+    for (const col of solvedColSet) {
+      for (let y = 0; y < puzzle.height; y += 1) locked.add(y * puzzle.width + col);
+    }
+    lockedCellIndicesRef.current = locked;
+
+    const current = cellValuesRef.current;
+    if (!Array.isArray(current) || current.length !== puzzle.width * puzzle.height) return;
+    const next = current.slice();
+    let changed = false;
+    const newRows = [];
+    const newCols = [];
+
+    for (const row of solvedRowSet) {
+      if (!tracker.rows.has(row)) newRows.push(row);
+      tracker.rows.add(row);
+      for (let x = 0; x < puzzle.width; x += 1) {
+        const index = row * puzzle.width + x;
+        if (next[index] === 0) {
+          next[index] = 2;
+          changed = true;
+        }
+      }
+    }
+
+    for (const col of solvedColSet) {
+      if (!tracker.cols.has(col)) newCols.push(col);
+      tracker.cols.add(col);
+      for (let y = 0; y < puzzle.height; y += 1) {
+        const index = y * puzzle.width + col;
+        if (next[index] === 0) {
+          next[index] = 2;
+          changed = true;
+        }
+      }
+    }
+
+    if (changed) {
+      pendingPaintRef.current.clear();
+      if (frameRef.current) {
+        cancelAnimationFrame(frameRef.current);
+        frameRef.current = 0;
+      }
+      cellValuesRef.current = next;
+      setCells(next);
+    }
+    if ((newRows.length > 0 || newCols.length > 0) && !tracker.silent) {
+      setLineClearFx({ id: Date.now(), rows: newRows, cols: newCols });
+      playSfx("line-clear");
+    }
+    tracker.silent = false;
+  }, [playMode, puzzle, solvedRows, solvedCols]);
 
   const formattedTime = useMemo(() => {
     const totalCs = Math.max(0, Math.floor(Number(elapsedMs || 0) / 10));
@@ -3901,6 +4005,12 @@ function App() {
       setTimeout(() => tone(840, 80, { type: "triangle", gain: 0.065 }), 60);
       return;
     }
+    if (kind === "line-clear") {
+      tone(660, 55, { type: "triangle", gain: 0.055 });
+      setTimeout(() => tone(880, 70, { type: "triangle", gain: 0.06 }), 58);
+      setTimeout(() => tone(1180, 90, { type: "triangle", gain: 0.052 }), 126);
+      return;
+    }
     if (kind === "rank-up") {
       tone(560, 80, { type: "triangle", gain: 0.075 });
       setTimeout(() => tone(770, 90, { type: "triangle", gain: 0.08 }), 75);
@@ -4141,6 +4251,8 @@ function App() {
     setPuzzleHpDamage(null);
     setPuzzleHints(PUZZLE_MAX_HINTS);
     setPuzzleHintReveal(null);
+    setLineClearFx(null);
+    setCellInputFxList([]);
     setHintAdLoading(false);
     setReviveAdLoading(false);
     setReviveAdError("");
@@ -6845,6 +6957,79 @@ function App() {
     }
   };
 
+  const triggerCellInputFx = (items) => {
+    if (!Array.isArray(items) || items.length === 0) return;
+    const nextItems = items.slice(-18).map((item) => ({
+      id: `${Date.now()}-${cellInputFxIdRef.current += 1}`,
+      index: item.index,
+      value: item.value,
+    }));
+    setCellInputFxList((prev) => [...prev.slice(-18), ...nextItems]);
+    if (cellInputFxTimerRef.current) window.clearTimeout(cellInputFxTimerRef.current);
+    cellInputFxTimerRef.current = window.setTimeout(() => {
+      setCellInputFxList([]);
+      cellInputFxTimerRef.current = 0;
+    }, 420);
+  };
+
+  const completeSolvedLinesInSnapshot = (sourceCells) => {
+    if (!puzzle || playMode === "create") return sourceCells;
+    const { rows: solvedRowSet, cols: solvedColSet } = collectSolvedLineSets(sourceCells, puzzle, rowHints, colHints);
+
+    let tracker = autoCompletedLinesRef.current;
+    const key = `${puzzle.id || "puzzle"}:${puzzle.width}x${puzzle.height}`;
+    if (tracker.key !== key) {
+      tracker = { key, rows: new Set(), cols: new Set(), silent: true };
+      autoCompletedLinesRef.current = tracker;
+    }
+    for (const row of Array.from(tracker.rows)) {
+      if (!solvedRowSet.has(row)) tracker.rows.delete(row);
+    }
+    for (const col of Array.from(tracker.cols)) {
+      if (!solvedColSet.has(col)) tracker.cols.delete(col);
+    }
+
+    const next = sourceCells.slice();
+    const locked = new Set();
+    const newRows = [];
+    const newCols = [];
+    let changed = false;
+
+    for (const row of solvedRowSet) {
+      if (!tracker.rows.has(row)) newRows.push(row);
+      tracker.rows.add(row);
+      for (let x = 0; x < puzzle.width; x += 1) {
+        const index = row * puzzle.width + x;
+        locked.add(index);
+        if (next[index] === 0) {
+          next[index] = 2;
+          changed = true;
+        }
+      }
+    }
+    for (const col of solvedColSet) {
+      if (!tracker.cols.has(col)) newCols.push(col);
+      tracker.cols.add(col);
+      for (let y = 0; y < puzzle.height; y += 1) {
+        const index = y * puzzle.width + col;
+        locked.add(index);
+        if (next[index] === 0) {
+          next[index] = 2;
+          changed = true;
+        }
+      }
+    }
+
+    lockedCellIndicesRef.current = locked;
+    const hasNewLine = newRows.length > 0 || newCols.length > 0;
+    if (hasNewLine && !tracker.silent) {
+      setLineClearFx({ id: Date.now(), rows: newRows, cols: newCols });
+      playSfx("line-clear");
+    }
+    tracker.silent = false;
+    return changed ? next : sourceCells;
+  };
+
   const flushQueuedPaint = () => {
     frameRef.current = 0;
     const pending = pendingPaintRef.current;
@@ -6852,20 +7037,25 @@ function App() {
     const prev = cellValuesRef.current;
     const next = [...prev];
     let changed = false;
+    const paintedFx = [];
     for (const [index, value] of pending.entries()) {
       if (next[index] !== value) {
         next[index] = value;
         changed = true;
+        paintedFx.push({ index, value });
       }
     }
     pending.clear();
     if (!changed) return;
+    const completedNext = completeSolvedLinesInSnapshot(next);
+    triggerCellInputFx(paintedFx);
     strokeChangedRef.current = true;
-    cellValuesRef.current = next;
-    setCells(next);
+    cellValuesRef.current = completedNext;
+    setCells(completedNext);
   };
 
   const queueCellPaint = (index, value) => {
+    if (!isModeCreate && lockedCellIndicesRef.current.has(index)) return;
     const pending = pendingPaintRef.current;
     const current = pending.has(index) ? pending.get(index) : (cellValuesRef.current[index] ?? 0);
     // Keep filled cells and X marks from overwriting each other during drag paint.
@@ -7014,15 +7204,15 @@ function App() {
     const revealEase = easeOutCubic(revealProgress);
     const solvedPaintPalette = getSolvedPaintPalette(puzzle);
 
-    const palette = uiStyleVariant === "excel"
+    const palette = uiStyleVariant === "excel" || IS_APPS_IN_TOSS
       ? {
-          empty: "rgba(255, 255, 255, 0.08)",
-          filled: "#fffae0",
-          filledBorder: "#b9aa63",
-          mark: "#1d4f96",
-          grid: "rgba(122, 143, 168, 0.9)",
-          gridStrong: "rgba(76, 99, 128, 0.95)",
-          border: "rgba(76, 99, 128, 0.95)",
+          empty: "#ffffff",
+          filled: "#34445c",
+          filledBorder: "#27364c",
+          mark: "#34445c",
+          grid: "#c9ced8",
+          gridStrong: "#111827",
+          border: "#111827",
         }
       : {
           empty: "#e6e6e6",
@@ -7180,9 +7370,17 @@ function App() {
     };
   }, []);
 
+  useEffect(() => {
+    return () => {
+      if (cellInputFxTimerRef.current) window.clearTimeout(cellInputFxTimerRef.current);
+    };
+  }, []);
+
   const resetGrid = () => {
     if (!puzzle) return;
     pushUndo(cellValuesRef.current.slice());
+    autoCompletedLinesRef.current = { key: `${puzzle.id || "puzzle"}:${puzzle.width}x${puzzle.height}`, rows: new Set(), cols: new Set(), silent: true };
+    lockedCellIndicesRef.current = new Set();
     applySnapshot(new Array(puzzle.width * puzzle.height).fill(0));
     setActiveHints(new Set());
     setPuzzleHp(PUZZLE_MAX_HP);
@@ -7212,6 +7410,12 @@ function App() {
     const timer = window.setTimeout(() => setPuzzleHintReveal(null), PUZZLE_HINT_REVEAL_MS);
     return () => window.clearTimeout(timer);
   }, [puzzleHintReveal?.id]);
+
+  useEffect(() => {
+    if (!lineClearFx) return undefined;
+    const timer = window.setTimeout(() => setLineClearFx(null), 520);
+    return () => window.clearTimeout(timer);
+  }, [lineClearFx?.id]);
 
   useEffect(() => {
     if (!isPuzzleHpGameOver) {
@@ -8333,6 +8537,68 @@ function App() {
       />
     );
   };
+  const renderLineClearFx = () => {
+    if (!puzzle || !lineClearFx) return null;
+    const rowItems = Array.isArray(lineClearFx.rows) ? lineClearFx.rows : [];
+    const colItems = Array.isArray(lineClearFx.cols) ? lineClearFx.cols : [];
+    if (!rowItems.length && !colItems.length) return null;
+    return (
+      <>
+        {rowItems.map((row) => (
+          <span
+            key={`line-clear-row-${lineClearFx.id}-${row}`}
+            className="lineClearFx row"
+            style={{
+              left: 0,
+              top: `${row * cellSize}px`,
+              width: `${puzzle.width * cellSize}px`,
+              height: `${cellSize}px`,
+            }}
+            aria-hidden="true"
+          />
+        ))}
+        {colItems.map((col) => (
+          <span
+            key={`line-clear-col-${lineClearFx.id}-${col}`}
+            className="lineClearFx col"
+            style={{
+              left: `${col * cellSize}px`,
+              top: 0,
+              width: `${cellSize}px`,
+              height: `${puzzle.height * cellSize}px`,
+            }}
+            aria-hidden="true"
+          />
+        ))}
+      </>
+    );
+  };
+  const renderCellInputFx = () => {
+    if (!puzzle || cellInputFxList.length === 0) return null;
+    return (
+      <>
+        {cellInputFxList.map((fx) => {
+          const index = Number(fx.index);
+          if (!Number.isInteger(index) || index < 0 || index >= puzzle.width * puzzle.height) return null;
+          const x = index % puzzle.width;
+          const y = Math.floor(index / puzzle.width);
+          return (
+            <span
+              key={fx.id}
+              className={`cellInputFx ${fx.value === 1 ? "fill" : fx.value === 2 ? "mark" : "erase"}`}
+              style={{
+                left: `${x * cellSize}px`,
+                top: `${y * cellSize}px`,
+                width: `${cellSize}px`,
+                height: `${cellSize}px`,
+              }}
+              aria-hidden="true"
+            />
+          );
+        })}
+      </>
+    );
+  };
   const renderBoardTopToolbar = () => {
     if (!shouldShowPuzzleBoard || isModeCreate) return null;
     const hintButtonLabel =
@@ -8346,7 +8612,7 @@ function App() {
       hintAdLoading ||
       (puzzleHints > 0 && !Array.isArray(puzzleSolutionCells));
     return (
-      <div className="boardTopToolbar" role="toolbar" aria-label={L("퍼즐 도구", "Puzzle tools")}>
+      <div className="boardControlLayer">
         {isHpPuzzleMode && (
           <div
             className={`puzzleHpMeter ${puzzleHpDamage ? "damage" : ""}`}
@@ -8367,72 +8633,80 @@ function App() {
             })}
           </div>
         )}
-        {isHpPuzzleMode && (
-          <div className="boardHintGroup" role="group" aria-label={L("힌트", "Hints")}>
+        <div className="boardTopToolbar" role="toolbar" aria-label={L("퍼즐 도구", "Puzzle tools")}>
+          <div className={`boardModeGroup ${mobilePaintMode === "mark" ? "markActive" : "fillActive"}`} role="group" aria-label={L("입력 모드", "Input mode")}>
             <button
               type="button"
-              className={`boardHintBtn ${puzzleHints <= 0 ? "ad" : ""}`}
-              onClick={puzzleHints > 0 ? revealPuzzleHintCell : handleHintAd}
-              disabled={hintButtonDisabled}
-              aria-label={hintButtonLabel}
-              title={hintButtonLabel}
+              className={`boardModeBtn mark ${mobilePaintMode === "mark" ? "active" : ""}`}
+              onClick={() => {
+                setMobilePaintMode("mark");
+                playSfx("ui");
+              }}
+              aria-label={L("X 표시 모드", "Mark X mode")}
+              title={L("X 표시", "Mark X")}
             >
-              <Lightbulb size={17} />
-              <span>{hintAdLoading ? "..." : puzzleHints > 0 ? puzzleHints : "AD"}</span>
+              <X size={18} />
+            </button>
+            <button
+              type="button"
+              className={`boardModeBtn fill ${mobilePaintMode === "fill" ? "active" : ""}`}
+              onClick={() => {
+                setMobilePaintMode("fill");
+                playSfx("ui");
+              }}
+              aria-label={L("색칠 모드", "Fill mode")}
+              title={L("색칠", "Fill")}
+            >
+              <Square size={18} fill="currentColor" />
             </button>
           </div>
-        )}
-        <div className="boardModeGroup" role="group" aria-label={L("입력 모드", "Input mode")}>
-          <button
-            type="button"
-            className={`boardModeBtn fill ${mobilePaintMode === "fill" ? "active" : ""}`}
-            onClick={() => setMobilePaintMode("fill")}
-            aria-label={L("색칠 모드", "Fill mode")}
-            title={L("색칠", "Fill")}
-          >
-            <Palette size={18} />
-          </button>
-          <button
-            type="button"
-            className={`boardModeBtn mark ${mobilePaintMode === "mark" ? "active" : ""}`}
-            onClick={() => setMobilePaintMode("mark")}
-            aria-label={L("X 표시 모드", "Mark X mode")}
-            title={L("X 표시", "Mark X")}
-          >
-            <X size={18} />
-          </button>
-        </div>
-        <div className="boardActionGroup" role="group" aria-label={L("편집 도구", "Edit tools")}>
-          <button
-            type="button"
-            className="boardToolIconBtn"
-            onClick={undo}
-            disabled={!canUndo || !canInteractBoard}
-            aria-label={L("되돌리기", "Undo")}
-            title={L("되돌리기", "Undo")}
-          >
-            <Undo2 size={18} />
-          </button>
-          <button
-            type="button"
-            className="boardToolIconBtn"
-            onClick={redo}
-            disabled={!canRedo || !canInteractBoard}
-            aria-label={L("다시하기", "Redo")}
-            title={L("다시하기", "Redo")}
-          >
-            <Redo2 size={18} />
-          </button>
-          <button
-            type="button"
-            className="boardToolIconBtn danger"
-            onClick={resetGrid}
-            disabled={!canResetBoard}
-            aria-label={L("초기화", "Clear")}
-            title={L("초기화", "Clear")}
-          >
-            <Eraser size={18} />
-          </button>
+          {isHpPuzzleMode && (
+            <div className="boardHintGroup" role="group" aria-label={L("힌트", "Hints")}>
+              <button
+                type="button"
+                className={`boardHintBtn ${puzzleHints <= 0 ? "ad" : ""}`}
+                onClick={puzzleHints > 0 ? revealPuzzleHintCell : handleHintAd}
+                disabled={hintButtonDisabled}
+                aria-label={hintButtonLabel}
+                title={hintButtonLabel}
+              >
+                <Lightbulb size={17} />
+                <span>{hintAdLoading ? "..." : puzzleHints > 0 ? puzzleHints : "AD"}</span>
+              </button>
+            </div>
+          )}
+          <div className="boardActionGroup" role="group" aria-label={L("편집 도구", "Edit tools")}>
+            <button
+              type="button"
+              className="boardToolIconBtn"
+              onClick={undo}
+              disabled={!canUndo || !canInteractBoard}
+              aria-label={L("되돌리기", "Undo")}
+              title={L("되돌리기", "Undo")}
+            >
+              <Undo2 size={18} />
+            </button>
+            <button
+              type="button"
+              className="boardToolIconBtn"
+              onClick={redo}
+              disabled={!canRedo || !canInteractBoard}
+              aria-label={L("다시하기", "Redo")}
+              title={L("다시하기", "Redo")}
+            >
+              <Redo2 size={18} />
+            </button>
+            <button
+              type="button"
+              className="boardToolIconBtn danger"
+              onClick={resetGrid}
+              disabled={!canResetBoard}
+              aria-label={L("초기화", "Clear")}
+              title={L("초기화", "Clear")}
+            >
+              <Eraser size={18} />
+            </button>
+          </div>
         </div>
       </div>
     );
@@ -10562,6 +10836,8 @@ function App() {
                         onContextMenu={(e) => e.preventDefault()}
                       >
                         <canvas ref={canvasRef} className="boardCanvas" />
+                        {renderCellInputFx()}
+                        {renderLineClearFx()}
                         {renderPuzzleHpCellFx()}
                         {renderPuzzleHintCellFx()}
                         {isRaceFinished && !isModePvp && <div className="countdownOverlay result">{raceResultText}</div>}
@@ -11440,6 +11716,8 @@ function App() {
                         onContextMenu={(e) => e.preventDefault()}
                       >
                         <canvas ref={canvasRef} className="boardCanvas" />
+                        {renderCellInputFx()}
+                        {renderLineClearFx()}
                         {renderPuzzleHpCellFx()}
                         {renderPuzzleHintCellFx()}
                         {isModeTutorial && tutorialHighlightCells.length > 0 && (
