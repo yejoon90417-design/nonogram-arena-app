@@ -2900,6 +2900,7 @@ async function createPvpRoomForMatch(match) {
     finishTarget: 1,
     width: puzzle.width,
     height: puzzle.height,
+    puzzlePreview: puzzleClientView(puzzle),
     createdAt: now,
     hostPlayerId: null,
     state: "countdown",
@@ -2955,7 +2956,7 @@ async function createPvpRoomForMatch(match) {
   match.puzzleId = puzzle.id;
   match.state = "ready";
   match.updatedAt = Date.now();
-  match.puzzlePreview = puzzleClientView(puzzle);
+  match.puzzlePreview = room.puzzlePreview;
 
   for (const p of match.players) {
     p.playerId = playerIdByUserId.get(p.userId) || null;
@@ -5319,19 +5320,34 @@ async function buildPvpReadyPayload(ticket) {
   if (!roomPlayer) return null;
   touchPlayer(room, ticket.playerId);
 
-  const { rows } = await pool.query(
-    `SELECT id, width, height, row_hints, col_hints, is_unique
-     FROM puzzles
-     WHERE id = $1`,
-    [room.puzzleId]
-  );
-  if (!rows.length) return null;
+  let puzzle = null;
+  try {
+    const { rows } = await pool.query(
+      `SELECT id, width, height, row_hints, col_hints, is_unique
+       FROM puzzles
+       WHERE id = $1`,
+      [room.puzzleId]
+    );
+    puzzle = rows[0] || null;
+  } catch {
+    puzzle = null;
+  }
+
+  if (!puzzle && room.puzzlePreview) {
+    puzzle = room.puzzlePreview;
+  }
+
+  if (!puzzle && Number(room.puzzleId) < 0 && Number.isInteger(Number(room.width)) && Number.isInteger(Number(room.height))) {
+    puzzle = puzzleClientView(buildGuestFallbackPuzzle(Number(room.width), Number(room.height)));
+  }
+
+  if (!puzzle) return null;
   return {
     matched: true,
     state: "ready",
     roomCode: ticket.roomCode,
     playerId: ticket.playerId,
-    puzzle: rows[0],
+    puzzle,
     room: roomPublicState(room),
   };
 }
