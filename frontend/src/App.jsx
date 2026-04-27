@@ -2426,6 +2426,7 @@ function App() {
   const missionRewardFxTimerRef = useRef(0);
   const puzzleStartedAtMsRef = useRef(0);
   const deferredCells = useDeferredValue(cells);
+  const createCellsForHints = playMode === "create" ? cells : null;
 
   const authHeaders = useMemo(() => {
     if (!authToken) return {};
@@ -3314,25 +3315,27 @@ function App() {
 
   const rowHints = useMemo(() => {
     if (playMode === "create" && puzzle) {
+      const sourceCells = createCellsForHints || [];
       return Array.from({ length: puzzle.height }, (_, y) =>
-        getRuns(cells.slice(y * puzzle.width, (y + 1) * puzzle.width).map((value) => (value === 1 ? 1 : 0)))
+        getRuns(sourceCells.slice(y * puzzle.width, (y + 1) * puzzle.width).map((value) => (value === 1 ? 1 : 0)))
       );
     }
     if (!Array.isArray(puzzle?.row_hints)) return [];
     return puzzle.row_hints.map((hint) => (Array.isArray(hint) ? hint : []));
-  }, [cells, playMode, puzzle]);
+  }, [createCellsForHints, playMode, puzzle]);
 
   const colHints = useMemo(() => {
     if (playMode === "create" && puzzle) {
+      const sourceCells = createCellsForHints || [];
       return Array.from({ length: puzzle.width }, (_, x) => {
         const col = [];
-        for (let y = 0; y < puzzle.height; y += 1) col.push(cells[y * puzzle.width + x] === 1 ? 1 : 0);
+        for (let y = 0; y < puzzle.height; y += 1) col.push(sourceCells[y * puzzle.width + x] === 1 ? 1 : 0);
         return getRuns(col);
       });
     }
     if (!Array.isArray(puzzle?.col_hints)) return [];
     return puzzle.col_hints.map((hint) => (Array.isArray(hint) ? hint : []));
-  }, [cells, playMode, puzzle]);
+  }, [createCellsForHints, playMode, puzzle]);
 
   const maxRowHintDepth = useMemo(() => {
     if (!rowHints.length) return 0;
@@ -6995,7 +6998,7 @@ function App() {
     if (!puzzle || !canvasRef.current) return;
 
     const canvas = canvasRef.current;
-    const dpr = window.devicePixelRatio || 1;
+    const dpr = Math.min(window.devicePixelRatio || 1, IS_APPS_IN_TOSS ? 2 : 2.5);
     const w = puzzle.width * cellSize;
     const h = puzzle.height * cellSize;
     canvas.width = Math.max(1, Math.floor(w * dpr));
@@ -7249,12 +7252,13 @@ function App() {
 
   useEffect(() => {
     if (!puzzle) return;
+    if (isInRaceRoom) return;
     if (puzzle?.isDailyPuzzle) return;
     const timer = setTimeout(() => {
       localStorage.setItem(`nonogram-progress-${puzzle.id}`, JSON.stringify(cells));
     }, 250);
     return () => clearTimeout(timer);
-  }, [cells, puzzle]);
+  }, [cells, isInRaceRoom, puzzle]);
 
   useEffect(() => {
     if (!puzzle || !timerRunning) return undefined;
@@ -7269,7 +7273,7 @@ function App() {
       setElapsedSec(Math.floor(nextElapsedMs / 1000));
     }, 50);
     return () => clearInterval(id);
-  }, [puzzle, timerRunning, isInRaceRoom, shouldStopSoloElapsedTimer, elapsedMs]);
+  }, [puzzle?.id, timerRunning, isInRaceRoom, shouldStopSoloElapsedTimer]);
 
   useEffect(() => {
     if (!timerRunning || !shouldStopSoloElapsedTimer) return;
@@ -7282,7 +7286,7 @@ function App() {
   useEffect(() => {
     if (!isRacePlaying || !raceRoomCode || !racePlayerId) return;
     const now = Date.now();
-    if (now - raceProgressLastSentRef.current < 220) return;
+    if (now - raceProgressLastSentRef.current < 520) return;
     raceProgressLastSentRef.current = now;
     submitRaceProgress();
   }, [isRacePlaying, raceRoomCode, racePlayerId, cells, puzzle]);
