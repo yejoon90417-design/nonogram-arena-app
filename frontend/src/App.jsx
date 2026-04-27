@@ -3378,7 +3378,7 @@ function App() {
       const totalColumns = puzzle.width + Math.max(maxRowHintDepth, 1);
       const usableWidth = Math.max(320, viewportWidth) - (viewportWidth >= 700 ? 132 : 24);
       const fittedSize = Math.floor(usableWidth / Math.max(totalColumns, 1));
-      const maxSize = puzzle.width <= 5 ? 44 : puzzle.width <= 10 ? 32 : 22;
+      const maxSize = puzzle.width <= 5 ? 40 : puzzle.width <= 10 ? 29 : 18;
       return Math.max(12, Math.min(maxSize, fittedSize || maxSize));
     }
     return puzzle.width >= 25 ? 20 : 24;
