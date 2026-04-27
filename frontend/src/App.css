@@ -153,7 +153,6 @@
 .page.excelSkin .boardWrap,
 .page.excelSkin .singleBottomBar,
 .page.excelSkin .status,
-.page.excelSkin .mobilePaintToggle,
 .page.excelSkin .raceStateBox {
   margin-left: calc(var(--excel-row-header-w) - 1px);
   margin-right: 0;
@@ -989,6 +988,10 @@
 .panelMenu {
   max-width: 100%;
   min-height: 100vh;
+}
+
+.panelPuzzleFixed {
+  min-height: 100svh;
 }
 
 .title {
@@ -3323,17 +3326,149 @@
   padding-bottom: 0.2rem;
 }
 
-.raceMatchLayout.mobileBoardFocusLayout {
-  grid-template-columns: 1fr;
+.raceMatchLayout.pvpRaceLayout {
+  grid-template-columns: minmax(180px, 240px) minmax(0, 1fr) minmax(170px, 220px);
 }
 
-.raceMatchLayout.mobileBoardFocusLayout .raceInfoPane,
-.raceMatchLayout.mobileBoardFocusLayout .raceSidePane {
+.page.appsInToss .raceMatchLayout {
+  width: min(calc(100% - (var(--apps-rail-x) * 2)), var(--apps-content-max));
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.page.appsInToss .racePanel {
+  width: min(calc(100% - (var(--apps-rail-x) * 2)), var(--apps-content-max));
+  margin: 0.34rem auto 0;
+  justify-content: flex-start;
+}
+
+.page.appsInToss .racePanel > button {
+  min-height: 30px;
+  border-width: 1px;
+  border-color: rgba(23, 62, 98, 0.28);
+  border-radius: 6px;
+  background: #ffffff;
+  box-shadow: none;
+  color: #173e62;
+  font-size: 0.76rem;
+  font-weight: 900;
+  line-height: 1;
+  padding: 0.2rem 0.5rem;
+  white-space: nowrap;
+}
+
+.page.appsInToss .pvpRaceLayout {
+  grid-template-areas:
+    "info"
+    "side"
+    "board";
+  gap: 0.42rem;
+  margin-top: 0.42rem;
+}
+
+.page.appsInToss .pvpRaceLayout .raceInfoPane {
+  grid-area: info;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.35rem 0.55rem;
+  border: 2px solid #173e62;
+  background: linear-gradient(135deg, #ffffff 0%, #eef7ff 100%);
+  box-shadow: 4px 4px 0 rgba(24, 50, 88, 0.1);
+  padding: 0.44rem 0.56rem;
+}
+
+.page.appsInToss .pvpRaceLayout .raceInfoTitle {
+  min-width: 0;
+  color: #132f4d;
+  font-size: 0.82rem;
+  line-height: 1.2;
+}
+
+.page.appsInToss .pvpRaceLayout .raceInfoGoal {
+  grid-column: 1 / -1;
+  font-size: 0.68rem;
+}
+
+.page.appsInToss .pvpRaceLayout .raceInfoMe {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.42rem;
+  grid-column: 1;
+  font-size: 0.94rem;
+  line-height: 1;
+}
+
+.page.appsInToss .pvpRaceLayout .raceInfoMe strong {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.page.appsInToss .pvpRaceLayout .raceInfoMe em {
+  color: #0f7a55;
+  white-space: nowrap;
+}
+
+.page.appsInToss .pvpRaceLayout .timerBar {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  justify-self: end;
+  margin-top: 0;
+  min-height: 30px;
+  border: 2px solid rgba(31, 117, 181, 0.28);
+  background: #e8f3ff;
+  padding: 0 0.5rem;
+  font-size: 0.72rem;
+  letter-spacing: 0;
+}
+
+.page.appsInToss .pvpRaceLayout .raceActions {
   display: none;
 }
 
-.raceMatchLayout.mobileBoardFocusLayout .raceBoardPane {
-  grid-column: 1 / -1;
+.page.appsInToss .pvpRaceLayout .raceSidePane {
+  grid-area: side;
+}
+
+.page.appsInToss .pvpRaceLayout .raceSidePlayers {
+  border: 2px solid rgba(23, 62, 98, 0.16);
+  background: #ffffff;
+  box-shadow: 4px 4px 0 rgba(24, 50, 88, 0.08);
+  padding: 0.38rem;
+}
+
+.page.appsInToss .pvpRaceLayout .raceSideTitle {
+  padding: 0 0.1rem;
+  font-size: 0.76rem;
+}
+
+.page.appsInToss .pvpRaceLayout .raceProgressRow {
+  min-height: 36px;
+  border-radius: 7px;
+  border-width: 2px;
+  padding: 0.2rem 0.42rem;
+  font-size: 0.8rem;
+}
+
+.page.appsInToss .pvpRaceLayout .raceProgressIdentity span:last-child {
+  max-width: 44vw;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.page.appsInToss .pvpRaceLayout .raceBoardPane {
+  grid-area: board;
+}
+
+.page.appsInToss .pvpRaceLayout .raceBoardPane .boardWrap {
+  width: 100%;
+  min-height: auto;
+  margin-top: 0;
+  padding: 0.42rem 0.28rem 0.56rem;
+  border-radius: 8px;
 }
 
 .raceInfoPane {
@@ -3363,6 +3498,19 @@
   font-weight: 900;
   color: #13233b;
   line-height: 1.1;
+}
+
+.raceInfoMeLabel,
+.raceInfoMe em {
+  font-style: normal;
+  font-size: 0.82rem;
+  font-weight: 900;
+  color: #516b83;
+}
+
+.raceInfoGoal {
+  color: #314861;
+  font-weight: 800;
 }
 
 .rankedFxOverlay,
@@ -3858,6 +4006,12 @@
   gap: 0.35rem;
 }
 
+.raceSideTitle {
+  color: #153451;
+  font-size: 0.86rem;
+  font-weight: 900;
+}
+
 .raceProgressRow {
   position: relative;
   border: 2px solid #183258;
@@ -3932,6 +4086,11 @@
   margin: 0.75rem 0 0.55rem;
   justify-content: center;
   gap: 0.55rem;
+}
+
+.panelPuzzleFixed .singleTopControls {
+  min-height: 58px;
+  margin-bottom: 0.4rem;
 }
 
 .singleModeBadge {
@@ -4108,6 +4267,20 @@
   border-bottom: 1px solid #d8e5f2;
 }
 
+.singleSourceHeaderActions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.55rem;
+  flex-wrap: wrap;
+}
+
+.compactActionBtn {
+  min-width: auto;
+  min-height: 40px;
+  padding: 0 0.85rem;
+}
+
 .singleSourceTitle {
   font-size: 1.28rem;
   font-weight: 900;
@@ -4191,6 +4364,117 @@
   overscroll-behavior-y: contain;
   scrollbar-gutter: stable;
   -webkit-overflow-scrolling: touch;
+}
+
+.themeProgressPanel {
+  border: 2px solid rgba(23, 62, 98, 0.14);
+  border-radius: 8px;
+  background: linear-gradient(135deg, #ffffff 0%, #f0f9ff 52%, #f0fdf4 100%);
+  display: grid;
+  gap: 0.55rem;
+  padding: 0.8rem;
+}
+
+.themeProgressHeader,
+.themeProgressMeta {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.65rem;
+}
+
+.themeProgressHeader span {
+  color: #153451;
+  font-size: 0.95rem;
+  font-weight: 900;
+}
+
+.themeProgressHeader strong {
+  color: #0f7a55;
+  font-size: 1.05rem;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.themeProgressTrack {
+  height: 12px;
+  border: 1px solid rgba(23, 62, 98, 0.12);
+  border-radius: 999px;
+  background: #e2e8f0;
+  overflow: hidden;
+}
+
+.themeProgressTrack span {
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #2563eb 0%, #22c55e 64%, #facc15 100%);
+  display: block;
+  transition: width 420ms ease;
+}
+
+.themeProgressMeta span,
+.themeProgressMeta em {
+  color: #64748b;
+  font-size: 0.78rem;
+  font-style: normal;
+  font-weight: 900;
+}
+
+.themeProgressMeta em {
+  color: #173e62;
+}
+
+.themeCategoryTabs {
+  display: flex;
+  gap: 0.45rem;
+  overflow-x: auto;
+  padding-bottom: 0.1rem;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+}
+
+.themeCategoryTabs::-webkit-scrollbar {
+  display: none;
+}
+
+.themeCategoryTab {
+  min-width: 84px;
+  min-height: 48px;
+  border: 2px solid rgba(23, 62, 98, 0.14);
+  border-radius: 8px;
+  background: #ffffff;
+  color: #173e62;
+  display: grid;
+  align-content: center;
+  gap: 0.1rem;
+  padding: 0.45rem 0.65rem;
+  text-align: left;
+  cursor: pointer;
+  flex: 0 0 auto;
+}
+
+.themeCategoryTab span {
+  font-size: 0.84rem;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.themeCategoryTab strong {
+  color: #64748b;
+  font-size: 0.72rem;
+  font-weight: 900;
+}
+
+.themeCategoryTab.active {
+  border-color: #173e62;
+  background: linear-gradient(135deg, #e0f2fe 0%, #ffffff 52%, #dcfce7 100%);
+  box-shadow: 4px 4px 0 rgba(24, 50, 88, 0.1);
+  color: #142f4d;
+}
+
+.themeCategoryTab.active strong {
+  color: #0f7a55;
 }
 
 .singleSampleCard {
@@ -4384,6 +4668,7 @@
   margin-top: 0.28rem;
   display: flex;
   justify-content: space-between;
+  flex-wrap: wrap;
   gap: 0.4rem;
   font-size: 0.82rem;
   color: #6b7f94;
@@ -5196,6 +5481,36 @@
   border-radius: 10px;
 }
 
+.createSamplePreview.locked {
+  position: relative;
+  display: grid;
+  place-items: center;
+  gap: 0;
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.72), rgba(231, 238, 246, 0.84)),
+    repeating-linear-gradient(
+      -45deg,
+      rgba(92, 112, 133, 0.14) 0,
+      rgba(92, 112, 133, 0.14) 8px,
+      rgba(255, 255, 255, 0.12) 8px,
+      rgba(255, 255, 255, 0.12) 16px
+    );
+  border: 1px solid #c7d5e4;
+  padding: 0;
+  overflow: hidden;
+}
+
+.themePreviewLock {
+  width: 42px;
+  height: 42px;
+  border-radius: 999px;
+  background: rgba(21, 39, 60, 0.82);
+  color: #ffffff;
+  display: inline-grid;
+  place-items: center;
+  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.18);
+}
+
 .createSamplePixel {
   background: #ffffff;
 }
@@ -5233,6 +5548,20 @@
   font-weight: 800;
   color: #56728f;
   letter-spacing: 0.04em;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.34rem;
+  flex-wrap: wrap;
+}
+
+.createSampleSize span {
+  border: 1px solid #d4dfeb;
+  border-radius: 999px;
+  background: #f6f9fc;
+  color: #66788b;
+  padding: 0.08rem 0.34rem;
+  font-size: 0.68rem;
+  letter-spacing: 0;
 }
 
 .createEditorToolbar {
@@ -5387,7 +5716,7 @@
 }
 
 .modeSingle {
-  background: linear-gradient(130deg, #1b8bd2 0%, #5ac2ff 100%);
+  background: linear-gradient(130deg, #228ed1 0%, #5bc5ff 100%);
   color: #fff;
 }
 
@@ -5397,17 +5726,26 @@
 }
 
 .modeMulti {
-  background: linear-gradient(130deg, #d7388f 0%, #ff5b86 100%);
+  background: linear-gradient(130deg, #d73892 0%, #ff5a88 100%);
   color: #fff;
 }
 
+.modeDaily {
+  background: linear-gradient(130deg, #d73892 0%, #ff5a88 100%);
+  color: #fff;
+}
+
+.modeDaily.solved {
+  background: linear-gradient(130deg, #d73892 0%, #ff5a88 100%);
+}
+
 .modePvp {
-  background: linear-gradient(130deg, #1f9a73 0%, #63d1a3 100%);
+  background: linear-gradient(130deg, #27a178 0%, #63d5ad 100%);
   color: #fff;
 }
 
 .modeRank {
-  background: linear-gradient(130deg, #5f45cc 0%, #8d72f1 100%);
+  background: linear-gradient(130deg, #6548d5 0%, #866df0 100%);
   color: #fff;
 }
 
@@ -5436,6 +5774,2355 @@
   font-weight: 900;
   color: #835b11;
   background: linear-gradient(180deg, #fff0c3 0%, #ffd68f 100%);
+}
+
+.appsMiniMenu {
+  width: min(100%, 620px);
+  margin: 0 auto;
+  display: grid;
+  gap: 0.64rem;
+  z-index: 2;
+}
+
+.appsModeMenu {
+  width: min(calc(100% - (var(--apps-rail-x, 0.55rem) * 2)), var(--apps-content-max, 620px));
+}
+
+.appsModeChooser {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: stretch;
+  justify-content: center;
+  gap: 0.62rem;
+}
+
+.appsModeChooser .modeBtn {
+  width: 100%;
+  min-width: 0;
+  min-height: clamp(118px, 19svh, 176px);
+  padding: 0.7rem;
+}
+
+.appsMiniHero {
+  display: grid;
+  gap: 0.2rem;
+  text-align: left;
+  padding: 0.05rem 0 0.1rem;
+}
+
+.appsMiniHero span {
+  width: fit-content;
+  border: 1px solid #bfdbfe;
+  border-radius: 999px;
+  padding: 0.18rem 0.56rem;
+  background: #eff6ff;
+  color: #1d4ed8;
+  font-size: 0.76rem;
+  font-weight: 900;
+}
+
+.appsMiniHero h2 {
+  margin: 0;
+  color: #142f4d;
+  font-size: clamp(1.72rem, 7.6vw, 2.35rem);
+  line-height: 1;
+}
+
+.appsMissionToast {
+  position: fixed;
+  top: calc(env(safe-area-inset-top, 0px) + 12px);
+  left: 50%;
+  z-index: 60;
+  width: min(88vw, 360px);
+  border: 2px solid #173e62;
+  border-radius: 16px;
+  background: linear-gradient(135deg, #fffbeb 0%, #ffffff 46%, #dcfce7 100%);
+  box-shadow: 0 12px 26px rgba(15, 23, 42, 0.18), 4px 4px 0 rgba(24, 50, 88, 0.12);
+  color: #153451;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 0.62rem;
+  padding: 0.72rem 0.82rem;
+  pointer-events: none;
+  transform: translateX(-50%);
+  animation: missionToastIn 520ms cubic-bezier(0.18, 1.06, 0.22, 1) both;
+  overflow: hidden;
+}
+
+.appsMissionToast::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(105deg, transparent 0%, rgba(255, 255, 255, 0.72) 44%, rgba(250, 204, 21, 0.24) 54%, transparent 72%);
+  opacity: 0;
+  transform: translateX(-120%);
+  animation: missionToastSweep 1800ms 280ms ease-out both;
+}
+
+.appsMissionToast.levelUp {
+  background: linear-gradient(135deg, #fef3c7 0%, #ffffff 42%, #dbeafe 100%);
+  border-color: #92400e;
+}
+
+.appsMissionToast svg {
+  color: #b45309;
+  flex: 0 0 auto;
+  position: relative;
+  z-index: 1;
+  animation: missionTrophyPop 900ms 120ms cubic-bezier(0.18, 1.12, 0.22, 1) both;
+}
+
+.appsMissionToastCopy {
+  min-width: 0;
+  display: grid;
+  gap: 0.34rem;
+  position: relative;
+  z-index: 1;
+}
+
+.appsMissionToastTop {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.appsMissionToast strong,
+.appsMissionToast em {
+  font-style: normal;
+  font-size: 0.86rem;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.appsMissionToast em {
+  color: #0f7a55;
+}
+
+.appsMissionToastGauge {
+  height: 9px;
+  border: 1px solid rgba(23, 62, 98, 0.14);
+  border-radius: 999px;
+  background: #e2e8f0;
+  display: block;
+  overflow: hidden;
+}
+
+.appsMissionToastGauge i {
+  width: var(--xp-from, 0%);
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #2563eb 0%, #22c55e 62%, #facc15 100%);
+  display: block;
+  animation: missionXpGaugeFill 1700ms 220ms cubic-bezier(0.16, 0.98, 0.2, 1) both;
+}
+
+.appsMissionToastMeta {
+  color: #64748b;
+  font-size: 0.72rem;
+  font-weight: 900;
+}
+
+.appsLevelUpFx {
+  position: fixed;
+  inset: 0;
+  z-index: 59;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.appsLevelUpRing {
+  position: absolute;
+  width: 150px;
+  height: 150px;
+  border: 3px solid rgba(250, 204, 21, 0.72);
+  border-radius: 999px;
+  box-shadow: 0 0 0 10px rgba(34, 197, 94, 0.12);
+  animation: levelRingBurst 1600ms ease-out both;
+}
+
+.appsLevelUpRing.secondary {
+  width: 108px;
+  height: 108px;
+  border-color: rgba(37, 99, 235, 0.44);
+  animation-delay: 160ms;
+}
+
+.appsLevelUpParticles {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+}
+
+.appsLevelUpParticles i {
+  position: absolute;
+  width: 9px;
+  height: 9px;
+  border-radius: 3px;
+  background: #facc15;
+  transform: rotate(var(--particle-angle)) translateY(-26px);
+  animation: levelParticleFly 1350ms var(--particle-delay, 0ms) ease-out both;
+}
+
+.appsLevelUpParticles i:nth-child(3n + 1) {
+  background: #22c55e;
+}
+
+.appsLevelUpParticles i:nth-child(3n + 2) {
+  background: #60a5fa;
+}
+
+.appsLevelUpCard {
+  min-width: 150px;
+  border: 3px solid #173e62;
+  border-radius: 14px;
+  background: linear-gradient(135deg, #fffbeb 0%, #ffffff 42%, #dbeafe 100%);
+  box-shadow: 0 16px 32px rgba(15, 23, 42, 0.2), 7px 7px 0 rgba(24, 50, 88, 0.14);
+  color: #153451;
+  display: grid;
+  justify-items: center;
+  gap: 0.24rem;
+  padding: 0.95rem 1.1rem;
+  animation: levelCardPop 1900ms cubic-bezier(0.18, 1.08, 0.2, 1) both;
+}
+
+.appsLevelUpCard svg {
+  color: #b45309;
+}
+
+.appsLevelUpCard span {
+  color: #92400e;
+  font-size: 0.82rem;
+  font-weight: 900;
+}
+
+.appsLevelUpCard strong {
+  color: #142f4d;
+  font-size: 1.65rem;
+  font-weight: 900;
+  line-height: 1;
+}
+
+.appsMissionSheetBackdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 55;
+  background: rgba(15, 23, 42, 0.38);
+  display: grid;
+  align-items: end;
+  padding: 0.75rem;
+}
+
+.appsMissionSheet {
+  width: min(100%, 620px);
+  max-height: min(82svh, 760px);
+  margin: 0 auto;
+  border: 3px solid #173e62;
+  border-radius: 16px 16px 8px 8px;
+  background: #ffffff;
+  box-shadow: 0 -18px 42px rgba(15, 23, 42, 0.24);
+  display: grid;
+  gap: 0.75rem;
+  overflow-y: auto;
+  padding: 0.7rem 0.85rem 0.9rem;
+  overscroll-behavior: contain;
+}
+
+.appsMissionSheetHandle {
+  width: 44px;
+  height: 5px;
+  border-radius: 999px;
+  background: #cbd5e1;
+  justify-self: center;
+}
+
+.appsMissionSheetTop {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.appsMissionSheetTop div {
+  min-width: 0;
+  display: grid;
+  gap: 0.12rem;
+}
+
+.appsMissionSheetTop span {
+  color: #64748b;
+  font-size: 0.78rem;
+  font-weight: 900;
+}
+
+.appsMissionSheetTop strong {
+  color: #142f4d;
+  font-size: 1.25rem;
+  font-weight: 900;
+}
+
+.appsMissionSheetTop button {
+  min-width: 64px;
+  min-height: 36px;
+  border: 2px solid rgba(23, 62, 98, 0.16);
+  border-radius: 999px;
+  background: #f8fafc;
+  color: #173e62;
+  font-size: 0.82rem;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.appsMissionSheet .appsMissionPanel {
+  border-width: 2px;
+  box-shadow: none;
+}
+
+.appsMissionPanel {
+  border: 3px solid #173e62;
+  border-radius: 8px;
+  background: linear-gradient(135deg, #ffffff 0%, #f0f9ff 52%, #ecfdf5 100%);
+  box-shadow: 7px 7px 0 rgba(24, 50, 88, 0.14);
+  display: grid;
+  gap: 0.75rem;
+  padding: 0.85rem;
+}
+
+.appsMissionPanel.compact {
+  border-width: 2px;
+  box-shadow: 5px 5px 0 rgba(24, 50, 88, 0.1);
+}
+
+.appsMissionPanel.rewardPulse .appsMissionLevelBadge {
+  animation: missionLevelBadgeCharge 1200ms ease-out both;
+}
+
+.appsMissionPanel.rewardPulse .appsMissionLevelCopy b {
+  box-shadow: 0 0 0 4px rgba(34, 197, 94, 0.12);
+}
+
+.appsMissionPanel.levelUpPulse .appsMissionLevelBadge {
+  background: linear-gradient(135deg, #facc15 0%, #22c55e 52%, #2563eb 100%);
+}
+
+.appsMissionLevelCard {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.appsMissionLevelBadge {
+  width: 56px;
+  height: 56px;
+  border: 2px solid #173e62;
+  border-radius: 8px;
+  background: linear-gradient(135deg, #2563eb 0%, #16a34a 100%);
+  color: #ffffff;
+  display: grid;
+  place-items: center;
+  font-size: 0.95rem;
+  font-weight: 900;
+  box-shadow: inset 0 -8px 16px rgba(15, 23, 42, 0.16);
+}
+
+.appsMissionLevelCopy {
+  min-width: 0;
+  display: grid;
+  gap: 0.28rem;
+}
+
+.appsMissionLevelCopy strong {
+  color: #142f4d;
+  font-size: 1.05rem;
+  font-weight: 900;
+}
+
+.appsMissionLevelCopy span {
+  color: #64748b;
+  font-size: 0.78rem;
+  font-weight: 900;
+}
+
+.appsMissionLevelCopy b {
+  height: 10px;
+  border: 1px solid rgba(23, 62, 98, 0.13);
+  border-radius: 999px;
+  background: #e2e8f0;
+  display: block;
+  overflow: hidden;
+}
+
+.appsMissionLevelCopy i {
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #2563eb 0%, #22c55e 64%, #facc15 100%);
+  display: block;
+  transition: width 420ms ease;
+}
+
+.appsMissionColumns {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.65rem;
+}
+
+.appsMissionPanel.compact .appsMissionColumns {
+  grid-template-columns: 1fr;
+}
+
+.appsMissionPanel.compact .appsMissionGroup:nth-child(2) {
+  display: none;
+}
+
+.appsMissionGroup {
+  min-width: 0;
+  display: grid;
+  gap: 0.5rem;
+}
+
+.appsMissionGroupHead {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  color: #153451;
+}
+
+.appsMissionGroupHead span,
+.appsMissionGroupHead strong {
+  font-size: 0.82rem;
+  font-weight: 900;
+}
+
+.appsMissionGroupHead strong {
+  color: #0f7a55;
+  text-align: right;
+}
+
+.appsMissionList {
+  display: grid;
+  gap: 0.42rem;
+}
+
+.appsMissionItem {
+  min-width: 0;
+  border: 2px solid rgba(23, 62, 98, 0.12);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.86);
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-areas:
+    "check copy reward"
+    "check bar count";
+  align-items: center;
+  column-gap: 0.5rem;
+  row-gap: 0.28rem;
+  padding: 0.52rem;
+}
+
+.appsMissionItem.complete {
+  border-color: rgba(22, 163, 74, 0.36);
+  background: rgba(240, 253, 244, 0.92);
+}
+
+.appsMissionCheck {
+  grid-area: check;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  background: #e0f2fe;
+  color: #1d4ed8;
+  display: grid;
+  place-items: center;
+  font-size: 0.76rem;
+  font-weight: 900;
+}
+
+.appsMissionItem.complete .appsMissionCheck {
+  background: #16a34a;
+  color: #ffffff;
+}
+
+.appsMissionCopy {
+  grid-area: copy;
+  min-width: 0;
+  display: grid;
+  gap: 0.05rem;
+}
+
+.appsMissionCopy strong,
+.appsMissionCopy em,
+.appsMissionReward,
+.appsMissionCount {
+  font-style: normal;
+  font-weight: 900;
+}
+
+.appsMissionCopy strong {
+  color: #142f4d;
+  font-size: 0.82rem;
+  line-height: 1.15;
+  overflow-wrap: anywhere;
+}
+
+.appsMissionCopy em {
+  color: #64748b;
+  font-size: 0.7rem;
+  line-height: 1.15;
+}
+
+.appsMissionReward {
+  grid-area: reward;
+  color: #b45309;
+  font-size: 0.76rem;
+  white-space: nowrap;
+}
+
+.appsMissionBar {
+  grid-area: bar;
+  height: 7px;
+  border-radius: 999px;
+  background: #e2e8f0;
+  display: block;
+  overflow: hidden;
+}
+
+.appsMissionBar i {
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #2563eb 0%, #22c55e 100%);
+  display: block;
+  transition: width 420ms ease;
+}
+
+.appsMissionCount {
+  grid-area: count;
+  color: #64748b;
+  font-size: 0.68rem;
+  text-align: right;
+  white-space: nowrap;
+}
+
+@keyframes missionToastIn {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -12px) scale(0.96);
+  }
+
+  100% {
+    opacity: 1;
+    transform: translate(-50%, 0) scale(1);
+  }
+}
+
+@keyframes missionToastSweep {
+  0% {
+    opacity: 0;
+    transform: translateX(-120%);
+  }
+
+  28% {
+    opacity: 0.95;
+  }
+
+  100% {
+    opacity: 0;
+    transform: translateX(120%);
+  }
+}
+
+@keyframes missionTrophyPop {
+  0% {
+    transform: rotate(-8deg) scale(0.74);
+  }
+
+  44% {
+    transform: rotate(5deg) scale(1.18);
+  }
+
+  100% {
+    transform: rotate(0deg) scale(1);
+  }
+}
+
+@keyframes missionXpGaugeFill {
+  0% {
+    width: var(--xp-from, 0%);
+  }
+
+  100% {
+    width: var(--xp-to, 100%);
+  }
+}
+
+@keyframes missionLevelBadgeCharge {
+  0% {
+    transform: scale(1);
+    box-shadow: inset 0 -8px 16px rgba(15, 23, 42, 0.16);
+  }
+
+  36% {
+    transform: scale(1.12);
+    box-shadow: 0 0 0 8px rgba(250, 204, 21, 0.18), inset 0 -8px 16px rgba(15, 23, 42, 0.16);
+  }
+
+  100% {
+    transform: scale(1);
+    box-shadow: inset 0 -8px 16px rgba(15, 23, 42, 0.16);
+  }
+}
+
+@keyframes levelRingBurst {
+  0% {
+    opacity: 0;
+    transform: scale(0.5);
+  }
+
+  28% {
+    opacity: 0.92;
+  }
+
+  100% {
+    opacity: 0;
+    transform: scale(2.55);
+  }
+}
+
+@keyframes levelParticleFly {
+  0% {
+    opacity: 0;
+    transform: rotate(var(--particle-angle)) translateY(-26px) scale(0.65);
+  }
+
+  24% {
+    opacity: 1;
+  }
+
+  100% {
+    opacity: 0;
+    transform: rotate(var(--particle-angle)) translateY(-132px) scale(1.05);
+  }
+}
+
+@keyframes levelCardPop {
+  0% {
+    opacity: 0;
+    transform: translateY(18px) scale(0.82);
+  }
+
+  26% {
+    opacity: 1;
+    transform: translateY(0) scale(1.08);
+  }
+
+  62% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+
+  100% {
+    opacity: 0;
+    transform: translateY(-10px) scale(0.96);
+  }
+}
+
+.appsMiniSubActions {
+  width: 100%;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.48rem;
+  align-items: stretch;
+}
+
+.appsMiniTopActions {
+  align-self: start;
+}
+
+.appsMiniTutorialBtn {
+  width: 100%;
+  min-width: 0;
+  min-height: 40px;
+  border: 2px solid rgba(23, 62, 98, 0.18);
+  border-radius: 12px;
+  background: #ffffff;
+  color: #234d73;
+  box-shadow: 3px 3px 0 rgba(24, 50, 88, 0.09);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  padding: 0 0.7rem;
+  font-size: 0.86rem;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.appsMiniTutorialBtn svg {
+  color: #5b45c4;
+}
+
+.appsMiniMissionBtn svg {
+  color: #b45309;
+}
+
+.appsMiniMissionBtn strong {
+  min-width: 32px;
+  min-height: 24px;
+  border-radius: 999px;
+  background: #fffbeb;
+  color: #92400e;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 0.45rem;
+  font-size: 0.76rem;
+  font-weight: 900;
+}
+
+.appsQuickGrid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.75rem;
+}
+
+.appsQuickBtn {
+  min-height: 104px;
+  border: 3px solid #173e62;
+  border-radius: 8px;
+  background: #fff;
+  color: #102a43;
+  box-shadow: 6px 6px 0 rgba(24, 50, 88, 0.16);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1rem 1.1rem;
+  text-align: left;
+  cursor: pointer;
+}
+
+.appsQuickBtn:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+
+.appsQuickBtn span {
+  font-size: clamp(1.5rem, 8vw, 2.1rem);
+  font-weight: 900;
+}
+
+.appsQuickBtn strong {
+  border-radius: 999px;
+  padding: 0.32rem 0.75rem;
+  background: rgba(255, 255, 255, 0.84);
+  font-size: 0.95rem;
+}
+
+.appsQuick5x5,
+.appsQuick55 {
+  background: linear-gradient(130deg, #e0f2fe 0%, #bae6fd 100%);
+}
+
+.appsQuick10x10,
+.appsQuick1010 {
+  background: linear-gradient(130deg, #dbeafe 0%, #bfdbfe 100%);
+}
+
+.appsQuick15x15,
+.appsQuick1515 {
+  background: linear-gradient(130deg, #dcfce7 0%, #bbf7d0 100%);
+}
+
+.appsMiniActions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.7rem;
+}
+
+.appsMiniActions button {
+  min-height: 52px;
+  border: 2px solid #c7d9ea;
+  border-radius: 8px;
+  background: #fff;
+  color: #234d73;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.page.appsInToss {
+  --apps-content-max: 680px;
+  --apps-rail-x: 0.55rem;
+  width: 100%;
+  min-height: 100svh;
+  place-items: start center;
+  overflow-x: hidden;
+}
+
+.page.appsInToss .panel {
+  width: 100vw;
+  min-height: 100svh;
+}
+
+.page.appsInToss .topBar {
+  width: 100%;
+  min-height: 72px;
+  padding: 0.62rem 0.78rem;
+  gap: 0.55rem;
+}
+
+.page.appsInToss .brandWrap {
+  gap: 0.55rem;
+  min-width: 0;
+}
+
+.page.appsInToss .logoPixel {
+  width: 36px;
+  height: 36px;
+  min-width: 36px;
+  border-width: 2px;
+}
+
+.page.appsInToss .title {
+  font-size: clamp(1.26rem, 6.4vw, 1.8rem);
+  line-height: 1.08;
+  white-space: nowrap;
+}
+
+.page.appsInToss .singleTopControls,
+.page.appsInToss .authScreen,
+.page.appsInToss .authTabs,
+.page.appsInToss .authCard,
+.page.appsInToss .appsSingleHub,
+.page.appsInToss .singleMenuHub,
+.page.appsInToss .singleSourcePanel,
+.page.appsInToss .communityHub,
+.page.appsInToss .communityDiscussionPanel,
+.page.appsInToss .createTopControls,
+.page.appsInToss .createEditorToolbar,
+.page.appsInToss .multiLobbyShell,
+.page.appsInToss .pvpQueuePanel,
+.page.appsInToss .pvpFxTestPanel,
+.page.appsInToss .pvpStageCard,
+.page.appsInToss .placementScreen,
+.page.appsInToss .rankingScreen,
+.page.appsInToss .hallScreen,
+.page.appsInToss .tutorialStage,
+.page.appsInToss .raceStateBox,
+.page.appsInToss .boardWrap.puzzleBoardStage,
+.page.appsInToss .singleBottomBar,
+.page.appsInToss .status {
+  width: min(calc(100% - (var(--apps-rail-x) * 2)), var(--apps-content-max));
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.page.appsInToss .singleTopControls {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(88px, 1fr));
+  align-items: stretch;
+  justify-content: stretch;
+}
+
+.page.appsInToss .singleTopControls.appsSingleNavControls {
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.42rem;
+  margin-top: 0.45rem;
+  margin-bottom: 0.36rem;
+}
+
+.page.appsInToss .appsSingleNavControls > * {
+  width: auto;
+}
+
+.page.appsInToss .appsSingleNavControls .singleSfxBtn,
+.page.appsInToss .appsSingleNavControls .singleHomeBtn {
+  min-width: 0;
+  min-height: 36px;
+  border-width: 1px;
+  border-radius: 10px;
+  padding: 0 0.68rem;
+  box-shadow: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.28rem;
+  font-size: 0.8rem;
+  letter-spacing: 0;
+}
+
+.page.appsInToss .appsSingleNavControls .singleSfxBtn {
+  width: 100%;
+  background: #ffffff;
+}
+
+.page.appsInToss .appsSingleNavControls .singleHomeBtn {
+  background: #eaf4ff;
+  color: #1d4f7a;
+}
+
+.page.appsInToss .singleTopControls > *,
+.page.appsInToss .singleSourceBody > *,
+.page.appsInToss .authTabs > *,
+.page.appsInToss .authCard .modalActions > *,
+.page.appsInToss .rankingActions > *,
+.page.appsInToss .hallActions > *,
+.page.appsInToss .placementActions > *,
+.page.appsInToss .pvpQueueActions > * {
+  width: 100%;
+  min-width: 0;
+}
+
+.page.appsInToss .singleTopControls.appsSingleNavControls > * {
+  width: auto;
+}
+
+.page.appsInToss .appsSingleNavControls .singleSfxBtn {
+  width: 100%;
+}
+
+.page.appsInToss .singleSourceBody {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.page.appsInToss .authTabs,
+.page.appsInToss .authCard .modalActions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: stretch;
+}
+
+.page.appsInToss .rankingActions,
+.page.appsInToss .hallActions,
+.page.appsInToss .placementActions,
+.page.appsInToss .pvpQueueActions {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(96px, 1fr));
+  align-items: stretch;
+}
+
+.page.appsInToss .menuStage {
+  min-height: calc(100svh - 86px);
+  align-content: start;
+  justify-items: center;
+  gap: 0.68rem;
+  padding: clamp(0.55rem, 1.4svh, 0.9rem) 0 1rem;
+}
+
+.page.appsInToss .menuDust {
+  display: none;
+}
+
+.page.appsInToss .singleTopControls {
+  gap: 0.5rem;
+}
+
+.page.appsInToss .appsSingleHub {
+  margin: 0 auto 0.9rem;
+}
+
+.appsSingleHubV2 {
+  gap: 0.85rem;
+}
+
+.page.appsInToss .appsSingleHubV2:not(.appsDailyPage) {
+  align-items: stretch;
+}
+
+.appsDailyPage {
+  padding-bottom: 0.35rem;
+}
+
+.appsDailyPanel {
+  display: grid;
+  gap: 0.65rem;
+  position: relative;
+}
+
+.appsDailyPanel.solved {
+  animation: dailyPanelSettle 900ms ease-out both;
+}
+
+.appsDailyResultCard {
+  border: 3px solid #173e62;
+  border-radius: 8px;
+  background: linear-gradient(135deg, #fff7ed 0%, #ffffff 48%, #ecfdf5 100%);
+  box-shadow: 7px 7px 0 rgba(24, 50, 88, 0.14);
+  color: #153451;
+  display: grid;
+  gap: 0.7rem;
+  overflow: hidden;
+  padding: 0.9rem;
+  position: relative;
+  animation: dailyResultIn 900ms 140ms cubic-bezier(0.18, 1.02, 0.22, 1) both;
+}
+
+.appsDailyResultCard::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(110deg, transparent 0%, rgba(255, 255, 255, 0.78) 44%, rgba(250, 204, 21, 0.22) 56%, transparent 74%);
+  opacity: 0;
+  pointer-events: none;
+  transform: translateX(-120%);
+  animation: dailyResultSweep 2600ms 620ms ease-out both;
+}
+
+.appsDailyResultBadge {
+  width: fit-content;
+  min-height: 32px;
+  border: 2px solid rgba(180, 83, 9, 0.22);
+  border-radius: 999px;
+  background: #fffbeb;
+  color: #92400e;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.32rem;
+  padding: 0 0.7rem;
+  font-size: 0.78rem;
+  font-weight: 900;
+  position: relative;
+  z-index: 1;
+}
+
+.appsDailyResultTitle {
+  min-width: 0;
+  display: grid;
+  gap: 0.22rem;
+  position: relative;
+  z-index: 1;
+}
+
+.appsDailyResultTitle small {
+  color: #64748b;
+  font-size: 0.78rem;
+  font-weight: 900;
+}
+
+.appsDailyResultTitle strong {
+  color: #142f4d;
+  font-size: 1.45rem;
+  font-weight: 900;
+  line-height: 1.08;
+  overflow-wrap: anywhere;
+}
+
+.appsDailyResultStats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.45rem;
+  position: relative;
+  z-index: 1;
+}
+
+.appsDailyResultStats span {
+  min-width: 0;
+  min-height: 36px;
+  border: 2px solid rgba(23, 62, 98, 0.13);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.86);
+  color: #173e62;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.28rem;
+  padding: 0.35rem 0.38rem;
+  font-size: 0.76rem;
+  font-weight: 900;
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+
+.appsDailyResultStats svg {
+  flex: 0 0 auto;
+  color: #16a34a;
+}
+
+.appsDailyResultActions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.5rem;
+  position: relative;
+  z-index: 1;
+}
+
+.appsDailyResultActions button {
+  min-width: 0;
+  min-height: 42px;
+  border: 2px solid #173e62;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #173e62;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.32rem;
+  padding: 0 0.55rem;
+  font-size: 0.82rem;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.appsDailyResultActions button:last-child {
+  background: #173e62;
+  color: #ffffff;
+}
+
+.appsDailyResultActions button:active {
+  transform: translateY(1px);
+}
+
+.appsDailyCard {
+  width: 100%;
+  min-height: 116px;
+  border: 3px solid #173e62;
+  border-radius: 8px;
+  background: linear-gradient(135deg, #e0f2fe 0%, #ffffff 48%, #dcfce7 100%);
+  box-shadow: 7px 7px 0 rgba(24, 50, 88, 0.16);
+  color: #153451;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.85rem;
+  padding: 0.95rem;
+  text-align: left;
+  cursor: pointer;
+  overflow: hidden;
+  position: relative;
+  transition: transform 180ms ease, box-shadow 180ms ease;
+}
+
+.appsDailyCard::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(110deg, transparent 0%, rgba(255, 255, 255, 0.72) 46%, transparent 70%);
+  opacity: 0;
+  pointer-events: none;
+  transform: translateX(-120%);
+}
+
+.appsDailyCard:active {
+  transform: translateY(2px);
+  box-shadow: 4px 4px 0 rgba(24, 50, 88, 0.14);
+}
+
+.appsDailyPanel.solved .appsDailyCard {
+  background: linear-gradient(135deg, #dcfce7 0%, #ffffff 52%, #bfdbfe 100%);
+}
+
+.appsDailyPanel.solved .appsDailyCard::after {
+  animation: dailyCardSweep 2400ms ease-out both;
+}
+
+.appsDailyIcon {
+  width: 56px;
+  height: 56px;
+  min-width: 56px;
+  border: 2px solid rgba(23, 62, 98, 0.2);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.88);
+  color: #0f7a55;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.appsDailyCopy {
+  min-width: 0;
+  display: grid;
+  gap: 0.2rem;
+}
+
+.appsDailyCopy small,
+.appsDailyCopy em {
+  font-style: normal;
+  font-size: 0.8rem;
+  font-weight: 900;
+  color: #516b83;
+}
+
+.appsDailyCopy strong {
+  min-width: 0;
+  font-size: 1.55rem;
+  line-height: 1.08;
+  font-weight: 900;
+  color: #142f4d;
+  overflow-wrap: anywhere;
+}
+
+.appsDailyBadge {
+  min-width: 52px;
+  min-height: 34px;
+  border: 2px solid #173e62;
+  border-radius: 999px;
+  background: #173e62;
+  color: #fff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 0.7rem;
+  font-size: 0.78rem;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.appsDailyPanel.solved .appsDailyBadge {
+  background: #16a34a;
+  border-color: #15803d;
+  animation: dailyBadgePop 1350ms 280ms cubic-bezier(0.18, 1.12, 0.22, 1) both;
+}
+
+.appsDailyPanel.solved .appsDailyIcon {
+  animation: dailyIconCelebrate 1600ms 240ms ease-out both;
+}
+
+.appsDailyStats {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.5rem;
+}
+
+.appsDailyStats span {
+  min-height: 38px;
+  border: 2px solid rgba(23, 62, 98, 0.16);
+  border-radius: 8px;
+  background: #ffffff;
+  color: #173e62;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  padding: 0.45rem 0.55rem;
+  font-size: 0.84rem;
+  font-weight: 900;
+  text-align: center;
+}
+
+.appsDailyStats svg {
+  flex: 0 0 auto;
+  color: #0f7a55;
+}
+
+.appsDailyCalendar {
+  border: 2px solid #173e62;
+  border-radius: 8px;
+  background: linear-gradient(180deg, #f8fbff 0%, #ffffff 54%, #f0fdf4 100%);
+  box-shadow: 5px 5px 0 rgba(24, 50, 88, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.88);
+  display: grid;
+  gap: 0.45rem;
+  overflow: hidden;
+  padding: 0.82rem 0.7rem 0.72rem;
+  position: relative;
+  isolation: isolate;
+}
+
+.appsDailyCalendar::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto;
+  height: 5px;
+  background: linear-gradient(90deg, #2563eb 0%, #22c55e 55%, #facc15 100%);
+  pointer-events: none;
+  z-index: 0;
+}
+
+.appsDailyCalendar::after {
+  content: "";
+  position: absolute;
+  inset: 5px;
+  border-radius: 7px;
+  background: linear-gradient(105deg, transparent 0%, rgba(255, 255, 255, 0.8) 42%, rgba(250, 204, 21, 0.36) 52%, transparent 70%);
+  opacity: 0;
+  pointer-events: none;
+  transform: translateX(-120%);
+  z-index: 2;
+}
+
+.appsDailyPanel.solved .appsDailyCalendar {
+  animation: dailyCalendarReveal 1100ms 120ms ease-out both;
+}
+
+.appsDailyPanel.solved .appsDailyCalendar::after {
+  animation: dailyCalendarSweep 2600ms 850ms ease-out both;
+}
+
+.appsDailyCalendarTop {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 0.55rem;
+  color: #153451;
+  position: relative;
+  z-index: 1;
+}
+
+.appsDailyCalendarTop strong {
+  font-size: 0.95rem;
+  font-weight: 900;
+}
+
+.appsDailyCalendarProgress {
+  min-width: 0;
+  width: min(48%, 168px);
+  display: grid;
+  gap: 0.22rem;
+}
+
+.appsDailyCalendarProgress span {
+  min-width: 0;
+  font-size: 0.75rem;
+  font-weight: 900;
+  color: #475569;
+  text-align: right;
+}
+
+.appsDailyCalendarProgress b {
+  width: 100%;
+  height: 8px;
+  border: 1px solid rgba(23, 62, 98, 0.14);
+  border-radius: 999px;
+  background: #e2e8f0;
+  display: block;
+  overflow: hidden;
+}
+
+.appsDailyCalendarProgress i {
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #2563eb 0%, #22c55e 62%, #facc15 100%);
+  display: block;
+  transform-origin: left center;
+  animation: dailyProgressFill 1500ms 480ms ease-out both;
+}
+
+.appsDailyWeekdays,
+.appsDailyCalendarGrid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 0.32rem;
+  position: relative;
+  z-index: 1;
+}
+
+.appsDailyWeekdays span {
+  color: #64748b;
+  font-size: 0.68rem;
+  font-weight: 900;
+  text-align: center;
+}
+
+.appsDailyDay {
+  height: 36px;
+  min-width: 0;
+  border: 1px solid rgba(23, 62, 98, 0.1);
+  border-radius: 8px;
+  background: linear-gradient(180deg, #ffffff 0%, #f1f5f9 100%);
+  box-shadow: inset 0 -1px 0 rgba(23, 62, 98, 0.06);
+  color: #475569;
+  display: grid;
+  place-items: center;
+  font-size: 0.72rem;
+  font-weight: 900;
+  overflow: hidden;
+  position: relative;
+  transition: transform 160ms ease, border-color 160ms ease, box-shadow 160ms ease;
+  animation: dailyCellIn 520ms ease-out both;
+  animation-delay: var(--daily-day-delay, 0ms);
+}
+
+.appsDailyDay.blank {
+  visibility: hidden;
+  animation: none;
+}
+
+.appsDailyDay.future {
+  opacity: 0.45;
+  background: #f8fafc;
+  color: #94a3b8;
+}
+
+.appsDailyDayNumber {
+  line-height: 1;
+  position: relative;
+  z-index: 2;
+}
+
+.appsDailyDayStamp {
+  width: 10px;
+  height: 6px;
+  border-left: 2px solid currentColor;
+  border-bottom: 2px solid currentColor;
+  border-radius: 1px;
+  color: #ffffff;
+  filter: drop-shadow(0 1px 1px rgba(15, 23, 42, 0.22));
+  position: absolute;
+  right: 5px;
+  top: 6px;
+  transform: rotate(-45deg);
+  z-index: 3;
+}
+
+.appsDailyDay.today {
+  border-color: #2563eb;
+  background: linear-gradient(180deg, #eff6ff 0%, #dbeafe 100%);
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.16), inset 0 -1px 0 rgba(37, 99, 235, 0.12);
+  color: #1e3a8a;
+}
+
+.appsDailyDay.today::after {
+  content: "";
+  position: absolute;
+  inset: 3px;
+  border: 1px solid rgba(37, 99, 235, 0.32);
+  border-radius: 6px;
+  pointer-events: none;
+  animation: dailyTodayPulse 2800ms ease-in-out infinite;
+}
+
+.appsDailyTodayDot {
+  width: 4px;
+  height: 4px;
+  border-radius: 999px;
+  background: #2563eb;
+  bottom: 4px;
+  position: absolute;
+  z-index: 3;
+}
+
+.appsDailyDay.solved {
+  border-color: rgba(21, 128, 61, 0.86);
+  background: linear-gradient(135deg, #16a34a 0%, #22c55e 58%, #bbf7d0 100%);
+  box-shadow: 0 4px 9px rgba(22, 163, 74, 0.18), inset 0 -13px 22px rgba(21, 128, 61, 0.22);
+  color: #ffffff;
+}
+
+.appsDailyDay.solved::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(120deg, transparent 12%, rgba(255, 255, 255, 0.34) 48%, transparent 72%);
+  pointer-events: none;
+  transform: translateX(-125%);
+  animation: dailySolvedGleam 2200ms ease-out both;
+  animation-delay: calc(var(--daily-day-delay, 0ms) + 300ms);
+}
+
+.appsDailyDay.solved.today {
+  border-color: #facc15;
+  box-shadow: 0 0 0 2px rgba(250, 204, 21, 0.42), 0 6px 12px rgba(22, 163, 74, 0.2), inset 0 -13px 22px rgba(21, 128, 61, 0.2);
+}
+
+.appsDailyDay.solved .appsDailyTodayDot {
+  background: #fef08a;
+}
+
+.appsDailyDay.justSolved {
+  animation: dailyStampPop 1900ms cubic-bezier(0.18, 1.08, 0.2, 1) both;
+}
+
+.appsDailyDay.justSolved .appsDailyDayStamp {
+  animation: dailyStampCheck 1650ms 180ms cubic-bezier(0.18, 1.08, 0.2, 1) both;
+}
+
+.appsDailyDay.justSolved .appsDailyDayNumber {
+  animation: dailyStampNumber 1900ms ease-out both;
+}
+
+@keyframes dailyPanelSettle {
+  0% {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes dailyResultIn {
+  0% {
+    opacity: 0;
+    transform: translateY(18px) scale(0.98);
+  }
+
+  58% {
+    opacity: 1;
+    transform: translateY(-2px) scale(1.01);
+  }
+
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes dailyResultSweep {
+  0% {
+    opacity: 0;
+    transform: translateX(-120%);
+  }
+
+  26% {
+    opacity: 0.95;
+  }
+
+  100% {
+    opacity: 0;
+    transform: translateX(120%);
+  }
+}
+
+@keyframes dailyCardSweep {
+  0% {
+    opacity: 0;
+    transform: translateX(-120%);
+  }
+
+  25% {
+    opacity: 1;
+  }
+
+  100% {
+    opacity: 0;
+    transform: translateX(120%);
+  }
+}
+
+@keyframes dailyBadgePop {
+  0% {
+    transform: scale(0.88);
+  }
+
+  38% {
+    transform: scale(1.12);
+  }
+
+  68% {
+    transform: scale(0.97);
+  }
+
+  100% {
+    transform: scale(1);
+  }
+}
+
+@keyframes dailyIconCelebrate {
+  0% {
+    transform: rotate(0deg) scale(0.92);
+  }
+
+  28% {
+    transform: rotate(-6deg) scale(1.1);
+  }
+
+  58% {
+    transform: rotate(5deg) scale(1.03);
+  }
+
+  100% {
+    transform: rotate(0deg) scale(1);
+  }
+}
+
+@keyframes dailyCalendarReveal {
+  0% {
+    opacity: 0;
+    transform: translateY(14px) scale(0.98);
+  }
+
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes dailyCalendarSweep {
+  0% {
+    opacity: 0;
+    transform: translateX(-120%);
+  }
+
+  24% {
+    opacity: 0.95;
+  }
+
+  100% {
+    opacity: 0;
+    transform: translateX(120%);
+  }
+}
+
+@keyframes dailyProgressFill {
+  from {
+    transform: scaleX(0);
+  }
+
+  to {
+    transform: scaleX(1);
+  }
+}
+
+@keyframes dailyCellIn {
+  from {
+    opacity: 0;
+    transform: translateY(7px) scale(0.96);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes dailySolvedGleam {
+  0% {
+    transform: translateX(-125%);
+  }
+
+  100% {
+    transform: translateX(125%);
+  }
+}
+
+@keyframes dailyTodayPulse {
+  0%,
+  100% {
+    opacity: 0.45;
+    transform: scale(1);
+  }
+
+  50% {
+    opacity: 0.95;
+    transform: scale(0.88);
+  }
+}
+
+@keyframes dailyStampPop {
+  0% {
+    transform: scale(0.72) rotate(-3deg);
+    box-shadow: 0 0 0 0 rgba(250, 204, 21, 0), 0 4px 9px rgba(22, 163, 74, 0.18);
+  }
+
+  32% {
+    transform: scale(1.24) rotate(2deg);
+    box-shadow: 0 0 0 8px rgba(250, 204, 21, 0.34), 0 0 0 16px rgba(34, 197, 94, 0.13), 0 8px 16px rgba(22, 163, 74, 0.28);
+  }
+
+  62% {
+    transform: scale(0.98) rotate(-1deg);
+    box-shadow: 0 0 0 13px rgba(250, 204, 21, 0), 0 0 0 22px rgba(34, 197, 94, 0), 0 5px 11px rgba(22, 163, 74, 0.2);
+  }
+
+  100% {
+    transform: scale(1) rotate(0deg);
+    box-shadow: 0 0 0 2px rgba(250, 204, 21, 0.42), 0 6px 12px rgba(22, 163, 74, 0.2), inset 0 -13px 22px rgba(21, 128, 61, 0.2);
+  }
+}
+
+@keyframes dailyStampCheck {
+  0% {
+    opacity: 0;
+    transform: rotate(-45deg) scale(0.35);
+  }
+
+  38% {
+    opacity: 1;
+    transform: rotate(-45deg) scale(1.38);
+  }
+
+  68% {
+    opacity: 1;
+    transform: rotate(-45deg) scale(0.92);
+  }
+
+  100% {
+    opacity: 1;
+    transform: rotate(-45deg) scale(1);
+  }
+}
+
+@keyframes dailyStampNumber {
+  0% {
+    transform: translateY(0) scale(1);
+  }
+
+  32% {
+    transform: translateY(-1px) scale(1.18);
+  }
+
+  68% {
+    transform: translateY(0) scale(0.98);
+  }
+
+  100% {
+    transform: translateY(0) scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .appsMissionToast,
+  .appsMissionToast::after,
+  .appsMissionToast svg,
+  .appsMissionToastGauge i,
+  .appsLevelUpFx,
+  .appsLevelUpRing,
+  .appsLevelUpParticles i,
+  .appsLevelUpCard,
+  .appsMissionSheet,
+  .appsMissionPanel.rewardPulse .appsMissionLevelBadge,
+  .appsMissionLevelCopy i,
+  .appsMissionBar i,
+  .appsDailyResultCard,
+  .appsDailyResultCard::after,
+  .appsDailyCard,
+  .appsDailyCard::after,
+  .appsDailyCalendarProgress i,
+  .appsDailyDay,
+  .appsDailyDay::before,
+  .appsDailyDay::after,
+  .appsDailyDayStamp {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+
+.appsSingleHeroCard {
+  width: 100%;
+  min-height: 164px;
+  border: 3px solid #173e62;
+  border-radius: 8px;
+  background: linear-gradient(135deg, #ffcf6f 0%, #fff3bf 54%, #d9f99d 100%);
+  box-shadow: 7px 7px 0 rgba(24, 50, 88, 0.18);
+  color: #153451;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 1.1rem;
+  text-align: left;
+  cursor: pointer;
+}
+
+.appsSingleChoiceHub {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: stretch;
+}
+
+.appsSinglePuzzleCard {
+  width: 100%;
+  min-height: 176px;
+  border: 3px solid #173e62;
+  border-radius: 8px;
+  box-shadow: 7px 7px 0 rgba(24, 50, 88, 0.18);
+  color: #153451;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 1.08rem;
+  text-align: left;
+  cursor: pointer;
+}
+
+.appsSinglePuzzleCard.theme {
+  background: linear-gradient(135deg, #ffcf6f 0%, #fff3bf 54%, #d9f99d 100%);
+}
+
+.appsSinglePuzzleCard.battle {
+  background: linear-gradient(135deg, #2fa57d 0%, #52c69a 48%, #8ee6bd 100%);
+}
+
+.appsSinglePuzzleCard.battle,
+.appsSinglePuzzleCard.battle .appsSinglePuzzleCopy small,
+.appsSinglePuzzleCard.battle .appsSinglePuzzleCopy em,
+.appsSinglePuzzleCard.battle .appsSinglePuzzleCopy strong {
+  color: #ffffff;
+}
+
+.appsSinglePuzzleCard.battle .appsSinglePuzzleIcon {
+  color: #14805d;
+}
+
+.appsSinglePuzzleIcon {
+  width: 62px;
+  height: 62px;
+  min-width: 62px;
+  border: 2px solid rgba(23, 62, 98, 0.2);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.82);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #b45309;
+}
+
+.appsSinglePuzzleCopy {
+  min-width: 0;
+  display: grid;
+  gap: 0.28rem;
+}
+
+.appsSinglePuzzleCopy small,
+.appsSinglePuzzleCopy em {
+  font-style: normal;
+  font-size: 0.82rem;
+  font-weight: 900;
+  color: #516b83;
+}
+
+.appsSinglePuzzleCopy strong {
+  font-size: clamp(1.86rem, 6.8vw, 2.6rem);
+  line-height: 1;
+  font-weight: 900;
+  color: #142f4d;
+}
+
+.appsSingleHeroIcon {
+  width: 64px;
+  height: 64px;
+  min-width: 64px;
+  border: 2px solid rgba(23, 62, 98, 0.22);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.82);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #b45309;
+}
+
+.appsSingleHeroCopy {
+  min-width: 0;
+  display: grid;
+  gap: 0.26rem;
+}
+
+.appsSingleHeroCopy small,
+.appsSingleHeroCopy em,
+.appsSingleTile small {
+  font-style: normal;
+  font-size: 0.82rem;
+  font-weight: 900;
+  color: #516b83;
+}
+
+.appsSingleHeroCopy strong {
+  font-size: clamp(2rem, 8vw, 2.8rem);
+  line-height: 1;
+  font-weight: 900;
+  color: #142f4d;
+}
+
+.appsSingleTileGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.7rem;
+}
+
+.appsSingleTileGridSolo {
+  grid-template-columns: 1fr;
+}
+
+.appsSingleTile {
+  min-height: 104px;
+  border: 2px solid #173e62;
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: 5px 5px 0 rgba(24, 50, 88, 0.12);
+  color: #153451;
+  padding: 0.85rem;
+  display: grid;
+  align-content: space-between;
+  justify-items: start;
+  gap: 0.65rem;
+  text-align: left;
+  cursor: pointer;
+}
+
+.appsSingleTile svg {
+  color: #1d72af;
+}
+
+.appsSingleTile span {
+  min-width: 0;
+  display: grid;
+  gap: 0.18rem;
+}
+
+.appsSingleTile strong {
+  font-size: 1.05rem;
+  line-height: 1.12;
+  font-weight: 900;
+  color: #14334e;
+}
+
+.appsSingleTile.community {
+  background: linear-gradient(180deg, #ffffff 0%, #e9fbf4 100%);
+}
+
+.appsSingleTile.community svg {
+  color: #14805d;
+}
+
+.appsSingleTile.official {
+  background: linear-gradient(180deg, #ffffff 0%, #eaf4ff 100%);
+}
+
+.appsSingleTile.tutorial {
+  background: linear-gradient(180deg, #ffffff 0%, #f0edff 100%);
+}
+
+.appsSingleTile.tutorial svg {
+  color: #5b45c4;
+}
+
+@media (min-width: 680px) and (max-height: 620px) {
+  .page.appsInToss .appsSingleHubV2:not(.appsDailyPage) {
+    grid-template-columns: minmax(0, 1.55fr) minmax(188px, 0.72fr);
+    gap: 0.72rem;
+  }
+
+  .page.appsInToss .appsSingleHubV2.appsSingleChoiceHub:not(.appsDailyPage) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .page.appsInToss .appsSingleHubV2:not(.appsDailyPage) .appsSingleHeroCard,
+  .page.appsInToss .appsSingleHubV2:not(.appsDailyPage) .appsSingleTileGrid,
+  .page.appsInToss .appsSingleHubV2:not(.appsDailyPage) .appsSingleTile,
+  .page.appsInToss .appsSingleHubV2:not(.appsDailyPage) .appsSinglePuzzleCard {
+    height: 100%;
+  }
+
+  .page.appsInToss .appsSingleHeroCard {
+    min-height: 132px;
+    padding: 0.9rem;
+    gap: 0.8rem;
+  }
+
+  .page.appsInToss .appsSingleHeroIcon {
+    width: 56px;
+    height: 56px;
+    min-width: 56px;
+  }
+
+  .page.appsInToss .appsSingleHeroCopy strong {
+    font-size: clamp(1.65rem, 4.4vw, 2.25rem);
+  }
+
+  .page.appsInToss .appsSinglePuzzleCard {
+    min-height: 142px;
+    padding: 0.9rem;
+    gap: 0.8rem;
+  }
+
+  .page.appsInToss .appsSinglePuzzleIcon {
+    width: 56px;
+    height: 56px;
+    min-width: 56px;
+  }
+
+  .page.appsInToss .appsSinglePuzzleCopy strong {
+    font-size: clamp(1.55rem, 4vw, 2.12rem);
+  }
+
+  .page.appsInToss .appsSingleHeroCopy small,
+  .page.appsInToss .appsSingleHeroCopy em,
+  .page.appsInToss .appsSingleTile small,
+  .page.appsInToss .appsSinglePuzzleCopy small,
+  .page.appsInToss .appsSinglePuzzleCopy em {
+    font-size: 0.76rem;
+  }
+
+  .page.appsInToss .appsSingleTile {
+    min-height: 132px;
+    align-content: center;
+    gap: 0.5rem;
+  }
+}
+
+.page.appsInToss .singleSourcePanel,
+.page.appsInToss .communityDiscussionPanel,
+.page.appsInToss .createTopControls,
+.page.appsInToss .createEditorToolbar {
+  border-radius: 8px;
+}
+
+.page.appsInToss .singleSourcePanel {
+  padding: 1rem;
+  gap: 0.85rem;
+}
+
+.page.appsInToss .singleCustomSourcePanel {
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  padding: 0 0 0.85rem;
+  gap: 0.58rem;
+}
+
+.page.appsInToss .singleSourceHeader {
+  align-items: center;
+  padding-bottom: 0.75rem;
+}
+
+.page.appsInToss .singleCustomSourcePanel .singleSourceHeader {
+  border: 1px solid #cbdced;
+  border-radius: 12px;
+  background: #ffffff;
+  padding: 0.62rem 0.7rem;
+}
+
+.page.appsInToss .singleSourceTitle {
+  font-size: 1.18rem;
+}
+
+.page.appsInToss .singleCustomSourcePanel .singleSourceTitle {
+  font-size: 1rem;
+}
+
+.page.appsInToss .singleSourceCount {
+  min-width: 2.2rem;
+  height: 2.2rem;
+}
+
+.page.appsInToss .singleCustomSourcePanel .singleSourceCount {
+  min-width: 2rem;
+  height: 2rem;
+  background: #eaf4ff;
+  color: #1d4f7a;
+  font-size: 0.74rem;
+}
+
+.page.appsInToss .singleGroupTabs {
+  gap: 0.45rem;
+}
+
+.page.appsInToss .singleGroupTab {
+  min-height: 40px;
+  padding: 0.45rem 0.75rem;
+}
+
+.page.appsInToss .singleCustomSections,
+.page.appsInToss .communityBrowserPanel,
+.page.appsInToss .communityCommentsList {
+  max-height: none;
+  overflow: visible;
+  padding-right: 0;
+}
+
+.page.appsInToss .singleCustomGrid {
+  grid-template-columns: 1fr;
+  gap: 0.5rem;
+}
+
+.page.appsInToss .singleSampleCardLarge {
+  padding: 0;
+  border-width: 1px;
+  border-color: #c9dceb;
+  border-radius: 12px;
+  background: #ffffff;
+  box-shadow: none;
+}
+
+.page.appsInToss .singleCustomListBtnLarge {
+  grid-template-columns: 78px minmax(0, 1fr);
+  gap: 0.62rem;
+  align-items: center;
+  justify-items: stretch;
+  min-height: 92px;
+  padding: 0.55rem;
+  border-radius: 12px;
+}
+
+.page.appsInToss .singleCustomThumbPreviewLarge,
+.page.appsInToss .singleCustomThumbLarge {
+  width: 78px;
+  min-width: 78px;
+  height: 78px;
+  justify-self: start;
+  border-radius: 10px;
+}
+
+.page.appsInToss .themePreviewLock {
+  width: 34px;
+  height: 34px;
+}
+
+.page.appsInToss .singleCustomMetaLarge {
+  width: 100%;
+  min-width: 0;
+  justify-items: start;
+  text-align: left;
+  align-content: center;
+}
+
+.page.appsInToss .createSampleLabel {
+  font-size: 0.9rem;
+  line-height: 1.2;
+}
+
+.page.appsInToss .communityHub,
+.page.appsInToss .communityDetailHero {
+  grid-template-columns: 1fr;
+}
+
+.page.appsInToss .communityBrowserPanel {
+  padding: 0.75rem;
+  border-radius: 8px;
+}
+
+.page.appsInToss .communityListCardLarge {
+  grid-template-columns: 92px minmax(0, 1fr);
+  gap: 0.75rem;
+  padding: 0.75rem;
+  border-radius: 8px;
+}
+
+.page.appsInToss .communityListPreviewLarge,
+.page.appsInToss .communityLockedThumbLarge {
+  width: 92px;
+  min-width: 92px;
+  height: 92px;
+}
+
+.page.appsInToss .communityDiscussionPanel {
+  padding: 0.95rem;
+  gap: 0.95rem;
+}
+
+.page.appsInToss .communityDetailPreview {
+  width: min(180px, 100%);
+}
+
+.page.appsInToss .communityDetailHiddenThumb {
+  min-height: 180px;
+  border-radius: 8px;
+}
+
+.page.appsInToss .communityReactionBtn {
+  min-height: 44px;
+  padding: 0.45rem 0.8rem;
+}
+
+.page.appsInToss .communityCommentComposer textarea {
+  min-height: 96px;
+  border-radius: 8px;
+}
+
+.page.appsInToss .singleSourceHeaderActions .compactActionBtn {
+  min-width: 0;
+  min-height: 38px;
+  padding: 0 0.7rem;
+}
+
+.page.appsInToss .singleCustomSourcePanel .themeProgressPanel {
+  border-width: 1px;
+  border-color: #cbdced;
+  border-radius: 12px;
+  padding: 0.62rem 0.7rem;
+  gap: 0.38rem;
+  background: linear-gradient(135deg, #ffffff 0%, #eef7ff 100%);
+}
+
+.page.appsInToss .singleCustomSourcePanel .themeProgressHeader span {
+  font-size: 0.82rem;
+}
+
+.page.appsInToss .singleCustomSourcePanel .themeProgressHeader strong {
+  font-size: 0.9rem;
+}
+
+.page.appsInToss .singleCustomSourcePanel .themeProgressTrack {
+  height: 8px;
+}
+
+.page.appsInToss .singleCustomSourcePanel .themeProgressMeta span,
+.page.appsInToss .singleCustomSourcePanel .themeProgressMeta em {
+  font-size: 0.68rem;
+}
+
+.page.appsInToss .singleCustomSourcePanel .themeCategoryTabs {
+  gap: 0.36rem;
+  padding-bottom: 0.04rem;
+}
+
+.page.appsInToss .singleCustomSourcePanel .themeCategoryTab {
+  min-width: 70px;
+  min-height: 40px;
+  border-width: 1px;
+  border-radius: 10px;
+  padding: 0.32rem 0.46rem;
+}
+
+.page.appsInToss .singleCustomSourcePanel .themeCategoryTab span {
+  font-size: 0.74rem;
+}
+
+.page.appsInToss .singleCustomSourcePanel .themeCategoryTab strong {
+  font-size: 0.66rem;
+}
+
+.page.appsInToss .singleCustomSourcePanel .singleSelectedGroupSection {
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  padding: 0;
+  gap: 0.5rem;
+}
+
+.page.appsInToss .singleCustomSourcePanel .createSampleSectionTitle {
+  padding: 0 0.08rem;
+  font-size: 0.86rem;
+}
+
+.page.appsInToss .singleCustomSourcePanel .createSampleSectionCount {
+  min-width: 1.9rem;
+  height: 1.9rem;
+  font-size: 0.72rem;
+}
+
+.page.appsInToss .createTopControls {
+  display: grid;
+  grid-template-columns: 1fr;
+  align-items: stretch;
+  padding: 0.95rem;
+  gap: 0.75rem;
+}
+
+.page.appsInToss .createTitleField,
+.page.appsInToss .createSubmissionsTitleWrap {
+  min-width: 0;
+}
+
+.page.appsInToss .createTitleField input,
+.page.appsInToss .createSizeField input {
+  width: 100%;
+  min-height: 50px;
+  border-radius: 8px;
+}
+
+.page.appsInToss .createSizeInputs {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.55rem;
+}
+
+.page.appsInToss .createValidationNote {
+  max-width: none;
+  min-height: auto;
+  border-radius: 8px;
+}
+
+.page.appsInToss .createTopControls .singleActionBtn,
+.page.appsInToss .createTopControls .singleSfxBtn,
+.page.appsInToss .createTopControls .singleHomeBtn {
+  width: 100%;
+  min-width: 0;
+  min-height: 48px;
+}
+
+@media (max-width: 430px) {
+  .appsMissionToast {
+    min-width: min(92vw, 330px);
+    padding-inline: 0.72rem;
+  }
+
+  .appsMissionColumns {
+    grid-template-columns: 1fr;
+  }
+
+  .appsMissionLevelBadge {
+    width: 50px;
+    height: 50px;
+  }
+
+  .appsMissionItem {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    padding: 0.48rem;
+  }
+
+  .appsDailyResultStats {
+    grid-template-columns: 1fr;
+  }
+
+  .appsDailyResultActions {
+    grid-template-columns: 1fr;
+  }
+
+  .appsDailyCard {
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: start;
+  }
+
+  .appsDailyBadge {
+    grid-column: 2;
+    justify-self: start;
+  }
+
+  .appsDailyCalendar {
+    padding: 0.78rem 0.62rem 0.64rem;
+  }
+
+  .appsDailyCalendarTop {
+    align-items: start;
+  }
+
+  .appsDailyCalendarProgress {
+    width: min(50%, 142px);
+  }
+
+  .appsDailyDay {
+    height: 34px;
+    border-radius: 7px;
+  }
+
+  .appsDailyDayStamp {
+    right: 4px;
+    top: 5px;
+  }
+
+  .appsSingleHeroCard {
+    min-height: 152px;
+    padding: 0.95rem;
+  }
+
+  .appsSingleHeroIcon {
+    width: 54px;
+    height: 54px;
+    min-width: 54px;
+  }
+
+  .appsSingleTileGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .appsSingleChoiceHub {
+    grid-template-columns: 1fr;
+  }
+
+  .appsSinglePuzzleCard {
+    min-height: 152px;
+    padding: 0.95rem;
+  }
+
+  .appsSinglePuzzleIcon {
+    width: 54px;
+    height: 54px;
+    min-width: 54px;
+  }
+
+  .page.appsInToss .singleCustomGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .themeCategoryTab {
+    min-width: 78px;
+  }
 }
 
 .menuDust {
@@ -8355,29 +11042,6 @@
   align-items: center;
 }
 
-.mobileBoardFocusTools {
-  position: fixed;
-  left: 50%;
-  bottom: calc(max(12px, env(safe-area-inset-bottom)) + 72px);
-  transform: translateX(-50%);
-  z-index: 121;
-  padding: 0.4rem 0.5rem;
-  border-radius: 18px;
-  background: rgba(11, 20, 31, 0.88);
-  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.32);
-  backdrop-filter: blur(10px) saturate(120%);
-}
-
-.mobileBoardFocusBottomBar {
-  min-height: 0;
-}
-
-.mobileBoardFocusTimerReadout,
-.mobileBoardFocusTimer,
-.mobileBoardFocusGameTools {
-  display: none;
-}
-
 .toolBtn {
   min-width: 178px;
   min-height: 64px;
@@ -8588,6 +11252,79 @@
 
 .modalCard p {
   margin: 0;
+}
+
+.puzzleHpGameOverBackdrop {
+  z-index: 35;
+}
+
+.puzzleHpGameOverCard {
+  width: min(360px, calc(100vw - 28px));
+  border: 3px solid #173e62;
+  border-radius: 12px;
+  background: linear-gradient(180deg, #ffffff 0%, #fff7f8 100%);
+  box-shadow: 0 18px 38px rgba(17, 30, 45, 0.26);
+  gap: 0.72rem;
+  text-align: center;
+  padding: 1.05rem;
+}
+
+.puzzleHpGameOverHearts {
+  color: #be123c;
+  font-size: 1.42rem;
+  font-weight: 900;
+  letter-spacing: 0.22em;
+  line-height: 1;
+}
+
+.puzzleHpGameOverCard h2 {
+  color: #142f4d;
+  font-size: 1.25rem;
+  font-weight: 900;
+}
+
+.puzzleHpGameOverCard p {
+  color: #52677f;
+  font-size: 0.9rem;
+  font-weight: 800;
+  line-height: 1.45;
+}
+
+.puzzleHpGameOverActions {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.45rem;
+  justify-content: stretch;
+}
+
+.puzzleHpGameOverActions button {
+  width: 100%;
+  min-height: 48px;
+  border: 2px solid #173e62;
+  border-radius: 10px;
+  color: #ffffff;
+  font-size: 1rem;
+  font-weight: 900;
+}
+
+.puzzleHpGameOverActions .puzzleHpReviveBtn {
+  background: linear-gradient(135deg, #2563eb 0%, #22c55e 100%);
+}
+
+.modalActions.puzzleHpGameOverActions .puzzleHpRetryBtn {
+  background: #ffffff;
+  color: #173e62;
+  border-color: #9fb4ca;
+}
+
+.puzzleHpAdError {
+  border: 1px solid #f5b6c2;
+  background: #fff1f4;
+  color: #9f1239;
+  border-radius: 8px;
+  padding: 0.42rem 0.5rem;
+  font-size: 0.82rem;
+  font-weight: 900;
 }
 
 .voteModalBackdrop {
@@ -8905,6 +11642,28 @@
   margin: 0;
   font-size: 1.42rem;
   color: #132942;
+}
+
+.profileNicknameEditor {
+  display: grid;
+  gap: 0.24rem;
+}
+
+.profileNicknameEditor span {
+  color: #5e7f9f;
+  font-size: 0.72rem;
+  font-weight: 900;
+}
+
+.profileNicknameEditor input {
+  min-height: 38px;
+  border: 1px solid #c6d7e8;
+  border-radius: 10px;
+  background: #f8fbff;
+  color: #132942;
+  font-size: 1rem;
+  font-weight: 900;
+  padding: 0.42rem 0.56rem;
 }
 
 .profileUsername {
@@ -9323,6 +12082,17 @@
   box-shadow: 0 6px 14px rgba(0, 0, 0, 0.26);
 }
 
+.profileSpecialLockedPreview {
+  width: 58px;
+  height: 58px;
+  border: 1px solid #c9d4e2;
+  border-radius: 18px;
+  background: linear-gradient(180deg, #f8fbff 0%, #e8eff7 100%);
+  color: #667386;
+  display: inline-grid;
+  place-items: center;
+}
+
 .page.themeDark .profileSpecialSummaryCard {
   border-color: #2f4662;
   background: linear-gradient(180deg, #182536 0%, #121d2c 100%);
@@ -9587,138 +12357,20 @@ button:disabled {
   font-weight: 700;
 }
 
-.mobilePaintToggle {
-  position: fixed;
-  top: calc(max(10px, env(safe-area-inset-top)) + 72px);
-  left: 50%;
-  transform: translateX(-50%);
-  margin-top: 0;
-  display: inline-flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 0.4rem;
-  padding: 0.24rem;
-  border: 1px solid #bed0e3;
-  border-radius: 999px;
-  background: #f4f8fd;
-  z-index: 121;
-  box-shadow: 0 18px 44px rgba(6, 16, 30, 0.24);
-  backdrop-filter: blur(10px) saturate(120%);
-}
-
-.mobilePaintToggle.focusMode {
-  top: max(10px, env(safe-area-inset-top));
-  background: rgba(244, 248, 253, 0.96);
-}
-
-.paintModeBtn {
-  border-radius: 999px;
-  border: 1px solid #aebfd4;
-  background: #ffffff;
-  color: #20364f;
-  min-height: 34px;
-  padding: 0.25rem 0.8rem;
-  font-size: 0.84rem;
-  font-weight: 800;
-}
-
-.paintModeBtn.active {
-  background: linear-gradient(180deg, #11a5af 0%, #0f7b83 100%);
-  border-color: #0b6168;
-  color: #ffffff;
-}
-
-.paintDragHandle {
-  display: inline-flex;
+.panelPuzzleFixed .status {
+  width: min(calc(100% - 1.5rem), 620px);
+  height: 44px;
+  margin: 0.6rem auto 0;
+  display: flex;
   align-items: center;
   justify-content: center;
-  min-width: 34px;
-  min-height: 34px;
-  border-radius: 999px;
-  border: 1px solid #aebfd4;
-  background: linear-gradient(180deg, #ffffff 0%, #edf3fa 100%);
-  color: #20364f;
-  touch-action: none;
-  cursor: grab;
-  user-select: none;
-  -webkit-user-select: none;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
-.paintDragHandle:active {
-  cursor: grabbing;
-}
-
-.paintZoomBtn,
-.paintScaleBtn,
-.paintFocusBtn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.35rem;
-  min-height: 34px;
-  border-radius: 999px;
-  border: 1px solid #aebfd4;
-  background: #ffffff;
-  color: #20364f;
-  font-size: 0.84rem;
-  font-weight: 800;
-}
-
-.paintZoomBtn {
-  min-width: 34px;
-  padding: 0.25rem 0.5rem;
-}
-
-.paintScaleBtn {
-  min-width: 62px;
-  padding: 0.25rem 0.72rem;
-}
-
-.paintFocusBtn {
-  padding: 0.25rem 0.8rem;
-}
-
-.paintCollapseBtn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 34px;
-  min-height: 34px;
-  border-radius: 999px;
-  border: 1px solid #aebfd4;
-  background: #ffffff;
-  color: #20364f;
-}
-
-.paintFocusBtn.active {
-  background: linear-gradient(180deg, #16385f 0%, #0c2340 100%);
-  border-color: #09182b;
-  color: #ffffff;
-}
-
-.mobileControlsReveal {
-  position: fixed;
-  top: calc(max(10px, env(safe-area-inset-top)) + 72px);
-  left: 50%;
-  transform: translateX(-50%);
-  z-index: 121;
-  margin-top: 0;
-  display: inline-flex;
-  align-items: center;
-  gap: 0.42rem;
-  padding: 0.42rem 0.8rem;
-  border-radius: 999px;
-  border: 1px solid #bed0e3;
-  background: rgba(244, 248, 253, 0.96);
-  color: #20364f;
-  font-size: 0.84rem;
-  font-weight: 900;
-  box-shadow: 0 10px 28px rgba(10, 22, 37, 0.14);
-  backdrop-filter: blur(10px) saturate(120%);
-}
-
-.mobileControlsReveal.focusMode {
-  top: max(10px, env(safe-area-inset-top));
+.status.empty {
+  visibility: hidden;
 }
 
 .boardWrap {
@@ -9743,41 +12395,207 @@ button:disabled {
   justify-content: center;
 }
 
-.boardWrap.mobileBoardEnabled {
-  justify-content: flex-start;
+.boardWrap.hasTopToolbar {
+  flex-direction: column;
+  align-items: center;
+  gap: 0.58rem;
+}
+
+.boardWrap.puzzleBoardStage {
+  width: min(calc(100% - 1.5rem), 620px);
+  height: clamp(390px, 58svh, 560px);
+  margin: 0.72rem auto 0;
   align-items: flex-start;
-  overscroll-behavior: contain;
-  -webkit-overflow-scrolling: touch;
+  justify-content: center;
 }
 
-.mobileBoardScaleShell {
+.boardWrap.puzzleBoardStage.hasTopToolbar {
+  display: grid;
+  grid-template-rows: 56px minmax(0, 1fr);
+  align-content: start;
+  justify-items: center;
+  gap: 0.58rem;
+}
+
+.boardWrap.puzzleBoardStage .boardTopToolbar {
+  position: relative;
+  top: auto;
+  min-height: 56px;
+}
+
+.boardWrap.puzzleBoardStage .excelBoardScaffold {
   width: fit-content;
+  max-width: 100%;
+  min-height: 0;
 }
 
-.mobileBoardScaleShell.active {
-  transform-origin: top left;
-  transition: transform 0.16s ease;
+.boardTopToolbar {
+  --board-tool-size: 40px;
+  --board-tool-gap: 0.32rem;
+  position: sticky;
+  top: 0;
+  z-index: 6;
+  width: fit-content;
+  max-width: 100%;
+  align-self: center;
+  border: 2px solid rgba(23, 62, 98, 0.16);
+  border-radius: 999px;
+  background: rgba(248, 250, 252, 0.94);
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.1);
+  backdrop-filter: blur(10px) saturate(120%);
+  display: inline-grid;
+  grid-auto-flow: column;
+  grid-auto-columns: max-content;
+  align-items: center;
+  justify-content: center;
+  gap: 0.42rem;
+  padding: 0.34rem;
 }
 
-.boardWrap.mobileBoardFocus {
-  position: fixed;
-  inset: 0;
-  z-index: 120;
-  margin: 0;
-  border-radius: 0;
-  border: none;
-  padding:
-    calc(max(56px, env(safe-area-inset-top) + 52px))
-    0.85rem
-    calc(max(12px, env(safe-area-inset-bottom) + 12px))
-    0.85rem;
-  background:
-    radial-gradient(circle at top, rgba(161, 197, 233, 0.26), rgba(11, 20, 31, 0) 36%),
-    rgba(8, 14, 22, 0.95);
+.boardModeGroup,
+.boardActionGroup,
+.boardHintGroup {
+  display: grid;
+  align-items: center;
+  gap: var(--board-tool-gap);
+  min-width: 0;
+  padding: 0.18rem;
+  border-radius: 999px;
 }
 
-.boardWrap.mobileBoardFocus .mobileBoardScaleShell {
-  min-width: max-content;
+.boardModeGroup {
+  grid-template-columns: repeat(2, var(--board-tool-size));
+  background: #e2e8f0;
+}
+
+.boardActionGroup {
+  grid-template-columns: repeat(3, var(--board-tool-size));
+}
+
+.boardHintGroup {
+  grid-template-columns: calc(var(--board-tool-size) + 16px);
+}
+
+.puzzleHpMeter {
+  min-height: var(--board-tool-size);
+  display: grid;
+  grid-template-columns: repeat(3, 22px);
+  align-items: center;
+  justify-content: center;
+  gap: 0.08rem;
+  padding: 0 0.42rem;
+  border: 1px solid #fecdd3;
+  border-radius: 999px;
+  background: linear-gradient(135deg, #fff7ed 0%, #fff1f2 100%);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.65);
+}
+
+.puzzleHpMeter.damage {
+  animation: puzzleHpMeterShake 360ms ease;
+}
+
+.puzzleHpHeart {
+  width: 22px;
+  height: 22px;
+  display: grid;
+  place-items: center;
+  color: #e11d48;
+  font-size: 1.1rem;
+  font-weight: 900;
+  line-height: 1;
+  transform-origin: center;
+}
+
+.puzzleHpHeart.empty {
+  color: #94a3b8;
+}
+
+.puzzleHpHeart.lost {
+  color: #be123c;
+  animation: puzzleHpHeartLost 720ms ease both;
+}
+
+.boardModeBtn,
+.boardToolIconBtn,
+.boardHintBtn {
+  width: var(--board-tool-size);
+  height: var(--board-tool-size);
+  border: 1px solid #b9cbe0;
+  border-radius: 999px;
+  background: #ffffff;
+  color: #173e62;
+  display: inline-grid;
+  place-items: center;
+  padding: 0;
+  cursor: pointer;
+  transition: transform 120ms ease, background-color 120ms ease, border-color 120ms ease, color 120ms ease;
+}
+
+.boardHintBtn {
+  width: calc(var(--board-tool-size) + 16px);
+  grid-template-columns: 18px 1fr;
+  gap: 0.12rem;
+  border-color: #facc15;
+  background: linear-gradient(135deg, #fff7ad 0%, #fde047 100%);
+  color: #173e62;
+  font-weight: 900;
+  letter-spacing: 0;
+}
+
+.boardHintBtn.ad {
+  border-color: #38bdf8;
+  background: linear-gradient(135deg, #dbeafe 0%, #7dd3fc 100%);
+}
+
+.boardModeBtn.active {
+  border-color: #0f7a55;
+  background: linear-gradient(135deg, #2563eb 0%, #22c55e 100%);
+  color: #ffffff;
+  box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.16);
+}
+
+.boardModeBtn.mark.active {
+  border-color: #9f1239;
+  background: linear-gradient(135deg, #ef4444 0%, #be123c 100%);
+  box-shadow: 0 0 0 3px rgba(244, 63, 94, 0.16);
+}
+
+.boardToolIconBtn:hover:not(:disabled),
+.boardHintBtn:hover:not(:disabled),
+.boardModeBtn:hover {
+  transform: translateY(-1px);
+}
+
+.boardToolIconBtn:disabled,
+.boardHintBtn:disabled {
+  opacity: 0.38;
+  cursor: not-allowed;
+}
+
+.boardToolIconBtn.danger {
+  border-color: #fecdd3;
+  background: #fff1f2;
+  color: #be123c;
+}
+
+@media (max-width: 360px) {
+  .boardTopToolbar {
+    --board-tool-size: 38px;
+    --board-tool-gap: 0.24rem;
+    gap: 0.3rem;
+    padding: 0.28rem;
+  }
+
+  .puzzleHpMeter {
+    grid-template-columns: repeat(3, 20px);
+    padding: 0 0.32rem;
+  }
+
+  .puzzleHpHeart {
+    width: 20px;
+    height: 20px;
+    font-size: 1rem;
+  }
 }
 
 .nonogram {
@@ -9865,11 +12683,39 @@ button:disabled {
   background: #dfe6ee;
 }
 
+.board.hpDamage {
+  animation: puzzleBoardDamageShake 320ms ease;
+}
+
 .boardCanvas {
   display: block;
   width: 100%;
   height: 100%;
   cursor: var(--board-cursor);
+}
+
+.puzzleHpCellFx {
+  position: absolute;
+  z-index: 5;
+  pointer-events: none;
+  border: 2px solid #ef4444;
+  background: rgba(239, 68, 68, 0.2);
+  box-shadow:
+    0 0 0 2px rgba(255, 255, 255, 0.65) inset,
+    0 0 18px rgba(239, 68, 68, 0.42);
+  animation: puzzleHpCellFlash 780ms ease-out both;
+}
+
+.puzzleHintCellFx {
+  position: absolute;
+  z-index: 6;
+  pointer-events: none;
+  border: 2px solid #facc15;
+  background: rgba(250, 204, 21, 0.2);
+  box-shadow:
+    0 0 0 2px rgba(255, 255, 255, 0.72) inset,
+    0 0 18px rgba(250, 204, 21, 0.48);
+  animation: puzzleHintCellPop 860ms ease-out both;
 }
 
 .countdownOverlay {
@@ -10009,6 +12855,87 @@ button:disabled {
   }
   100% {
     transform: scale(1);
+  }
+}
+
+@keyframes puzzleHpMeterShake {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  22% {
+    transform: translateX(-3px);
+  }
+  44% {
+    transform: translateX(3px);
+  }
+  66% {
+    transform: translateX(-2px);
+  }
+}
+
+@keyframes puzzleHpHeartLost {
+  0% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  36% {
+    opacity: 1;
+    transform: scale(1.35) rotate(-9deg);
+  }
+  100% {
+    opacity: 0.55;
+    transform: scale(0.72) rotate(8deg);
+  }
+}
+
+@keyframes puzzleBoardDamageShake {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  25% {
+    transform: translateX(-2px);
+  }
+  50% {
+    transform: translateX(2px);
+  }
+  75% {
+    transform: translateX(-1px);
+  }
+}
+
+@keyframes puzzleHpCellFlash {
+  0% {
+    opacity: 0;
+    transform: scale(0.7);
+  }
+  18% {
+    opacity: 1;
+    transform: scale(1.08);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.24);
+  }
+}
+
+@keyframes puzzleHintCellPop {
+  0% {
+    opacity: 0;
+    transform: scale(0.62) rotate(-6deg);
+  }
+  18% {
+    opacity: 1;
+    transform: scale(1.1) rotate(2deg);
+  }
+  58% {
+    opacity: 0.72;
+    transform: scale(0.98) rotate(0deg);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.26) rotate(0deg);
   }
 }
 
@@ -10203,6 +13130,12 @@ button:disabled {
     gap: 1rem;
   }
 
+  .appsModeChooser {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.7rem;
+  }
+
   .menuTopTabs,
   .menuTopPanelGrid {
     grid-template-columns: 1fr;
@@ -10314,6 +13247,63 @@ button:disabled {
     font-size: clamp(1.45rem, 9.3vw, 2.1rem);
   }
 
+  .appsModeChooser .modeBtn {
+    min-width: 0;
+    min-height: clamp(108px, 18.2svh, 154px);
+    border-width: 4px;
+    box-shadow: 5px 5px 0 rgba(24, 50, 88, 0.2);
+  }
+
+  .appsModeChooser .modeName {
+    font-size: clamp(1.28rem, 6.6vw, 1.88rem);
+    line-height: 1.05;
+  }
+
+  .page.appsInToss .menuStage {
+    min-height: calc(100svh - 76px);
+    padding: 0.55rem 0 0.85rem;
+    gap: 0.56rem;
+  }
+
+  .appsMiniMenu {
+    gap: 0.56rem;
+  }
+
+  .appsMiniHero {
+    gap: 0.16rem;
+    padding: 0;
+  }
+
+  .appsMiniHero span {
+    font-size: 0.7rem;
+    padding: 0.14rem 0.5rem;
+  }
+
+  .appsMiniHero h2 {
+    font-size: clamp(1.48rem, 7.1vw, 2.02rem);
+  }
+
+  .appsMiniTutorialBtn {
+    min-height: 38px;
+    border-radius: 10px;
+    padding: 0 0.5rem;
+    font-size: 0.8rem;
+  }
+
+  .appsMiniMissionBtn strong {
+    min-width: 28px;
+    min-height: 22px;
+    padding: 0 0.34rem;
+    font-size: 0.7rem;
+  }
+
+  .appsModeChooser .modeTag {
+    top: 8px;
+    right: 8px;
+    font-size: 0.76rem;
+    padding: 0.14rem 0.44rem;
+  }
+
   .menuAdfitSection {
     display: none;
   }
@@ -10329,6 +13319,29 @@ button:disabled {
   .topAuth {
     width: 100%;
     justify-content: flex-end;
+  }
+
+  .page.appsInToss .topBar {
+    min-height: 64px;
+    flex-direction: row;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.48rem 0.62rem;
+  }
+
+  .page.appsInToss .topAuth {
+    width: auto;
+    flex: 0 0 auto;
+  }
+
+  .page.appsInToss .title {
+    font-size: clamp(1.12rem, 5.8vw, 1.58rem);
+  }
+
+  .page.appsInToss .logoPixel {
+    width: 32px;
+    height: 32px;
+    min-width: 32px;
   }
 
   .langSwitch {
@@ -10779,6 +13792,11 @@ button:disabled {
     grid-template-columns: 1fr;
   }
 
+  .raceMatchLayout.pvpRaceLayout {
+    grid-template-columns: 1fr;
+    overflow-x: visible;
+  }
+
   .raceInfoProgress {
     font-size: 1.3rem;
   }
@@ -10794,6 +13812,10 @@ button:disabled {
 
   .singleTopControls {
     justify-content: flex-start;
+  }
+
+  .panelPuzzleFixed .singleTopControls {
+    min-height: 52px;
   }
 
   .singlePuzzleChooserGrid {
@@ -10836,6 +13858,27 @@ button:disabled {
   .singleBottomBar {
     flex-direction: column;
     align-items: flex-start;
+  }
+
+  .panelPuzzleFixed .status {
+    width: min(calc(100% - 0.9rem), 620px);
+    height: 40px;
+    font-size: 0.82rem;
+  }
+
+  .boardWrap.puzzleBoardStage {
+    width: min(calc(100% - 0.9rem), 620px);
+    height: clamp(350px, 56svh, 520px);
+    padding: 0.52rem;
+  }
+
+  .boardWrap.puzzleBoardStage.hasTopToolbar {
+    grid-template-rows: 52px minmax(0, 1fr);
+    gap: 0.48rem;
+  }
+
+  .boardWrap.puzzleBoardStage .boardTopToolbar {
+    min-height: 52px;
   }
 
   .singleTimer {
@@ -10913,6 +13956,335 @@ button:disabled {
   .tutorialCoachDot {
     width: 8px;
     height: 8px;
+  }
+}
+
+.page.appsInToss .topBar {
+  min-height: 54px;
+  padding: 0.42rem var(--apps-rail-x);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: stretch;
+  gap: 0.4rem;
+}
+
+.page.appsInToss .brandWrap {
+  display: none;
+}
+
+.page.appsInToss .topAuth {
+  width: min(calc(100% - (var(--apps-rail-x) * 2)), var(--apps-content-max));
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(86px, auto);
+  align-items: stretch;
+  justify-content: stretch;
+  gap: 0.42rem;
+}
+
+.page.appsInToss .topAuth > .userChipBtn:only-child {
+  grid-column: 1 / -1;
+}
+
+.page.appsInToss .topAuth > .userChipBtn {
+  width: 100%;
+  min-width: 0;
+  min-height: 42px;
+  overflow: hidden;
+  justify-content: flex-start;
+  border-radius: 8px;
+  padding: 0.28rem 0.42rem;
+}
+
+.page.appsInToss .topAuth > button:not(.userChipBtn) {
+  min-width: 86px;
+  min-height: 42px;
+  border-radius: 8px;
+  font-size: 0.88rem;
+  white-space: nowrap;
+}
+
+.page.appsInToss .userChipText {
+  min-width: 0;
+}
+
+.page.appsInToss .userChipText strong,
+.page.appsInToss .userChipText span {
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.page.appsInToss .modalBackdrop {
+  padding: 0.7rem var(--apps-rail-x);
+}
+
+.page.appsInToss .profileModal {
+  width: min(calc(100vw - 28px), 430px);
+  max-height: min(86svh, 760px);
+  overflow-y: auto;
+  border-radius: 10px;
+  padding: 0.82rem;
+  gap: 0.62rem;
+}
+
+.page.appsInToss .profileHero {
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 0.72rem;
+  align-items: center;
+  padding: 0;
+}
+
+.page.appsInToss .profileHeroMeta {
+  min-width: 0;
+  gap: 0.16rem;
+}
+
+.page.appsInToss .profileEyebrow {
+  font-size: 0.7rem;
+  letter-spacing: 0.08em;
+}
+
+.page.appsInToss .profileHeroMeta h2 {
+  max-width: 100%;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: 1.34rem;
+  line-height: 1.12;
+}
+
+.page.appsInToss .profileNicknameEditor {
+  gap: 0.18rem;
+}
+
+.page.appsInToss .profileNicknameEditor span {
+  font-size: 0.66rem;
+}
+
+.page.appsInToss .profileNicknameEditor input {
+  width: 100%;
+  min-height: 36px;
+  border-radius: 8px;
+  font-size: 0.96rem;
+  padding: 0.34rem 0.46rem;
+}
+
+.page.appsInToss .profileAvatar-xl {
+  width: 72px;
+  height: 72px;
+}
+
+.page.appsInToss .profileAvatarEmoji-xl {
+  font-size: 52px;
+}
+
+.page.appsInToss .profileHeroAvatarChevron {
+  right: -4px;
+  bottom: -3px;
+  width: 24px;
+  height: 24px;
+}
+
+.page.appsInToss .profileTierLine {
+  gap: 0.28rem;
+  font-size: 0.84rem;
+}
+
+.page.appsInToss .profileTierLine span {
+  min-height: 24px;
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid #c7d6e8;
+  border-radius: 999px;
+  background: #f4f8fd;
+  padding: 0 0.44rem;
+}
+
+.page.appsInToss .profileStatsGrid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.42rem;
+}
+
+.page.appsInToss .profileStatCard {
+  min-height: 64px;
+  border-radius: 10px;
+  padding: 0.5rem 0.52rem;
+}
+
+.page.appsInToss .profileStatCard span {
+  font-size: 0.68rem;
+}
+
+.page.appsInToss .profileStatCard strong {
+  font-size: 1.2rem;
+}
+
+.page.appsInToss .profileModal .modalActions {
+  display: grid;
+  grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr);
+  gap: 0.42rem;
+}
+
+.page.appsInToss .profileModal .modalActions button {
+  width: 100%;
+  min-height: 42px;
+  border-radius: 8px;
+  font-size: 0.9rem;
+}
+
+.page.appsInToss .profileModal .modalActions button:only-child {
+  grid-column: 1 / -1;
+}
+
+.page.appsInToss .profileAvatarGrid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.42rem;
+}
+
+.page.appsInToss .profileAvatarGridScrollable {
+  max-height: min(42svh, 430px);
+  padding-right: 0.12rem;
+}
+
+.page.appsInToss .profileAvatarOption.compact {
+  min-height: 96px;
+  border-radius: 10px;
+  padding: 0.36rem;
+  overflow: hidden;
+}
+
+.page.appsInToss .profileAvatar-picker {
+  width: 64px;
+  height: 64px;
+}
+
+.page.appsInToss .profileAvatarEmoji-picker {
+  font-size: 48px;
+}
+
+.page.appsInToss .profileAvatarGridDefaultPicker .profileAvatarOption.compact .profileAvatar {
+  width: 72px;
+  height: 72px;
+  overflow: visible;
+}
+
+.page.appsInToss .profileAvatarGridDefaultPicker .profileAvatarOption.compact .profileAvatarEmoji-picker {
+  font-size: 54px;
+}
+
+.page.appsInToss .profileAvatarGrid.hall .profileAvatarOption.compact {
+  min-height: 104px;
+  align-content: center;
+  gap: 0.3rem;
+}
+
+.page.appsInToss .profileSpecialLockedPreview {
+  width: 54px;
+  height: 54px;
+  border-radius: 14px;
+}
+
+.page.appsInToss .profileAvatarOption .profileAvatarTitle {
+  max-width: 100%;
+  min-height: 1.8em;
+  color: #516981;
+  font-size: 0.66rem;
+  line-height: 1.16;
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+.page.appsInToss .boardWrap.puzzleBoardStage {
+  max-width: calc(100vw - (var(--apps-rail-x) * 2));
+  padding: 0.42rem;
+  overflow: auto;
+}
+
+.page.appsInToss .boardWrap.puzzleBoardStage.hasTopToolbar {
+  grid-template-rows: 48px minmax(0, 1fr);
+  gap: 0.42rem;
+}
+
+.page.appsInToss .boardWrap.puzzleBoardStage .boardTopToolbar {
+  min-height: 48px;
+}
+
+.page.appsInToss .boardTopToolbar {
+  --board-tool-size: 36px;
+  --board-tool-gap: 0.2rem;
+  gap: 0.24rem;
+  padding: 0.24rem;
+}
+
+.page.appsInToss .puzzleHpMeter {
+  min-height: var(--board-tool-size);
+  grid-template-columns: repeat(3, 18px);
+  padding: 0 0.3rem;
+}
+
+.page.appsInToss .puzzleHpHeart {
+  width: 18px;
+  height: 18px;
+  font-size: 0.98rem;
+}
+
+.page.appsInToss .boardHintGroup {
+  grid-template-columns: 48px;
+}
+
+.page.appsInToss .boardHintBtn {
+  width: 48px;
+  grid-template-columns: 15px 1fr;
+  gap: 0.08rem;
+}
+
+@media (max-width: 380px) {
+  .page.appsInToss .profileStatsGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .page.appsInToss .topAuth {
+    grid-template-columns: minmax(0, 1fr) minmax(78px, auto);
+    gap: 0.34rem;
+  }
+
+  .page.appsInToss .topAuth > button:not(.userChipBtn) {
+    min-width: 78px;
+    padding-left: 0.44rem;
+    padding-right: 0.44rem;
+  }
+
+  .page.appsInToss .boardTopToolbar {
+    --board-tool-size: 32px;
+    --board-tool-gap: 0.16rem;
+    gap: 0.18rem;
+    padding: 0.2rem;
+  }
+
+  .page.appsInToss .puzzleHpMeter {
+    grid-template-columns: repeat(3, 16px);
+    padding: 0 0.24rem;
+  }
+
+  .page.appsInToss .puzzleHpHeart {
+    width: 16px;
+    height: 16px;
+    font-size: 0.88rem;
+  }
+
+  .page.appsInToss .boardHintGroup,
+  .page.appsInToss .boardHintBtn {
+    width: 44px;
+    grid-template-columns: 44px;
+  }
+
+  .page.appsInToss .boardHintBtn svg {
+    display: none;
   }
 }
 

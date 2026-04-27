@@ -4,12 +4,19 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
-    "build": "vite build",
+    "dev": "granite dev",
+    "web:dev": "vite",
+    "build": "ait build",
+    "web:build": "vite build",
+    "apk:web": "vite build --mode apk",
+    "apk:sync": "cap sync android",
+    "apk:debug": "npm run apk:web && cap sync android && cd android && gradlew.bat assembleDebug",
+    "deploy": "ait deploy",
     "lint": "eslint .",
     "preview": "vite preview"
   },
   "dependencies": {
+    "@apps-in-toss/web-framework": "^2.4.7",
     "@emotion/react": "^11.14.0",
     "@emotion/styled": "^11.14.1",
     "@mui/material": "^7.3.8",
@@ -21,6 +28,9 @@
     "react-dom": "^19.2.0"
   },
   "devDependencies": {
+    "@capacitor/android": "^6.2.1",
+    "@capacitor/cli": "^6.2.1",
+    "@capacitor/core": "^6.2.1",
     "@eslint/js": "^9.39.1",
     "@types/react": "^19.2.7",
     "@types/react-dom": "^19.2.3",

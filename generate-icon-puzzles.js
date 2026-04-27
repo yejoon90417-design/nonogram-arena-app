@@ -8,7 +8,12 @@ const GROUPS = {
   large: { targetSize: 24, titleKo: '\uB77C\uC9C0', titleEn: 'Large' },
   xlarge: { targetSize: 36, titleKo: '\uC5D1\uC2A4\uB77C\uC9C0', titleEn: 'XLarge' },
 };
-const TARGET_PER_GROUP = 50;
+const TARGET_PER_GROUP = {
+  small: 300,
+  medium: 50,
+  large: 50,
+  xlarge: 50,
+};
 const XLARGE_REJECT_SOURCE_NAMES = new Set([
   'album',
   'disc-album',
@@ -460,9 +465,9 @@ const LUCIDE_XLARGE_EXTRA_POOL = [
   ['badge-plus', '\uD50C\ub7EC\uc2A4 \uBC30\uC9C0', 'Plus Badge'],
   ['bath', '\uC695\uc870', 'Bath'],
   ['bike', '\uC790\uC804\uAC70', 'Bike'],
-  ['bell-dot', '\uC54C\uB9BC \uC885', 'Bell Dot'],
-  ['bell-electric', '\uC804\uAE30 \uC885', 'Electric Bell'],
-  ['bell-ring', '\uC6B8\uB9AC\uB294 \uC885', 'Bell Ring'],
+  ['bell-dot', '\uC54C\uB9BC \uC885', 'Notification Bell'],
+  ['bell-electric', '\uCD08\uC778\uC885', 'Doorbell'],
+  ['bell-ring', '\uBC29\uC6B8', 'Bell'],
   ['birdhouse', '\uC0C8\uc9D1', 'Birdhouse'],
   ['blocks', '\uBE14\uB85D', 'Blocks'],
   ['book-heart', '\uD558\uD2B8 \uCC45', 'Heart Book'],
@@ -582,6 +587,196 @@ const LUCIDE_XLARGE_EXTRA_POOL = [
   ['wallet-cards', '\uCE74\uB4DC \uC9C0\uAC11', 'Wallet Cards'],
   ['wand-sparkles', '\uB9C8\uBC95 \uBC29\uB9DD\uC774', 'Magic Wand'],
   ['watermelon', '\uC218\uBC15', 'Watermelon'],
+];
+
+const LUCIDE_SMALL_AUTO_INCLUDE_TOKENS = new Set([
+  'alarm', 'album', 'anchor', 'apple', 'armchair', 'baby', 'backpack', 'badge', 'balloon', 'banana',
+  'bath', 'bean', 'bed', 'beer', 'bell', 'bike', 'bird', 'birdhouse', 'blocks', 'book', 'bookmark',
+  'brick', 'brush', 'bug', 'bus', 'cable', 'cake', 'calendar', 'camera', 'candy', 'car', 'carrot',
+  'castle', 'cat', 'chef', 'cherry', 'chess', 'circle', 'citrus', 'clock', 'cloud', 'coffee',
+  'concierge', 'cookie', 'croissant', 'crown', 'cup', 'diamond', 'dice', 'dices', 'disc', 'dog',
+  'donut', 'drum', 'drumstick', 'earth', 'ferris', 'film', 'fish', 'flower', 'gamepad', 'gem',
+  'ghost', 'gift', 'glass', 'glasses', 'globe', 'grape', 'guitar', 'hamburger', 'hand', 'handbag',
+  'hard', 'hat', 'headphones', 'heart', 'home', 'house', 'ice', 'key', 'keyboard', 'lamp', 'leaf',
+  'library', 'lollipop', 'map', 'medal', 'message', 'milk', 'moon', 'motorbike', 'mouse', 'music',
+  'notebook', 'nut', 'origami', 'paintbrush', 'palette', 'party', 'paw', 'piano', 'pin', 'pizza',
+  'plane', 'popcorn', 'popsicle', 'rabbit', 'radio', 'rocket', 'sailboat', 'salad', 'sandwich',
+  'shell', 'ship', 'shirt', 'shopping', 'shrimp', 'smile', 'snail', 'snowflake', 'sofa', 'sprout',
+  'squirrel', 'star', 'store', 'sun', 'sunrise', 'sunset', 'swatch', 'tent', 'ticket', 'tickets',
+  'timer', 'toy', 'train', 'tram', 'tree', 'trophy', 'turtle', 'tv', 'umbrella', 'utensils',
+  'wallet', 'wand', 'watch',
+]);
+
+const LUCIDE_SMALL_AUTO_EXCLUDE_TOKENS = new Set([
+  'arrow', 'axis', 'barcode', 'binary', 'bluetooth', 'braces', 'brackets', 'chart', 'chevron',
+  'clipboard', 'code', 'columns', 'copy', 'corner', 'cursor', 'database', 'download', 'ethernet',
+  'figma', 'file', 'filter', 'folder', 'git', 'github', 'maximize', 'minimize', 'panel',
+  'parentheses', 'plug', 'power', 'qr', 'radio-receiver', 'radiation', 'redo', 'regex', 'resize',
+  'rotate', 'router', 'scan', 'search', 'server', 'settings', 'sidebar', 'signal', 'sliders',
+  'split', 'table', 'terminal', 'text', 'trash', 'type', 'undo', 'upload', 'usb', 'volume', 'wifi',
+  'cent', 'euro', 'rupee', 'yen', 'pound', 'sterling', 'percent', 'slash', 'question',
+  'circle', 'minimal', 'minus', 'play', 'plus', 'round', 'square', 'user',
+]);
+
+const NON_OBJECT_ICON_TOKENS = new Set([
+  'circle', 'minimal', 'minus', 'play', 'plus', 'round', 'square', 'user',
+]);
+
+const NATURAL_TITLE_OVERRIDES = {
+  axe: { ko: '도끼', en: 'Axe' },
+  beef: { ko: '스테이크', en: 'Steak' },
+  'biceps-flexed': { ko: '근육', en: 'Muscle' },
+  binoculars: { ko: '쌍안경', en: 'Binoculars' },
+  bot: { ko: '로봇', en: 'Robot' },
+  briefcase: { ko: '서류가방', en: 'Briefcase' },
+  building: { ko: '건물', en: 'Building' },
+  'building-2': { ko: '빌딩', en: 'Office Building' },
+  'bus-front': { ko: '시내버스', en: 'City Bus' },
+  caravan: { ko: '캠핑카', en: 'Caravan' },
+  cctv: { ko: '감시카메라', en: 'Security Camera' },
+  clapperboard: { ko: '슬레이트', en: 'Clapperboard' },
+  compass: { ko: '나침반', en: 'Compass' },
+  container: { ko: '컨테이너', en: 'Container' },
+  'cooking-pot': { ko: '냄비', en: 'Cooking Pot' },
+  dessert: { ko: '디저트', en: 'Dessert' },
+  dna: { ko: '유전자', en: 'DNA' },
+  'door-closed': { ko: '문', en: 'Door' },
+  'door-open': { ko: '열린 문', en: 'Open Door' },
+  drama: { ko: '극장 가면', en: 'Theater Masks' },
+  drill: { ko: '드릴', en: 'Drill' },
+  droplet: { ko: '물방울', en: 'Droplet' },
+  dumbbell: { ko: '덤벨', en: 'Dumbbell' },
+  egg: { ko: '달걀', en: 'Egg' },
+  'egg-fried': { ko: '달걀프라이', en: 'Fried Egg' },
+  fan: { ko: '선풍기', en: 'Fan' },
+  fingerprint: { ko: '지문', en: 'Fingerprint' },
+  'flask-conical': { ko: '플라스크', en: 'Flask' },
+  forklift: { ko: '지게차', en: 'Forklift' },
+  fuel: { ko: '주유기', en: 'Fuel Pump' },
+  goal: { ko: '골대', en: 'Goal' },
+  hammer: { ko: '망치', en: 'Hammer' },
+  hospital: { ko: '병원', en: 'Hospital' },
+  hotel: { ko: '호텔', en: 'Hotel' },
+  'id-card': { ko: '신분증', en: 'ID Card' },
+  joystick: { ko: '조이스틱', en: 'Joystick' },
+  landmark: { ko: '기념비', en: 'Landmark' },
+  laugh: { ko: '웃는 얼굴', en: 'Laughing Face' },
+  mail: { ko: '편지', en: 'Mail' },
+  martini: { ko: '칵테일', en: 'Cocktail' },
+  microscope: { ko: '현미경', en: 'Microscope' },
+  mountain: { ko: '산', en: 'Mountain' },
+  newspaper: { ko: '신문', en: 'Newspaper' },
+  package: { ko: '상자', en: 'Box' },
+  'paint-bucket': { ko: '페인트통', en: 'Paint Bucket' },
+  paperclip: { ko: '클립', en: 'Paperclip' },
+  pencil: { ko: '연필', en: 'Pencil' },
+  'pencil-ruler': { ko: '문구세트', en: 'Stationery' },
+  'person-standing': { ko: '사람', en: 'Person' },
+  pill: { ko: '알약', en: 'Pill' },
+  'pill-bottle': { ko: '약병', en: 'Pill Bottle' },
+  printer: { ko: '프린터', en: 'Printer' },
+  projector: { ko: '프로젝터', en: 'Projector' },
+  school: { ko: '학교', en: 'School' },
+  scissors: { ko: '가위', en: 'Scissors' },
+  scroll: { ko: '두루마리', en: 'Scroll' },
+  shovel: { ko: '삽', en: 'Shovel' },
+  signpost: { ko: '이정표', en: 'Signpost' },
+  skull: { ko: '해골', en: 'Skull' },
+  soup: { ko: '수프', en: 'Soup' },
+  stethoscope: { ko: '청진기', en: 'Stethoscope' },
+  tractor: { ko: '트랙터', en: 'Tractor' },
+  'traffic-cone': { ko: '안전콘', en: 'Traffic Cone' },
+  truck: { ko: '트럭', en: 'Truck' },
+  university: { ko: '대학교', en: 'University' },
+  vault: { ko: '금고', en: 'Vault' },
+  'venetian-mask': { ko: '가면', en: 'Mask' },
+  warehouse: { ko: '창고', en: 'Warehouse' },
+  'washing-machine': { ko: '세탁기', en: 'Washing Machine' },
+  waves: { ko: '파도', en: 'Waves' },
+  wine: { ko: '와인', en: 'Wine' },
+  wrench: { ko: '렌치', en: 'Wrench' },
+  'badge-alert': { ko: '경고 표시', en: 'Warning Sign' },
+  'badge-check': { ko: '인증 표시', en: 'Verified Mark' },
+  'badge-info': { ko: '정보 표시', en: 'Info Mark' },
+  'alarm-clock-check': { ko: '알람 확인', en: 'Alarm Check' },
+  'calendar-1': { ko: '하루 달력', en: 'Day Calendar' },
+  'calendar-check': { ko: '일정표', en: 'Schedule' },
+  'calendar-check-2': { ko: '완료 달력', en: 'Done Calendar' },
+  'calendar-clock': { ko: '예약 일정', en: 'Reservation' },
+  'calendar-heart': { ko: '기념일', en: 'Anniversary' },
+  'calendar-sync': { ko: '반복 일정', en: 'Recurring Schedule' },
+  'car-front': { ko: '앞모습 자동차', en: 'Front Car' },
+  'cloud-sync': { ko: '구름 순환', en: 'Cloud Cycle' },
+  'dice-1': { ko: '주사위 하나', en: 'Dice One' },
+  'dice-2': { ko: '주사위 둘', en: 'Dice Two' },
+  'dice-3': { ko: '주사위 셋', en: 'Dice Three' },
+  'dice-4': { ko: '주사위 넷', en: 'Dice Four' },
+  'dice-5': { ko: '주사위 다섯', en: 'Dice Five' },
+  'dice-6': { ko: '주사위 여섯', en: 'Dice Six' },
+  'disc-2': { ko: '음반', en: 'Record' },
+  'disc-3': { ko: 'CD', en: 'CD' },
+  'flower-2': { ko: '꽃다발', en: 'Bouquet' },
+  'gamepad-2': { ko: '게임기', en: 'Game Console' },
+  'glass-water': { ko: '물컵', en: 'Water Glass' },
+  'hand-helping': { ko: '도움의 손', en: 'Helping Hand' },
+  'hand-heart': { ko: '응원 손', en: 'Cheering Hand' },
+  'heart-crack': { ko: '깨진 하트', en: 'Broken Heart' },
+  'heart-handshake': { ko: '약속', en: 'Promise' },
+  'heart-pulse': { ko: '심장박동', en: 'Heartbeat' },
+  'house-heart': { ko: '우리집', en: 'Home Sweet Home' },
+  'map-pin-check': { ko: '목적지', en: 'Destination' },
+  'map-pin-pen': { ko: '여행 메모', en: 'Travel Memo' },
+  'map-pinned': { ko: '핀 지도', en: 'Pinned Map' },
+  'plane-landing': { ko: '착륙', en: 'Landing' },
+  'ship-wheel': { ko: '조타륜', en: 'Ship Wheel' },
+  'tickets-plane': { ko: '항공권', en: 'Plane Ticket' },
+  'ticket-check': { ko: '입장권', en: 'Admission Ticket' },
+  'train-front': { ko: '기차', en: 'Train' },
+  'tram-front': { ko: '트램', en: 'Tram' },
+  'book-alert': { ko: '주의 책', en: 'Warning Book' },
+  'book-check': { ko: '문제집', en: 'Workbook' },
+  'book-headphones': { ko: '오디오북', en: 'Audiobook' },
+  'book-heart': { ko: '러브레터', en: 'Love Letter' },
+  'book-image': { ko: '그림책', en: 'Picture Book' },
+  'book-marked': { ko: '참고서', en: 'Reference Book' },
+  'book-open': { ko: '펼친 책', en: 'Open Book' },
+  'book-open-check': { ko: '완성 노트', en: 'Finished Notes' },
+  'book-open-text': { ko: '교과서', en: 'Textbook' },
+  'bookmark-check': { ko: '완료 책갈피', en: 'Done Bookmark' },
+  'camera-off': { ko: '사진 금지', en: 'No Photos' },
+  'file-heart': { ko: '사랑 편지', en: 'Love Note' },
+  'gamepad-directional': { ko: '조이패드', en: 'Joypad' },
+  'house-wifi': { ko: '스마트홈', en: 'Smart Home' },
+  'lamp-ceiling': { ko: '천장등', en: 'Ceiling Light' },
+  'lamp-floor': { ko: '장스탠드', en: 'Floor Lamp' },
+  'clock-1': { ko: '한시', en: 'One O Clock' },
+  'clock-2': { ko: '두시', en: 'Two O Clock' },
+  'clock-3': { ko: '세시', en: 'Three O Clock' },
+  'clock-4': { ko: '네시', en: 'Four O Clock' },
+  'clock-5': { ko: '다섯시', en: 'Five O Clock' },
+  'clock-6': { ko: '여섯시', en: 'Six O Clock' },
+  'clock-alert': { ko: '알림 시계', en: 'Reminder Clock' },
+  'music-2': { ko: '멜로디', en: 'Melody' },
+  'music-3': { ko: '화음', en: 'Harmony' },
+  'music-4': { ko: '악보', en: 'Sheet Music' },
+};
+
+const LUCIDE_SMALL_AUTO_PRIORITY_TOKENS = [
+  'apple', 'banana', 'bean', 'carrot', 'cherry', 'citrus', 'coffee', 'cookie', 'croissant', 'cup',
+  'donut', 'drumstick', 'grape', 'hamburger', 'ice', 'lollipop', 'milk', 'nut', 'pizza', 'popcorn',
+  'popsicle', 'salad', 'sandwich', 'shrimp',
+  'bird', 'birdhouse', 'bug', 'cat', 'dog', 'fish', 'ghost', 'mouse', 'paw', 'rabbit', 'shell',
+  'snail', 'squirrel', 'turtle',
+  'cloud', 'flower', 'leaf', 'moon', 'snowflake', 'sprout', 'star', 'sun', 'sunrise', 'sunset',
+  'tree', 'umbrella',
+  'baby', 'backpack', 'balloon', 'bath', 'bed', 'bell', 'blocks', 'book', 'bookmark', 'brush',
+  'camera', 'candy', 'castle', 'clock', 'crown', 'diamond', 'dice', 'disc', 'drum', 'gem', 'gift',
+  'glasses', 'guitar', 'hand', 'handbag', 'hat', 'headphones', 'heart', 'house', 'key', 'lamp',
+  'library', 'medal', 'message', 'music', 'notebook', 'origami', 'paintbrush', 'palette', 'party',
+  'piano', 'radio', 'shirt', 'shopping', 'smile', 'sofa', 'swatch', 'tent', 'ticket', 'timer',
+  'toy', 'trophy', 'tv', 'utensils', 'wallet', 'wand', 'watch',
+  'bike', 'bus', 'cable', 'car', 'ferris', 'globe', 'map', 'motorbike', 'pin', 'plane', 'rocket',
+  'sailboat', 'ship', 'train', 'tram',
 ];
 
 const SPECIAL_TITLE_KO_MAP = {
@@ -778,6 +973,201 @@ const TOKEN_KO_MAP = {
   notification: '\uC54C\uB9BC',
 };
 
+const EXTRA_TOKEN_KO_MAP = {
+  '1': '1',
+  '2': '2',
+  '3': '3',
+  '4': '4',
+  '5': '5',
+  '6': '6',
+  a: '\uC54C\uD30C\uBCB3',
+  alarm: '\uC54C\uB78C',
+  alert: '\uACBD\uACE0',
+  album: '\uC568\uBC94',
+  anchor: '\uB2FB',
+  armchair: '\uC548\uB77D\uC758\uC790',
+  audio: '\uC624\uB514\uC624',
+  backup: '\uBC31\uC5C5',
+  badge: '\uBC30\uC9C0',
+  bag: '\uAC00\uBC29',
+  bath: '\uC695\uC870',
+  bed: '\uCE68\uB300',
+  bike: '\uC790\uC804\uAC70',
+  birdhouse: '\uC0C8\uC9D1',
+  blocks: '\uBE14\uB85D',
+  bookmark: '\uCC45\uAC08\uD53C',
+  brick: '\uBE14\uB85D',
+  brush: '\uBD93',
+  business: '\uBE44\uC988\uB2C8\uC2A4',
+  calendar: '\uB2EC\uB825',
+  candy: '\uC0AC\uD0D5',
+  cane: '\uC9C0\uD321\uC774',
+  caravan: '\uCEA0\uD551\uCE74',
+  card: '\uCE74\uB4DC',
+  ceiling: '\uCC9C\uC7A5',
+  cent: '\uC13C\uD2B8',
+  check: '\uCCB4\uD06C',
+  chess: '\uCCB4\uC2A4',
+  circle: '\uC6D0\uD615',
+  citrus: '\uAC10\uADE4',
+  cleaning: '\uCCAD\uC18C',
+  closed: '\uB2EB\uD78C',
+  cloudy: '\uD750\uB9BC',
+  coins: '\uB3D9\uC804',
+  concierge: '\uD638\uD154',
+  crack: '\uAE08\uAC04',
+  credit: '\uCE74\uB4DC',
+  croissant: '\uD06C\uB8E8\uC544\uC0C1',
+  cup: '\uC794',
+  dashed: '\uC810\uC120',
+  desk: '\uCC45\uC0C1',
+  diamond: '\uB2E4\uC774\uC544',
+  dice: '\uC8FC\uC0AC\uC704',
+  dices: '\uC8FC\uC0AC\uC704',
+  disc: '\uB514\uC2A4\uD06C',
+  donut: '\uB3C4\uB11B',
+  door: '\uBB38',
+  double: '\uB354\uBE14',
+  drum: '\uB4DC\uB7FC',
+  drumstick: '\uB2ED\uB2E4\uB9AC',
+  drizzle: '\uC774\uC2AC\uBE44',
+  earth: '\uC9C0\uAD6C',
+  edit: '\uD3B8\uC9D1',
+  electric: '\uC804\uAE30',
+  euro: '\uC720\uB85C',
+  fading: '\uD750\uB9B0',
+  ferris: '\uB300\uAD00\uB78C\uCC28',
+  fist: '\uC8FC\uBA39',
+  floor: '\uBC14\uB2E5',
+  front: '\uC815\uBA74',
+  gamepad: '\uAC8C\uC784\uD328\uB4DC',
+  gem: '\uBCF4\uC11D',
+  glass: '\uC720\uB9AC\uC794',
+  glasses: '\uC548\uACBD',
+  globe: '\uC9C0\uAD6C',
+  grab: '\uC7A1\uB294',
+  grape: '\uD3EC\uB3C4',
+  green: '\uCD08\uB85D',
+  hail: '\uC6B0\uBC15',
+  handbag: '\uD578\uB4DC\uBC31',
+  handshake: '\uC545\uC218',
+  headphones: '\uD5E4\uB4DC\uD3F0',
+  helping: '\uB3C4\uC6C0',
+  help: '\uB3C4\uC6C0',
+  home: '\uC9D1',
+  hook: '\uBC14\uB298',
+  hourglass: '\uBAA8\uB798\uC2DC\uACC4',
+  image: '\uADF8\uB9BC',
+  indian: '\uC778\uB3C4',
+  info: '\uC815\uBCF4',
+  japanese: '\uC77C\uBCF8',
+  keyboard: '\uD0A4\uBCF4\uB4DC',
+  keyhole: '\uC5F4\uC1E0\uAD6C\uBA4D',
+  lanyard: '\uBAA9\uAC78\uC774\uC904',
+  landing: '\uCC29\uB959',
+  left: '\uC67C\uCABD',
+  leafy: '\uC78E\uC774 \uB9CE\uC740',
+  lollipop: '\uB864\uB9AC\uD31D',
+  map: '\uC9C0\uB3C4',
+  marked: '\uD45C\uC2DC',
+  medium: '\uC911\uAC04',
+  message: '\uBA54\uC2DC\uC9C0',
+  metal: '\uBA54\uD0C8',
+  milk: '\uC6B0\uC720',
+  minimal: '\uBBF8\uB2C8\uBA40',
+  minus: '\uB9C8\uC774\uB108\uC2A4',
+  motorbike: '\uC624\uD1A0\uBC14\uC774',
+  mouse: '\uB9C8\uC6B0\uC2A4',
+  nut: '\uB3C4\uD1A0\uB9AC',
+  origami: '\uC885\uC774\uC811\uAE30',
+  paintbrush: '\uBD93',
+  palette: '\uD314\uB808\uD2B8',
+  palm: '\uC57C\uC790',
+  palmtree: '\uC57C\uC790\uC218',
+  party: '\uD30C\uD2F0',
+  paw: '\uBC1C\uC790\uAD6D',
+  pawn: '\uB9D0',
+  pen: '\uD39C',
+  percent: '\uD37C\uC13C\uD2B8',
+  piano: '\uD53C\uC544\uB178',
+  pin: '\uD540',
+  pinned: '\uACE0\uC815',
+  plane: '\uBE44\uD589\uAE30',
+  platter: '\uC811\uC2DC',
+  play: '\uD50C\uB808\uC774',
+  plus: '\uD50C\uB7EC\uC2A4',
+  popcorn: '\uD31D\uCF58',
+  popper: '\uD3ED\uC8FD',
+  popsicle: '\uC544\uC774\uC2A4\uBC14',
+  pound: '\uD30C\uC6B4\uB4DC',
+  pulse: '\uB9E5\uBC15',
+  question: '\uBB3C\uC74C',
+  rabbit: '\uD1A0\uB07C',
+  radio: '\uB77C\uB514\uC624',
+  receiver: '\uC218\uC2E0\uAE30',
+  reset: '\uCD08\uAE30\uD654',
+  right: '\uC624\uB978\uCABD',
+  rocket: '\uB85C\uCF13',
+  round: '\uB465\uADFC',
+  rupee: '\uB8E8\uD53C',
+  salad: '\uC0D0\uB7EC\uB4DC',
+  sailboat: '\uC694\uD2B8',
+  sandwich: '\uC0CC\uB4DC\uC704\uCE58',
+  shell: '\uC870\uAC1C',
+  ship: '\uBC30',
+  shirt: '\uC154\uCE20',
+  shopping: '\uC1FC\uD551',
+  shrimp: '\uC0C8\uC6B0',
+  single: '\uC2F1\uAE00',
+  slice: '\uC870\uAC01',
+  slash: '\uC2AC\uB798\uC2DC',
+  smile: '\uC2A4\uB9C8\uC77C',
+  smoke: '\uC5F0\uAE30',
+  snail: '\uB2EC\uD33D\uC774',
+  snowflake: '\uB208\uC1A1\uC774',
+  soda: '\uC74C\uB8CC',
+  sofa: '\uC18C\uD30C',
+  sparkle: '\uBC18\uC9DD\uC784',
+  sparkles: '\uBC18\uC9DD\uC784',
+  square: '\uC0AC\uAC01',
+  squirrel: '\uB2E4\uB78C\uC950',
+  star: '\uBCC4',
+  stars: '\uBCC4\uB4E4',
+  sterling: '\uC2A4\uD138\uB9C1',
+  store: '\uC0C1\uC810',
+  sun: '\uD574',
+  sunrise: '\uC77C\uCD9C',
+  sunset: '\uC77C\uBAB0',
+  swatch: '\uC0C9\uC0C1',
+  switch: '\uC804\uD658',
+  sync: '\uB3D9\uAE30\uD654',
+  template: '\uD15C\uD50C\uB9BF',
+  tent: '\uD150\uD2B8',
+  ticket: '\uD2F0\uCF13',
+  tickets: '\uD2F0\uCF13',
+  timer: '\uD0C0\uC774\uBA38',
+  toy: '\uC7A5\uB09C\uAC10',
+  track: '\uB808\uC77C',
+  train: '\uAE30\uCC28',
+  tram: '\uD2B8\uB7A8',
+  tv: '\uD2F0\uBE44',
+  umbrella: '\uC6B0\uC0B0',
+  unlock: '\uC5F4\uB9BC',
+  user: '\uC0AC\uC6A9\uC790',
+  utensils: '\uC218\uC800',
+  vertical: '\uC138\uB85C',
+  wall: '\uBCBD',
+  wallet: '\uC9C0\uAC11',
+  wand: '\uC9C0\uD321\uC774',
+  warehouse: '\uCC3D\uACE0',
+  watch: '\uC190\uBAA9\uC2DC\uACC4',
+  water: '\uBB3C',
+  watermelon: '\uC218\uBC15',
+  wheel: '\uBC14\uD034',
+  wind: '\uBC14\uB78C',
+  yen: '\uC5D4',
+};
+
 function humanizeIconName(name) {
   return String(name || '')
     .split('-')
@@ -786,20 +1176,63 @@ function humanizeIconName(name) {
     .join(' ');
 }
 
+function translateIconToken(token) {
+  return TOKEN_KO_MAP[token] || EXTRA_TOKEN_KO_MAP[token] || undefined;
+}
+
 function guessKoreanTitle(name) {
   if (SPECIAL_TITLE_KO_MAP[name]) return SPECIAL_TITLE_KO_MAP[name];
   const tokens = String(name || '').split('-').filter(Boolean);
-  const translated = tokens.map((token) => TOKEN_KO_MAP[token]).filter(Boolean);
+  const translated = tokens.map((token) => translateIconToken(token)).filter(Boolean);
   if (translated.length === tokens.length && translated.length) {
     return translated.join(' ');
   }
   return humanizeIconName(name);
 }
 
+function getLocalLucideIconNames() {
+  const iconDir = path.join(__dirname, 'frontend', 'node_modules', 'lucide-react', 'dist', 'esm', 'icons');
+  if (!fs.existsSync(iconDir)) return [];
+  return fs
+    .readdirSync(iconDir)
+    .filter((fileName) => fileName.endsWith('.js'))
+    .map((fileName) => fileName.replace(/\.js$/, ''))
+    .filter((name) => !name.endsWith('-icon'));
+}
+
+function isSmallAutoLucideCandidate(name) {
+  const tokens = String(name || '').split('-').filter(Boolean);
+  if (!tokens.length) return false;
+  if (NATURAL_TITLE_OVERRIDES[name] && !tokens.some((token) => NON_OBJECT_ICON_TOKENS.has(token))) return true;
+  if (!tokens.some((token) => LUCIDE_SMALL_AUTO_INCLUDE_TOKENS.has(token))) return false;
+  if (tokens.some((token) => LUCIDE_SMALL_AUTO_EXCLUDE_TOKENS.has(token))) return false;
+  return tokens.every((token) => translateIconToken(token));
+}
+
+function getLucideSmallAutoPriority(name) {
+  const tokens = String(name || '').split('-').filter(Boolean);
+  const index = LUCIDE_SMALL_AUTO_PRIORITY_TOKENS.findIndex((token) => tokens.includes(token));
+  return index === -1 ? LUCIDE_SMALL_AUTO_PRIORITY_TOKENS.length : index;
+}
+
+function isNaturalPuzzleCandidate(icon) {
+  const tokens = String(icon?.sourceName || '').split('-').filter(Boolean);
+  if (tokens.some((token) => NON_OBJECT_ICON_TOKENS.has(token))) return false;
+  return true;
+}
+
+function getLucideSmallAutoPool() {
+  return getLocalLucideIconNames()
+    .filter(isSmallAutoLucideCandidate)
+    .sort((a, b) => getLucideSmallAutoPriority(a) - getLucideSmallAutoPriority(b) || a.localeCompare(b))
+    .map((name) => [name, guessKoreanTitle(name), humanizeIconName(name)]);
+}
+
 function buildIconCandidate(sizeGroup, name, options = {}) {
   const sourcePack = options.sourcePack || 'phosphor';
-  const titleKo = options.titleKo || guessKoreanTitle(name);
-  const titleEn = options.titleEn || humanizeIconName(name);
+  const titleOverride = NATURAL_TITLE_OVERRIDES[name];
+  const titleKo = titleOverride?.ko || options.titleKo || guessKoreanTitle(name);
+  const titleEn = titleOverride?.en || options.titleEn || humanizeIconName(name);
   const sourceUrl =
     sourcePack === 'hero'
       ? `https://raw.githubusercontent.com/tailwindlabs/heroicons/master/src/24/solid/${name}.svg`
@@ -812,6 +1245,7 @@ function buildIconCandidate(sizeGroup, name, options = {}) {
             : `https://raw.githubusercontent.com/phosphor-icons/core/main/assets/regular/${name}.svg`;
   return {
     id: `${sourcePack}-${sizeGroup}-${name}`,
+    sourcePack,
     sourceName: name,
     titleKo,
     titleEn,
@@ -826,6 +1260,10 @@ function buildIconCandidate(sizeGroup, name, options = {}) {
 
 function uniqueNames(names) {
   return [...new Set(names.filter(Boolean))];
+}
+
+function getTargetForGroup(sizeGroup) {
+  return TARGET_PER_GROUP[sizeGroup] || 50;
 }
 
 async function buildIconCandidates() {
@@ -843,6 +1281,18 @@ async function buildIconCandidates() {
     const lucideCandidates = LUCIDE_FRIENDLY_POOL.map(([name, titleKo, titleEn]) =>
       buildIconCandidate(groupKey, name, { sourcePack: 'lucide', titleKo, titleEn })
     );
+    const lucideSmallExtraCandidates =
+      groupKey === 'small'
+        ? LUCIDE_LARGE_EXTRA_POOL.map(([name, titleKo, titleEn]) =>
+            buildIconCandidate(groupKey, name, { sourcePack: 'lucide', titleKo, titleEn })
+          )
+        : [];
+    const lucideSmallAutoCandidates =
+      groupKey === 'small'
+        ? getLucideSmallAutoPool().map(([name, titleKo, titleEn]) =>
+            buildIconCandidate(groupKey, name, { sourcePack: 'lucide', titleKo, titleEn })
+          )
+        : [];
     const lucideLargeExtraCandidates =
       groupKey === 'large'
         ? LUCIDE_LARGE_EXTRA_POOL.map(([name, titleKo, titleEn]) =>
@@ -850,7 +1300,7 @@ async function buildIconCandidates() {
           )
         : [];
     const lucideXLargeExtraCandidates =
-      groupKey === 'xlarge'
+      groupKey === 'small' || groupKey === 'xlarge'
         ? LUCIDE_XLARGE_EXTRA_POOL.map(([name, titleKo, titleEn]) =>
             buildIconCandidate(groupKey, name, { sourcePack: 'lucide', titleKo, titleEn })
           )
@@ -859,9 +1309,11 @@ async function buildIconCandidates() {
       ...phosphorCandidates,
       ...heroCandidates,
       ...lucideCandidates,
+      ...lucideSmallExtraCandidates,
+      ...lucideSmallAutoCandidates,
       ...lucideLargeExtraCandidates,
       ...lucideXLargeExtraCandidates,
-    ];
+    ].filter(isNaturalPuzzleCandidate);
   });
 }
 
@@ -1201,61 +1653,289 @@ async function renderIconRows(page, svgText, targetSize = 14) {
   }, { svgText, targetSize });
 }
 
-(async () => {
-  const browser = await chromium.launch({ headless: true });
-  const page = await browser.newPage();
-  await page.setContent('<!doctype html><html><body style="margin:0;background:#fff"></body></html>');
-
-  const icons = await buildIconCandidates();
-  const samples = [];
-  const acceptedCounts = Object.fromEntries(Object.keys(GROUPS).map((groupKey) => [groupKey, 0]));
-  const acceptedTitles = new Set();
-  for (const icon of icons) {
-    if (acceptedCounts[icon.sizeGroup] >= TARGET_PER_GROUP) continue;
-    const res = await fetch(icon.sourceUrl);
-    if (!res.ok) {
-      console.log(icon.id, icon.sizeGroup, `SKIP fetch=${res.status}`);
-      continue;
-    }
-    const svgText = await res.text();
-    const rows = await renderIconRows(page, svgText, icon.targetSize || 14);
-    if (!rows.length) {
-      console.log(icon.id, icon.sizeGroup, 'SKIP empty');
-      continue;
-    }
-    if (!isAcceptableForGroup(icon, rows)) {
-      console.log(icon.id, icon.sizeGroup, `${rows[0]?.length || 0}x${rows.length}`, 'SKIP xlarge-filter');
-      continue;
-    }
-    const analysis = analyzePuzzle(rows);
-    if (analysis.unique && !analysis.needsGuess) {
-      const titleKoKey = String(icon.titleKo || '').trim().toLowerCase();
-      const titleEnKey = String(icon.titleEn || '').trim().toLowerCase();
-      if (titleKoKey && acceptedTitles.has(`ko:${titleKoKey}`)) {
-        console.log(icon.id, icon.sizeGroup, 'SKIP duplicate-title-ko');
-        continue;
-      }
-      if (titleEnKey && acceptedTitles.has(`en:${titleEnKey}`)) {
-        console.log(icon.id, icon.sizeGroup, 'SKIP duplicate-title-en');
-        continue;
-      }
-      samples.push({ ...icon, rows, ...analysis });
-      if (titleKoKey) acceptedTitles.add(`ko:${titleKoKey}`);
-      if (titleEnKey) acceptedTitles.add(`en:${titleEnKey}`);
-      acceptedCounts[icon.sizeGroup] += 1;
-      console.log(icon.id, icon.sizeGroup, `${rows[0]?.length || 0}x${rows.length}`, 'PASS');
-      if (Object.values(acceptedCounts).every((count) => count >= TARGET_PER_GROUP)) break;
+function parseCliArgs(argv = []) {
+  const options = {};
+  for (let i = 0; i < argv.length; i += 1) {
+    const arg = argv[i];
+    if (arg === '--help' || arg === '-h') {
+      options.help = true;
+    } else if (arg === '--selection') {
+      options.selectionPath = argv[i + 1];
+      i += 1;
+    } else if (arg.startsWith('--selection=')) {
+      options.selectionPath = arg.slice('--selection='.length);
+    } else if (arg === '--report') {
+      options.reportPath = argv[i + 1];
+      i += 1;
+    } else if (arg.startsWith('--report=')) {
+      options.reportPath = arg.slice('--report='.length);
+    } else if (arg === '--dedupe-variants') {
+      options.dedupeVariants = true;
     } else {
-      console.log(
-        icon.id,
-        icon.sizeGroup,
-        `${rows[0]?.length || 0}x${rows.length}`,
-        `SKIP unique=${analysis.unique} logicalSolved=${analysis.logicalSolved} solutions=${analysis.solutionCount}`
-      );
+      throw new Error(`Unknown argument: ${arg}`);
+    }
+  }
+  return options;
+}
+
+function printCliHelp() {
+  console.log(`Usage:
+  node generate-icon-puzzles.js
+  node generate-icon-puzzles.js --selection theme-source-selection.json
+
+Options:
+  --selection <file>  Generate puzzles only from selected source icon ids.
+  --report <file>     Write the generation report to a custom path.
+  --dedupe-variants   Keep one representative per related icon keyword and size.
+`);
+}
+
+function normalizeSelectedIds(value) {
+  const ids = Array.isArray(value?.selectedIds) ? value.selectedIds : Array.isArray(value) ? value : [];
+  return new Set(ids.map((id) => String(id || '').trim()).filter(Boolean));
+}
+
+function loadSelection(selectionPath) {
+  const resolvedPath = path.resolve(selectionPath || './theme-source-selection.json');
+  if (!fs.existsSync(resolvedPath)) {
+    return { path: resolvedPath, exists: false, ids: new Set() };
+  }
+  const raw = fs.readFileSync(resolvedPath, 'utf8');
+  const parsed = raw.trim() ? JSON.parse(raw) : {};
+  return { path: resolvedPath, exists: true, ids: normalizeSelectedIds(parsed) };
+}
+
+function getDefaultReportPath() {
+  return path.resolve('./theme-source-generation-report.json');
+}
+
+function writeGenerationReport(reportPath, report) {
+  fs.writeFileSync(reportPath, `${JSON.stringify(report, null, 2)}\n`, 'utf8');
+  console.log('Wrote', reportPath);
+}
+
+function uniqueIconsById(icons) {
+  const seen = new Set();
+  return icons.filter((icon) => {
+    if (!icon?.id || seen.has(icon.id)) return false;
+    seen.add(icon.id);
+    return true;
+  });
+}
+
+function getIconSourceName(sample) {
+  if (sample?.sourceName) return String(sample.sourceName);
+  const id = String(sample?.id || '');
+  const match = /^(?:phosphor|phosphor-fill|phosphor-bold|hero|lucide)-(?:small|medium|large|xlarge)-(.+)$/.exec(id);
+  return match ? match[1] : id;
+}
+
+function getVariantConceptKey(sample) {
+  const sourceName = getIconSourceName(sample).toLowerCase();
+  const tokens = sourceName.split('-').filter(Boolean);
+  if (!tokens.length) return sourceName;
+  if (tokens[0] === 'ice' && tokens[1] === 'cream') return 'ice-cream';
+  if (tokens[0] === 'paper' && tokens[1] === 'airplane') return 'paper-airplane';
+  return tokens[0];
+}
+
+function countFilledCells(rows) {
+  return (rows || []).reduce((sum, row) => {
+    let rowCount = 0;
+    for (const ch of String(row || '')) {
+      if (ch === '#') rowCount += 1;
+    }
+    return sum + rowCount;
+  }, 0);
+}
+
+function getVariantRepresentativeScore(sample) {
+  const sourceName = getIconSourceName(sample).toLowerCase();
+  const conceptKey = getVariantConceptKey(sample);
+  const tokenCount = sourceName.split('-').filter(Boolean).length;
+  const packRank =
+    sample.sourcePack === 'phosphor' ? 0 :
+      sample.sourcePack === 'hero' ? 1 :
+        sample.sourcePack === 'lucide' ? 2 :
+          3;
+  return [
+    sourceName === conceptKey ? 0 : 1,
+    tokenCount,
+    Math.abs(countFilledCells(sample.rows) - ((sample.rows?.length || 0) * (sample.rows?.[0]?.length || 0) * 0.42)),
+    packRank,
+    sourceName,
+  ];
+}
+
+function compareVariantRepresentative(a, b) {
+  const aScore = getVariantRepresentativeScore(a);
+  const bScore = getVariantRepresentativeScore(b);
+  for (let i = 0; i < aScore.length; i += 1) {
+    const av = aScore[i];
+    const bv = bScore[i];
+    if (typeof av === 'number' && typeof bv === 'number') {
+      if (av !== bv) return av - bv;
+    } else {
+      const cmp = String(av).localeCompare(String(bv));
+      if (cmp) return cmp;
+    }
+  }
+  return String(a.id || '').localeCompare(String(b.id || ''));
+}
+
+function dedupeVariantSamples(samples) {
+  const byKey = new Map();
+  for (const sample of samples) {
+    const key = `${sample.sizeGroup || 'medium'}:${getVariantConceptKey(sample)}`;
+    const current = byKey.get(key);
+    if (!current || compareVariantRepresentative(sample, current) < 0) {
+      byKey.set(key, sample);
+    }
+  }
+  const keepIds = new Set([...byKey.values()].map((sample) => sample.id));
+  return samples.filter((sample) => keepIds.has(sample.id));
+}
+
+function makeReportIcon(icon, extra = {}) {
+  return {
+    id: icon.id,
+    sourcePack: icon.sourcePack || '',
+    sourceName: icon.sourceName || '',
+    titleKo: icon.titleKo || '',
+    titleEn: icon.titleEn || '',
+    sizeGroup: icon.sizeGroup || '',
+    sourceUrl: icon.sourceUrl || '',
+    ...extra,
+  };
+}
+
+async function generateIconPuzzles(options = {}) {
+  const selection = options.selectionPath ? loadSelection(options.selectionPath) : null;
+  const useSelection = Boolean(selection);
+  const reportPath = path.resolve(options.reportPath || getDefaultReportPath());
+  const report = {
+    generatedAt: new Date().toISOString(),
+    selectionPath: selection ? selection.path : '',
+    selectionFileExists: selection ? selection.exists : false,
+    selectedCount: selection ? selection.ids.size : null,
+    candidateCount: 0,
+    attemptedCount: 0,
+    passed: [],
+    failed: [],
+    finalCount: 0,
+    wroteOutputs: false,
+    dedupeVariants: Boolean(options.dedupeVariants),
+  };
+
+  const allIcons = await buildIconCandidates();
+  const uniqueIcons = useSelection ? uniqueIconsById(allIcons) : allIcons;
+  report.candidateCount = uniqueIcons.length;
+
+  let icons = uniqueIcons;
+  if (useSelection) {
+    const knownIds = new Set(uniqueIcons.map((icon) => icon.id));
+    for (const selectedId of selection.ids) {
+      if (!knownIds.has(selectedId)) {
+        report.failed.push({ id: selectedId, reason: 'missing-candidate' });
+      }
+    }
+    icons = uniqueIcons.filter((icon) => selection.ids.has(icon.id));
+    if (selection.ids.size === 0) {
+      report.message = 'No selected icon ids. Existing generated puzzle files were left unchanged.';
+      writeGenerationReport(reportPath, report);
+      console.log(report.message);
+      return { samples: [], finalSamples: [], report, wroteOutputs: false };
     }
   }
 
-  await browser.close();
+  const chromeExecutablePath =
+    process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH ||
+    process.env.CHROME_PATH ||
+    (process.platform === 'win32' ? 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe' : '');
+  const launchOptions = {
+    headless: true,
+    ...(chromeExecutablePath && fs.existsSync(chromeExecutablePath) ? { executablePath: chromeExecutablePath } : {}),
+  };
+  const browser = await chromium.launch(launchOptions);
+  const samples = [];
+  const acceptedCounts = Object.fromEntries(Object.keys(GROUPS).map((groupKey) => [groupKey, 0]));
+  const acceptedTitles = new Set();
+  const acceptedSources = new Set();
+
+  try {
+    const page = await browser.newPage();
+    await page.setContent('<!doctype html><html><body style="margin:0;background:#fff"></body></html>');
+
+    for (const icon of icons) {
+      if (!useSelection && acceptedCounts[icon.sizeGroup] >= getTargetForGroup(icon.sizeGroup)) continue;
+      const sourceKey = useSelection ? icon.id : `${icon.sizeGroup}:${icon.sourceName}`;
+      if (acceptedSources.has(sourceKey)) continue;
+      report.attemptedCount += 1;
+
+      let res;
+      try {
+        res = await fetch(icon.sourceUrl);
+      } catch (error) {
+        const reason = `fetch-error: ${error?.message || error}`;
+        console.log(icon.id, icon.sizeGroup, `SKIP ${reason}`);
+        if (useSelection) report.failed.push(makeReportIcon(icon, { reason }));
+        continue;
+      }
+
+      if (!res.ok) {
+        const reason = `fetch=${res.status}`;
+        console.log(icon.id, icon.sizeGroup, `SKIP ${reason}`);
+        if (useSelection) report.failed.push(makeReportIcon(icon, { reason }));
+        continue;
+      }
+
+      const svgText = await res.text();
+      const rows = await renderIconRows(page, svgText, icon.targetSize || 14);
+      if (!rows.length) {
+        const reason = 'empty-render';
+        console.log(icon.id, icon.sizeGroup, 'SKIP empty');
+        if (useSelection) report.failed.push(makeReportIcon(icon, { reason }));
+        continue;
+      }
+
+      const renderedSize = `${rows[0]?.length || 0}x${rows.length}`;
+      if (!isAcceptableForGroup(icon, rows)) {
+        const reason = 'xlarge-filter';
+        console.log(icon.id, icon.sizeGroup, renderedSize, 'SKIP xlarge-filter');
+        if (useSelection) report.failed.push(makeReportIcon(icon, { reason, renderedSize }));
+        continue;
+      }
+
+      const analysis = analyzePuzzle(rows);
+      if (analysis.unique && !analysis.needsGuess) {
+        const titleScope = `${icon.sizeGroup}:`;
+        const titleKoKey = String(icon.titleKo || '').trim().toLowerCase();
+        const titleEnKey = String(icon.titleEn || '').trim().toLowerCase();
+        if (!useSelection && titleKoKey && acceptedTitles.has(`${titleScope}ko:${titleKoKey}`)) {
+          console.log(icon.id, icon.sizeGroup, 'SKIP duplicate-title-ko');
+          continue;
+        }
+        if (!useSelection && titleEnKey && acceptedTitles.has(`${titleScope}en:${titleEnKey}`)) {
+          console.log(icon.id, icon.sizeGroup, 'SKIP duplicate-title-en');
+          continue;
+        }
+        samples.push({ ...icon, rows, ...analysis });
+        if (titleKoKey) acceptedTitles.add(`${titleScope}ko:${titleKoKey}`);
+        if (titleEnKey) acceptedTitles.add(`${titleScope}en:${titleEnKey}`);
+        acceptedSources.add(sourceKey);
+        acceptedCounts[icon.sizeGroup] += 1;
+        console.log(icon.id, icon.sizeGroup, renderedSize, 'PASS');
+        if (useSelection) report.passed.push(makeReportIcon(icon, { renderedSize }));
+        if (!useSelection && Object.entries(acceptedCounts).every(([groupKey, count]) => count >= getTargetForGroup(groupKey))) break;
+      } else {
+        const reason = `not-logically-solvable unique=${analysis.unique} logicalSolved=${analysis.logicalSolved} solutions=${analysis.solutionCount}`;
+        console.log(icon.id, icon.sizeGroup, renderedSize, `SKIP unique=${analysis.unique} logicalSolved=${analysis.logicalSolved} solutions=${analysis.solutionCount}`);
+        if (useSelection) report.failed.push(makeReportIcon(icon, { reason, renderedSize }));
+      }
+    }
+  } finally {
+    await browser.close();
+  }
 
   const countsByGroup = samples.reduce((acc, sample) => {
     acc[sample.sizeGroup] = (acc[sample.sizeGroup] || 0) + 1;
@@ -1263,19 +1943,39 @@ async function renderIconRows(page, svgText, targetSize = 14) {
   }, {});
   console.log('accepted', samples.length, countsByGroup);
 
-  const finalSamples = Object.keys(GROUPS).flatMap((groupKey) =>
-    samples.filter((sample) => sample.sizeGroup === groupKey).slice(0, TARGET_PER_GROUP)
-  );
+  const finalSamples = useSelection
+    ? samples
+    : Object.keys(GROUPS).flatMap((groupKey) =>
+        samples.filter((sample) => sample.sizeGroup === groupKey).slice(0, getTargetForGroup(groupKey))
+      );
+  const dedupedFinalSamples = options.dedupeVariants ? dedupeVariantSamples(finalSamples) : finalSamples;
   const finalCountsByGroup = finalSamples.reduce((acc, sample) => {
     acc[sample.sizeGroup] = (acc[sample.sizeGroup] || 0) + 1;
     return acc;
   }, {});
+  const dedupedCountsByGroup = dedupedFinalSamples.reduce((acc, sample) => {
+    acc[sample.sizeGroup] = (acc[sample.sizeGroup] || 0) + 1;
+    return acc;
+  }, {});
   console.log('final', finalSamples.length, finalCountsByGroup);
+  if (options.dedupeVariants) {
+    console.log('deduped-final', dedupedFinalSamples.length, dedupedCountsByGroup);
+  }
+  report.finalCount = dedupedFinalSamples.length;
+  report.beforeDedupeCount = finalSamples.length;
+
+  if (!dedupedFinalSamples.length) {
+    report.message = 'No icons were converted successfully. Existing generated puzzle files were left unchanged.';
+    if (useSelection) writeGenerationReport(reportPath, report);
+    console.log(report.message);
+    return { samples, finalSamples: dedupedFinalSamples, report, wroteOutputs: false };
+  }
 
   const output = `// Auto-generated from official MIT icon sources.
 export const GENERATED_CREATOR_SAMPLE_PUZZLES = [
-${finalSamples.map((sample) => `  {
+${dedupedFinalSamples.map((sample) => `  {
     id: ${formatJsString(sample.id)},
+    sourcePack: ${formatJsString(sample.sourcePack || '')},
     titleKo: ${formatJsString(sample.titleKo)},
     titleEn: ${formatJsString(sample.titleEn)},
     sizeGroup: ${formatJsString(sample.sizeGroup)},
@@ -1293,10 +1993,43 @@ ${finalSamples.map((sample) => `  {
 ];
 `;
 
-  const outputPath = path.resolve('./frontend/src/creatorSamples.generated.js');
+  const outputPath = path.resolve(options.outputPath || './frontend/src/creatorSamples.generated.js');
   fs.writeFileSync(outputPath, output, 'utf8');
   console.log('Wrote', outputPath);
-  const jsonOutputPath = path.resolve('./creator-samples.generated.json');
-  fs.writeFileSync(jsonOutputPath, JSON.stringify(finalSamples, null, 2), 'utf8');
+  const jsonOutputPath = path.resolve(options.jsonOutputPath || './creator-samples.generated.json');
+  fs.writeFileSync(jsonOutputPath, JSON.stringify(dedupedFinalSamples, null, 2), 'utf8');
   console.log('Wrote', jsonOutputPath);
-})();
+  report.wroteOutputs = true;
+  if (useSelection) writeGenerationReport(reportPath, report);
+  return { samples, finalSamples: dedupedFinalSamples, report, wroteOutputs: true };
+}
+
+module.exports = {
+  GROUPS,
+  TARGET_PER_GROUP,
+  buildIconCandidate,
+  buildIconCandidates,
+  generateIconPuzzles,
+  getTargetForGroup,
+  guessKoreanTitle,
+  humanizeIconName,
+  parseCliArgs,
+};
+
+if (require.main === module) {
+  let options;
+  try {
+    options = parseCliArgs(process.argv.slice(2));
+  } catch (error) {
+    console.error(error.message);
+    process.exit(1);
+  }
+  if (options.help) {
+    printCliHelp();
+    process.exit(0);
+  }
+  generateIconPuzzles(options).catch((error) => {
+    console.error(error);
+    process.exit(1);
+  });
+}

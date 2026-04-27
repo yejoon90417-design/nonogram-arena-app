@@ -1,9 +1,9 @@
 ﻿import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import confetti from "canvas-confetti";
+import { getAnonymousKey, GoogleAdMob } from "@apps-in-toss/web-framework";
 import EmojiPicker from "emoji-picker-react";
 import { motion } from "framer-motion";
-import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, ChevronDown, Eraser, GripHorizontal, Home, Lock, LogIn, Maximize2, Minimize2, Minus, Moon, Plus, Redo2, Settings, Sun, Trophy, Undo2, User, UserPlus, Volume2, VolumeX } from "lucide-react";
-import { AdFitBanner } from "./components/AdFitBanner";
+import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, BookOpen, CalendarDays, CheckCircle2, ChevronDown, Eraser, Flame, Home, Lightbulb, Lock, LogIn, Palette, Redo2, Shuffle, Trophy, Undo2, User, UserPlus, X } from "lucide-react";
 import { GENERATED_CREATOR_SAMPLE_PUZZLES } from "./creatorSamples.generated";
 import "./App.css";
 
@@ -19,22 +19,146 @@ function normalizeApiBase(raw) {
 }
 
 const API_BASE = normalizeApiBase(import.meta.env.VITE_API_BASE_URL);
+const IS_APPS_IN_TOSS = import.meta.env.VITE_APPS_IN_TOSS === "true";
+const BUILD_MODE = import.meta.env.MODE;
+const REVIVE_AD_GROUP_ID = String(import.meta.env.VITE_REVIVE_AD_GROUP_ID || import.meta.env.VITE_REVIVE_AD_UNIT_ID || "").trim();
+const REVIVE_AD_TEST_FALLBACK =
+  import.meta.env.DEV || BUILD_MODE === "apk" || import.meta.env.VITE_SIMULATE_REWARD_AD === "true";
 const MAX_HISTORY = 200;
-const SOLVED_REVEAL_DURATION_MS = 820;
+const PUZZLE_MAX_HP = 3;
+const PUZZLE_MAX_HINTS = 3;
+const PUZZLE_HINT_REWARD_AMOUNT = 1;
+const PUZZLE_HP_DAMAGE_MS = 820;
+const PUZZLE_HINT_REVEAL_MS = 860;
+const REVIVE_AD_TEST_MS = 850;
+const REVIVE_AD_TIMEOUT_MS = 45000;
+const SOLVED_REVEAL_DURATION_MS = 2600;
+const SOLVED_PAINT_DEFAULT_PALETTE = ["#2563eb", "#60a5fa", "#1d4ed8", "#dbeafe"];
+
+function getViewportWidth() {
+  if (typeof window === "undefined") return 430;
+  return Math.max(
+    320,
+    Math.round(window.visualViewport?.width || window.innerWidth || document.documentElement?.clientWidth || 430)
+  );
+}
+
+const SOLVED_PAINT_PALETTE_RULES = [
+  { keys: ["ambulance", "구급차"], colors: ["#f8fafc", "#ef4444", "#2563eb", "#fee2e2"] },
+  { keys: ["candy-cane", "사탕 지팡이"], colors: ["#f8fafc", "#ef4444", "#16a34a", "#fee2e2"] },
+  { keys: ["cloud-rain", "rain cloud", "비 구름"], colors: ["#93c5fd", "#38bdf8", "#1d4ed8", "#e0f2fe"] },
+  { keys: ["cake-slice", "케이크 한조각"], colors: ["#f9a8d4", "#fde68a", "#be185d", "#fff7ed"] },
+  { keys: ["key-round", "동그란 열쇠"], colors: ["#facc15", "#f59e0b", "#92400e", "#fef3c7"] },
+  { keys: ["moon-star", "별 달"], colors: ["#fde68a", "#818cf8", "#312e81", "#fff7ed"] },
+  { keys: ["badge-alert", "경고 배지"], colors: ["#f97316", "#fde047", "#b91c1c", "#ffedd5"] },
+  { keys: ["badge-check", "check badge", "체크 배지"], colors: ["#22c55e", "#86efac", "#15803d", "#dcfce7"] },
+  { keys: ["badge-plus", "plus badge", "플러스 배지"], colors: ["#3b82f6", "#93c5fd", "#1d4ed8", "#dbeafe"] },
+  { keys: ["heart", "하트"], colors: ["#e11d48", "#fb7185", "#9f1239", "#ffe4e6"] },
+  { keys: ["gift", "선물"], colors: ["#dc2626", "#facc15", "#1d4ed8", "#fee2e2"] },
+  { keys: ["fire", "불"], colors: ["#f97316", "#facc15", "#dc2626", "#ffedd5"] },
+  { keys: ["moon", "달"], colors: ["#fde68a", "#a5b4fc", "#312e81", "#fff7ed"] },
+  { keys: ["star", "sparkle", "반짝임", "별"], colors: ["#facc15", "#fde68a", "#f59e0b", "#fffbeb"] },
+  { keys: ["light-bulb", "lamp", "bulb", "전구", "스탠드"], colors: ["#fde047", "#fbbf24", "#92400e", "#fff7ad"] },
+  { keys: ["bell", "종"], colors: ["#facc15", "#fbbf24", "#b45309", "#fef3c7"] },
+  { keys: ["key", "lock", "열쇠", "자물쇠"], colors: ["#facc15", "#f59e0b", "#78350f", "#fef3c7"] },
+  { keys: ["medal", "trophy", "crown", "메달", "트로피", "왕관"], colors: ["#facc15", "#f59e0b", "#92400e", "#fef3c7"] },
+  { keys: ["basketball", "농구공"], colors: ["#f97316", "#fb923c", "#7c2d12", "#ffedd5"] },
+  { keys: ["apple", "cherry", "citrus", "사과", "체리", "감귤"], colors: ["#ef4444", "#f97316", "#15803d", "#fee2e2"] },
+  { keys: ["banana", "바나나"], colors: ["#fde047", "#facc15", "#854d0e", "#fef9c3"] },
+  { keys: ["grape", "포도"], colors: ["#7c3aed", "#a78bfa", "#4c1d95", "#ede9fe"] },
+  { keys: ["bean", "콩"], colors: ["#84cc16", "#a3e635", "#3f6212", "#ecfccb"] },
+  { keys: ["coffee", "beer", "커피", "맥주"], colors: ["#b45309", "#fbbf24", "#451a03", "#fef3c7"] },
+  { keys: ["cake", "ice-cream", "croissant", "pizza", "hamburger", "sandwich", "bowl-food", "food", "케이크", "아이스크림", "크루아상", "피자", "햄버거", "샌드위치", "음식"], colors: ["#fb7185", "#fde68a", "#b45309", "#fff7ed"] },
+  { keys: ["flower", "tulip", "lotus", "꽃", "튤립", "튀립", "연꽃"], colors: ["#ec4899", "#f9a8d4", "#16a34a", "#fce7f3"] },
+  { keys: ["leaf", "sprout", "tree", "palm", "forest", "잎사귀", "새싹", "나무", "야자", "소나무", "숲"], colors: ["#16a34a", "#84cc16", "#166534", "#dcfce7"] },
+  { keys: ["cloud", "snowflake", "bath", "구름", "눈송이", "욕조"], colors: ["#bfdbfe", "#60a5fa", "#1d4ed8", "#f0f9ff"] },
+  { keys: ["umbrella", "우산"], colors: ["#7c3aed", "#38bdf8", "#4c1d95", "#ede9fe"] },
+  { keys: ["globe", "lifebuoy", "지구", "구명튜브"], colors: ["#2563eb", "#22c55e", "#dc2626", "#dbeafe"] },
+  { keys: ["car", "bus", "truck", "airplane", "rocket", "vehicle", "자동차", "버스", "트럭", "비행기", "로켓", "케이블카"], colors: ["#ef4444", "#60a5fa", "#1d4ed8", "#fee2e2"] },
+  { keys: ["house", "store", "library", "castle", "lighthouse", "building", "집", "상점", "도서관", "성탑", "등대"], colors: ["#d97706", "#fbbf24", "#475569", "#ffedd5"] },
+  { keys: ["book", "notebook", "bookmark", "ticket", "cardholder", "wallet", "책", "노트", "북마크", "티켓", "카드", "지갑"], colors: ["#2563eb", "#f97316", "#1e3a8a", "#dbeafe"] },
+  { keys: ["camera", "photo", "film", "microphone", "music", "note", "카메라", "사진", "영화", "마이크", "음표"], colors: ["#7c3aed", "#38bdf8", "#312e81", "#ede9fe"] },
+  { keys: ["game-controller", "lego", "smile", "게임", "레고", "스마일"], colors: ["#facc15", "#22c55e", "#2563eb", "#fef9c3"] },
+  { keys: ["shield", "check", "방패", "체크"], colors: ["#2563eb", "#22c55e", "#1e3a8a", "#dbeafe"] },
+  { keys: ["map-pin", "pin", "핀"], colors: ["#ef4444", "#fb7185", "#991b1b", "#fee2e2"] },
+  { keys: ["chat", "bubble", "message", "notification", "말풍선", "알림"], colors: ["#38bdf8", "#a78bfa", "#1d4ed8", "#e0f2fe"] },
+  { keys: ["user", "baby", "사용자", "아기"], colors: ["#fbbf24", "#fb7185", "#92400e", "#fef3c7"] },
+  { keys: ["ghost", "유령"], colors: ["#f8fafc", "#c4b5fd", "#7c3aed", "#ffffff"] },
+  { keys: ["milk", "우유"], colors: ["#f8fafc", "#93c5fd", "#1e3a8a", "#ffffff"] },
+  { keys: ["soda", "음료"], colors: ["#ef4444", "#38bdf8", "#991b1b", "#fee2e2"] },
+  { keys: ["cat", "dog", "rabbit", "squirrel", "paw", "bird", "turtle", "ant", "bug", "shrimp", "shell", "고양이", "강아지", "토끼", "발자국", "새", "거북이", "개미", "벌레", "새우", "조개"], colors: ["#f59e0b", "#fcd34d", "#92400e", "#fff7ed"] },
+  { keys: ["hard-hat", "helmet", "cap", "안전모", "헬멧"], colors: ["#facc15", "#f59e0b", "#422006", "#fef3c7"] },
+  { keys: ["hat", "backpack", "basket", "모자", "배낭", "바구니"], colors: ["#a16207", "#f59e0b", "#422006", "#fef3c7"] },
+  { keys: ["clock", "alarm", "시계"], colors: ["#38bdf8", "#f8fafc", "#1e3a8a", "#e0f2fe"] },
+];
+
+function delay(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function isBridgeMethodSupported(method) {
+  try {
+    return method?.isSupported?.() === true;
+  } catch {
+    return false;
+  }
+}
+
+function cleanupBridgeListener(cleanup) {
+  try {
+    cleanup?.();
+  } catch {
+    // Native bridge cleanup can throw when the host has already disposed the listener.
+  }
+}
+
+function isLocalNativeRuntime() {
+  try {
+    return window?.Capacitor?.isNativePlatform?.() === true || window?.location?.protocol === "capacitor:";
+  } catch {
+    return false;
+  }
+}
+
+async function sha256Hex(value) {
+  if (!window?.crypto?.subtle || typeof TextEncoder !== "function") {
+    throw new Error("crypto_not_supported");
+  }
+  const bytes = new TextEncoder().encode(String(value || ""));
+  const hash = await window.crypto.subtle.digest("SHA-256", bytes);
+  return Array.from(new Uint8Array(hash), (byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
+async function buildTossGameAuthPayload(userHash) {
+  const digest = await sha256Hex(userHash);
+  return {
+    username: `toss-${digest.slice(0, 18)}`,
+    nickname: `토스유저${digest.slice(0, 8)}`,
+    password: `Toss${digest.slice(0, 24)}9a`,
+  };
+}
 const AUTH_TOKEN_KEY = "nonogram-auth-token";
 const AUTH_USER_KEY = "nonogram-auth-user";
 const PROFILE_AVATAR_LOCAL_OVERRIDES_KEY = "nonogram-local-profile-avatar-overrides";
 const LANG_KEY = "nonogram-ui-lang";
 const THEME_KEY = "nonogram-ui-theme";
 const STYLE_VARIANT_KEY = "nonogram-ui-style-variant";
-const SOUND_KEY = "nonogram-ui-sound";
 const TUTORIAL_SEEN_KEY = "nonogram-tutorial-seen-v1";
+const DAILY_PUZZLE_HISTORY_KEY = "nonogram-daily-puzzle-history-v1";
+const SHOULD_PERSIST_DAILY_PUZZLE_HISTORY = false;
+const MISSION_STATE_KEY = "nonogram-mission-state-v1";
+const SHOULD_PERSIST_MISSION_STATE = false;
 const CREATOR_ADMIN_KEY = "nonogram-creator-admin-key";
-const PATCH_NOTES_VERSION = "theme-puzzles-2026-03-18-v1";
 const PVP_SIZE_KEYS = ["5x5", "10x10", "15x15", "20x20", "25x25"];
-const PVP_SIZE_KEYS_LOW_TIER = ["5x5", "10x10", "15x15"];
-const PVP_SIZE_KEYS_GOLD_TIER = ["10x10", "15x15", "20x20"];
-const PVP_SIZE_KEYS_DIAMOND_PLUS = ["10x10", "15x15", "20x20", "25x25"];
+const PVP_BATTLE_SIZE_KEYS = ["5x5", "10x10", "15x15"];
+const PVP_SIZE_KEYS_LOW_TIER = PVP_BATTLE_SIZE_KEYS;
+const PVP_SIZE_KEYS_GOLD_TIER = PVP_BATTLE_SIZE_KEYS;
+const PVP_SIZE_KEYS_DIAMOND_PLUS = PVP_BATTLE_SIZE_KEYS;
+const APPS_IN_TOSS_SIZE_KEYS = ["5x5", "10x10", "15x15"];
+const APPS_IN_TOSS_DEFAULT_SIZE = "10x10";
+const SINGLE_SIZE_KEYS = IS_APPS_IN_TOSS ? APPS_IN_TOSS_SIZE_KEYS : PVP_SIZE_KEYS;
+const CREATOR_DEFAULT_SIZE = IS_APPS_IN_TOSS ? 10 : 12;
+const CREATOR_MAX_SIZE = IS_APPS_IN_TOSS ? 15 : 40;
 const PVP_REVEAL_RESULT_HOLD_MS = 1600;
 const SOUND_MASTER_GAIN_MAX = 0.34;
 const CREATOR_REACTION_OPTIONS = [
@@ -56,7 +180,7 @@ const MODE_TO_PATH = {
   create: "/create",
   multi: "/multi",
   pvp: "/pvp",
-  placement_test: "/placement",
+  placement_test: "/pvp",
   auth: "/auth",
   tutorial: "/tutorial",
   ranking: "/ranking",
@@ -299,10 +423,10 @@ const HOME_MODE_CARDS = [
     key: "pvp",
     eyebrowKo: "등급전 모드",
     eyebrowEn: "Ranked PvP",
-    titleKo: "PvP는 배치고사와 밴 단계를 거치는 정식 대전 모드입니다.",
-    titleEn: "Queue into structured duels with placement, bans, reveal, and rating movement.",
-    bodyKo: "배치 결과로 시작 레이팅이 정해지고, 이후에는 비슷한 실력대의 상대와 싸우며 티어, 연승, 랭킹이 함께 움직입니다.",
-    bodyEn: "After placement, you face players around your skill band and play matches that feed directly into visible tiers, streaks, and ranking tables.",
+    titleKo: "PvP는 바로 매칭해서 같은 퍼즐로 겨루는 정식 대전 모드입니다.",
+    titleEn: "Queue into direct duels with reveal and rating movement.",
+    bodyKo: "비슷한 실력대의 상대와 같은 퍼즐을 동시에 풀고, 승패에 따라 티어, 연승, 랭킹이 함께 움직입니다.",
+    bodyEn: "Face players around your skill band on the same puzzle, with wins and losses feeding directly into visible tiers, streaks, and ranking tables.",
   },
 ];
 const HOME_SYSTEM_CARDS = [
@@ -310,8 +434,8 @@ const HOME_SYSTEM_CARDS = [
     key: "rating",
     titleKo: "티어와 레이팅",
     titleEn: "Visible tiers and rating",
-    bodyKo: "브론즈부터 마스터까지 이어지는 티어 구조 위에서, 배치고사와 PvP 결과에 따라 레이팅이 오르내리며 내 위치가 분명하게 보이도록 설계했습니다.",
-    bodyEn: "Bronze through Master gives players a clear ladder to climb, while placement and match results move rating in a way that feels legible from game to game.",
+    bodyKo: "브론즈부터 마스터까지 이어지는 티어 구조 위에서, PvP 결과에 따라 레이팅이 오르내리며 내 위치가 분명하게 보이도록 설계했습니다.",
+    bodyEn: "Bronze through Master gives players a clear ladder to climb, while match results move rating in a way that feels legible from game to game.",
   },
   {
     key: "records",
@@ -356,8 +480,8 @@ const HOME_FAQ_ITEMS = [
     key: "placement",
     questionKo: "PvP는 바로 플레이할 수 있나요?",
     questionEn: "Can I jump straight into ranked PvP?",
-    answerKo: "처음에는 배치고사를 먼저 진행해야 합니다. 이 결과가 시작 티어와 레이팅 기준이 되어 이후 등급전 매칭에 반영됩니다.",
-    answerEn: "New players begin with placement. Those opening matches determine the starting rating band that the ranked queue uses afterward.",
+    answerKo: "네. 로그인하지 않아도 테스트 배틀을 바로 시작할 수 있고, 로그인하면 등급전 매칭으로 이어집니다.",
+    answerEn: "Yes. You can start a test battle without login, and signed-in players can enter ranked matchmaking directly.",
   },
   {
     key: "single",
@@ -377,8 +501,8 @@ const HOME_FAQ_ITEMS = [
     key: "guide",
     questionKo: "처음 들어왔으면 어디부터 보면 좋나요?",
     questionEn: "Where should I start if I am new to the site?",
-    answerKo: "플레이 방법 페이지부터 보고, 그다음 PvP 가이드와 랭킹 가이드를 읽으면 배치고사, 티어, 명예의 전당, 등급전 흐름을 빠르게 이해할 수 있습니다.",
-    answerEn: "Start with How to Play, then read the PvP and Ranking guides if you want to understand placement, tiers, Hall records, and ranked progression.",
+    answerKo: "플레이 방법 페이지부터 보고, 그다음 PvP와 랭킹 화면을 보면 티어, 명예의 전당, 등급전 흐름을 빠르게 이해할 수 있습니다.",
+    answerEn: "Start with How to Play, then check PvP and Ranking if you want to understand tiers, Hall records, and ranked progression.",
   },
 ];
 const HOME_UPDATE_ITEMS = [
@@ -393,10 +517,10 @@ const HOME_UPDATE_ITEMS = [
   {
     key: "2026-03-18",
     date: "2026-03-18",
-    titleKo: "배치고사와 등급전 흐름을 더 매끈하게 다듬었습니다.",
-    titleEn: "Placement and ranked flow were tightened.",
-    bodyKo: "수락, 밴, 퍼즐 공개 단계가 더 자연스럽게 이어지도록 상태 전환과 안내 흐름을 정리했습니다.",
-    bodyEn: "Accept, ban, and reveal phases were tuned so the state changes feel easier to follow before the actual solve begins.",
+    titleKo: "등급전 흐름을 더 매끈하게 다듬었습니다.",
+    titleEn: "Ranked flow was tightened.",
+    bodyKo: "매칭, 퍼즐 공개, 대전 시작 단계가 더 자연스럽게 이어지도록 상태 전환과 안내 흐름을 정리했습니다.",
+    bodyEn: "Matchmaking, reveal, and start phases were tuned so the state changes feel easier to follow before the actual solve begins.",
   },
   {
     key: "2026-03-12",
@@ -508,16 +632,16 @@ const MENU_TOUR_STEPS = [
     imageSrc: "/site-tour/pvp.png",
     shortKo: "PvP",
     shortEn: "PvP",
-    summaryKo: "배치고사 이후 진입하는 정식 경쟁 모드",
-    summaryEn: "Structured ranked play with placement and bans",
+    summaryKo: "바로 진입하는 정식 경쟁 모드",
+    summaryEn: "Structured ranked play with direct matchmaking",
     titleKo: "PvP는 티어와 레이팅이 실제로 반영되는 경쟁 모드입니다",
     titleEn: "PvP is the competitive mode where tiers and rating really move.",
     bodyKo:
-      "배치고사 이후 비슷한 실력의 상대를 찾고, 수락과 밴 단계를 거쳐 퍼즐이 공개되면 승패와 함께 레이팅이 갱신됩니다.",
+      "비슷한 실력의 상대를 찾고, 같은 퍼즐이 공개되면 승패와 함께 레이팅이 갱신됩니다.",
     bodyEn:
-      "After placement, you face similar opponents, move through accept and ban phases, then play a rated match on the revealed puzzle.",
-    pointsKo: ["배치고사", "밴 단계", "레이팅 변화"],
-    pointsEn: ["Placement", "Ban phase", "Rating movement"],
+      "You face similar opponents, then play a rated match on the revealed puzzle.",
+    pointsKo: ["바로 매칭", "동일 퍼즐", "레이팅 변화"],
+    pointsEn: ["Direct queue", "Same puzzle", "Rating movement"],
     ctaKo: "PvP 열기",
     ctaEn: "Open PvP",
     action: "pvp",
@@ -602,8 +726,8 @@ function getModeFromPath(pathname) {
   if (path === "/create") return "create";
   if (path === "/multi") return "multi";
   if (path === "/pvp") return "pvp";
-  if (path === "/placement") return "placement_test";
-  if (path === "/placement-test") return "placement_test";
+  if (path === "/placement") return "pvp";
+  if (path === "/placement-test") return "pvp";
   if (path === "/auth") return "auth";
   if (path === "/tutorial") return "tutorial";
   if (path === "/ranking") return "ranking";
@@ -618,10 +742,6 @@ function getPathFromMode(mode) {
 
 function normalizeUiLang(raw) {
   return String(raw || "").toLowerCase() === "ko" ? "ko" : "en";
-}
-
-function normalizeUiTheme(raw) {
-  return String(raw || "").toLowerCase() === "dark" ? "dark" : "light";
 }
 
 function normalizeUiStyleVariant(raw) {
@@ -1086,25 +1206,6 @@ function toSheetColumnLabel(index) {
   return label;
 }
 
-function normalizeUiSoundVolume(raw, legacyOn = undefined) {
-  const n = Number(raw);
-  if (Number.isFinite(n)) {
-    return Math.max(0, Math.min(100, Math.round(n)));
-  }
-  if (legacyOn === false) return 0;
-  if (legacyOn === true) return 100;
-  return 100;
-}
-
-function readInitialSoundVolume() {
-  const saved = localStorage.getItem(SOUND_KEY);
-  if (saved == null) return 100;
-  const v = String(saved).trim().toLowerCase();
-  if (v === "off") return 0;
-  if (v === "on") return 100;
-  return normalizeUiSoundVolume(v);
-}
-
 const TUTORIAL_PUZZLE = {
   id: "tutorial-5x5",
   width: 5,
@@ -1208,6 +1309,90 @@ function fromBase64Bits(bitsBase64, width, height) {
   return cells;
 }
 
+function cellsFromPackedBytes(bytesLike, width, height) {
+  const total = width * height;
+  let bytes = null;
+  if (ArrayBuffer.isView(bytesLike)) bytes = bytesLike;
+  else if (Array.isArray(bytesLike)) bytes = bytesLike;
+  else if (bytesLike && Array.isArray(bytesLike.data)) bytes = bytesLike.data;
+  if (!bytes) return null;
+
+  const cells = new Array(total).fill(0);
+  for (let i = 0; i < total; i += 1) {
+    const byte = Number(bytes[Math.floor(i / 8)]) || 0;
+    cells[i] = ((byte >> (i % 8)) & 1) === 1 ? 1 : 0;
+  }
+  return cells;
+}
+
+function cellsFromPackedHex(hexValue, width, height) {
+  const raw = String(hexValue || "").trim().replace(/^\\x/i, "");
+  if (!raw || raw.length % 2 !== 0 || !/^[0-9a-f]+$/i.test(raw)) return null;
+  const bytes = [];
+  for (let i = 0; i < raw.length; i += 2) {
+    bytes.push(Number.parseInt(raw.slice(i, i + 2), 16));
+  }
+  return cellsFromPackedBytes(bytes, width, height);
+}
+
+function cellsFromPackedBase64(bitsBase64, width, height) {
+  if (!bitsBase64 || typeof bitsBase64 !== "string" || typeof atob !== "function") return null;
+  const total = width * height;
+  let binary = "";
+  try {
+    binary = atob(bitsBase64);
+  } catch {
+    return null;
+  }
+  const cells = new Array(total).fill(0);
+  const byteLen = Math.ceil(total / 8);
+  for (let i = 0; i < total; i += 1) {
+    const b = i < byteLen ? (binary.charCodeAt(Math.floor(i / 8)) || 0) : 0;
+    cells[i] = ((b >> (i % 8)) & 1) === 1 ? 1 : 0;
+  }
+  return cells;
+}
+
+function normalizePuzzleSolutionCells(values, width, height) {
+  if (!Array.isArray(values)) return null;
+  const total = width * height;
+  const cells = values.slice(0, total).map((value) =>
+    value === 1 || value === true || value === "1" || value === "#" ? 1 : 0
+  );
+  while (cells.length < total) cells.push(0);
+  return cells;
+}
+
+function getPuzzleSolutionCells(puzzle) {
+  const width = Number(puzzle?.width);
+  const height = Number(puzzle?.height);
+  if (!puzzle || !Number.isInteger(width) || !Number.isInteger(height) || width <= 0 || height <= 0) return null;
+
+  const direct = normalizePuzzleSolutionCells(puzzle.solution || puzzle.cells || puzzle.answer || puzzle.answers, width, height);
+  if (direct) return direct;
+
+  const packedKeys = [
+    "solution_bits",
+    "solutionBits",
+    "solution_bits_base64",
+    "solutionBase64",
+    "solution_hex",
+    "solutionHex",
+  ];
+  for (const key of packedKeys) {
+    const value = puzzle[key];
+    const fromBytes = cellsFromPackedBytes(value, width, height);
+    if (fromBytes) return fromBytes;
+    if (typeof value === "string") {
+      const fromHex = cellsFromPackedHex(value, width, height);
+      if (fromHex) return fromHex;
+      const fromBase64 = cellsFromPackedBase64(value, width, height);
+      if (fromBase64) return fromBase64;
+    }
+  }
+  return null;
+}
+
 function getRuns(line) {
   const runs = [];
   let count = 0;
@@ -1231,10 +1416,73 @@ function cluesEqual(line, clues) {
   return true;
 }
 
+function clamp01(value) {
+  return Math.max(0, Math.min(1, Number(value) || 0));
+}
+
+function easeOutCubic(value) {
+  const t = clamp01(value);
+  return 1 - (1 - t) ** 3;
+}
+
+function getSolvedPaintDescriptor(puzzle) {
+  return [
+    puzzle?.creatorPuzzleId,
+    puzzle?.id,
+    puzzle?.titleKo,
+    puzzle?.titleEn,
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+}
+
+function solvedPaintKeyMatches(descriptor, key) {
+  const normalizedKey = String(key || "").toLowerCase().trim();
+  if (!normalizedKey) return false;
+  if (/^[a-z0-9 -]+$/.test(normalizedKey)) {
+    const escaped = normalizedKey.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    return new RegExp(`(^|[^a-z0-9])${escaped}($|[^a-z0-9])`).test(descriptor);
+  }
+  return descriptor.includes(normalizedKey);
+}
+
+function getSolvedPaintPalette(puzzle) {
+  const descriptor = getSolvedPaintDescriptor(puzzle);
+  const rule = SOLVED_PAINT_PALETTE_RULES.find((item) =>
+    item.keys.some((key) => solvedPaintKeyMatches(descriptor, key))
+  );
+  return rule?.colors || SOLVED_PAINT_DEFAULT_PALETTE;
+}
+
+function getSolvedPaintColor(puzzle, x, y, palette = getSolvedPaintPalette(puzzle)) {
+  const [base, accent = base, shade = base, light = accent] = palette;
+  const width = Math.max(1, Number(puzzle?.width || 1));
+  const height = Math.max(1, Number(puzzle?.height || 1));
+  const xRatio = width <= 1 ? 0.5 : x / (width - 1);
+  const yRatio = height <= 1 ? 0.5 : y / (height - 1);
+  const edgeCell = x === 0 || y === 0 || x === width - 1 || y === height - 1;
+  const softHighlight = yRatio < 0.24 && (x + y) % 2 === 0;
+  const diagonalGlint = Math.abs(xRatio - yRatio) < 0.12 && (x + y) % 3 === 0;
+
+  if (softHighlight) return light;
+  if (edgeCell || yRatio > 0.72) return shade;
+  if (diagonalGlint) return accent;
+  return base;
+}
+
+function getSolvedPreviewPixelStyle(puzzle, index, value, palette = getSolvedPaintPalette(puzzle)) {
+  if (value !== 1 && value !== "#") return undefined;
+  const width = Math.max(1, Number(puzzle?.width || 1));
+  const x = index % width;
+  const y = Math.floor(index / width);
+  return { backgroundColor: getSolvedPaintColor(puzzle, x, y, palette) };
+}
+
 function clampCreatorSize(value) {
   const parsed = Number.parseInt(String(value || "").trim(), 10);
-  if (!Number.isFinite(parsed)) return 12;
-  return Math.max(5, Math.min(40, parsed));
+  if (!Number.isFinite(parsed)) return CREATOR_DEFAULT_SIZE;
+  return Math.max(5, Math.min(CREATOR_MAX_SIZE, parsed));
 }
 
 function normalizeCreatorCells(cells, total) {
@@ -1266,6 +1514,8 @@ function buildCreatorPuzzle(width, height, cells, meta = {}) {
     isCustomPreview: Boolean(meta.isPreview),
     isCustomLibrary: Boolean(meta.isLibrary),
     isCommunityPuzzle: Boolean(meta.isCommunity),
+    isDailyPuzzle: Boolean(meta.isDailyPuzzle),
+    dailyDate: meta.dailyDate || "",
     creatorPuzzleId: String(meta.creatorPuzzleId || meta.id || ""),
     createdByNickname: meta.createdByNickname || "",
     titleKo: meta.titleKo || "",
@@ -1287,8 +1537,8 @@ function createCreatorSample(id, titleKo, titleEn, rows) {
   };
 }
 
-const DEFAULT_CREATOR_SAMPLE_PUZZLES = GENERATED_CREATOR_SAMPLE_PUZZLES.map((sample) =>
-  ({
+const DEFAULT_CREATOR_SAMPLE_PUZZLES = GENERATED_CREATOR_SAMPLE_PUZZLES
+  .map((sample) => ({
     ...createCreatorSample(sample.id, sample.titleKo, sample.titleEn, sample.rows),
     sizeGroup: sample.sizeGroup || "medium",
     groupTitleKo: sample.groupTitleKo || "미디엄",
@@ -1296,8 +1546,451 @@ const DEFAULT_CREATOR_SAMPLE_PUZZLES = GENERATED_CREATOR_SAMPLE_PUZZLES.map((sam
     license: sample.license || "",
     targetSize: sample.targetSize || sample.width || 0,
     sourceUrl: sample.sourceUrl || "",
-  })
-);
+    isSolved: sample.isSolved === true,
+    solvedAt: sample.solvedAt || "",
+    bestElapsedSec: Number(sample.bestElapsedSec || 0),
+    lastElapsedSec: Number(sample.lastElapsedSec || 0),
+    solveCount: Number(sample.solveCount || 0),
+  }));
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+const KST_OFFSET_MS = 9 * 60 * 60 * 1000;
+const DAILY_WEEKDAY_LABELS_KO = ["일", "월", "화", "수", "목", "금", "토"];
+const DAILY_WEEKDAY_LABELS_EN = ["S", "M", "T", "W", "T", "F", "S"];
+
+function makeDateKey(year, month, day) {
+  return `${String(year).padStart(4, "0")}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+}
+
+function parseDateKeyParts(dateKey) {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(dateKey || ""));
+  if (!match) return null;
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  if (!Number.isFinite(year) || !Number.isFinite(month) || !Number.isFinite(day)) return null;
+  return { year, month, day };
+}
+
+function getKstDateKey(date = new Date()) {
+  const shifted = new Date(date.getTime() + KST_OFFSET_MS);
+  return makeDateKey(shifted.getUTCFullYear(), shifted.getUTCMonth() + 1, shifted.getUTCDate());
+}
+
+function addDaysToDateKey(dateKey, amount) {
+  const parts = parseDateKeyParts(dateKey) || parseDateKeyParts(getKstDateKey());
+  const next = new Date(Date.UTC(parts.year, parts.month - 1, parts.day) + amount * DAY_MS);
+  return makeDateKey(next.getUTCFullYear(), next.getUTCMonth() + 1, next.getUTCDate());
+}
+
+function normalizeDailyPuzzleHistory(value) {
+  const source = value && typeof value === "object" && value.solves && typeof value.solves === "object"
+    ? value.solves
+    : {};
+  const solves = {};
+  Object.entries(source).forEach(([dateKey, entry]) => {
+    if (!parseDateKeyParts(dateKey)) return;
+    solves[dateKey] = entry && typeof entry === "object" ? { ...entry } : { solvedAt: Number(entry || 0) };
+  });
+  return { solves };
+}
+
+function clearStoredDailyPuzzleState() {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.removeItem(DAILY_PUZZLE_HISTORY_KEY);
+    Object.keys(localStorage).forEach((key) => {
+      if (key.startsWith("nonogram-progress-daily-")) localStorage.removeItem(key);
+    });
+  } catch {
+    // Daily quiz test state is disposable.
+  }
+}
+
+function readDailyPuzzleHistory() {
+  if (!SHOULD_PERSIST_DAILY_PUZZLE_HISTORY) {
+    clearStoredDailyPuzzleState();
+    return { solves: {} };
+  }
+  if (typeof window === "undefined") return { solves: {} };
+  try {
+    const raw = localStorage.getItem(DAILY_PUZZLE_HISTORY_KEY);
+    if (!raw) return { solves: {} };
+    return normalizeDailyPuzzleHistory(JSON.parse(raw));
+  } catch {
+    return { solves: {} };
+  }
+}
+
+function writeDailyPuzzleHistory(value) {
+  if (!SHOULD_PERSIST_DAILY_PUZZLE_HISTORY) return;
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.setItem(DAILY_PUZZLE_HISTORY_KEY, JSON.stringify(normalizeDailyPuzzleHistory(value)));
+  } catch {
+    // Daily puzzle history is a retention helper, so storage failures should not block play.
+  }
+}
+
+function getDailyPuzzleIndex(dateKey, count) {
+  if (!count) return 0;
+  let hash = 2166136261;
+  for (let i = 0; i < String(dateKey).length; i += 1) {
+    hash ^= String(dateKey).charCodeAt(i);
+    hash = Math.imul(hash, 16777619) >>> 0;
+  }
+  return hash % count;
+}
+
+function getDailyPuzzleForDate(samples, dateKey) {
+  const pool = Array.isArray(samples) ? samples.filter((sample) => sample?.sizeGroup === "small") : [];
+  if (!pool.length) return null;
+  return pool[getDailyPuzzleIndex(dateKey, pool.length)];
+}
+
+function getDaysInMonth(year, month) {
+  return new Date(Date.UTC(year, month, 0)).getUTCDate();
+}
+
+function getDailyMonthCells(dateKey, history) {
+  const parts = parseDateKeyParts(dateKey) || parseDateKeyParts(getKstDateKey());
+  const firstDay = new Date(Date.UTC(parts.year, parts.month - 1, 1)).getUTCDay();
+  const daysInMonth = getDaysInMonth(parts.year, parts.month);
+  const solves = normalizeDailyPuzzleHistory(history).solves;
+  const cells = [];
+
+  for (let index = 0; index < firstDay; index += 1) {
+    cells.push({ key: `blank-start-${index}`, isBlank: true });
+  }
+
+  for (let day = 1; day <= daysInMonth; day += 1) {
+    const cellDateKey = makeDateKey(parts.year, parts.month, day);
+    cells.push({
+      key: cellDateKey,
+      dateKey: cellDateKey,
+      day,
+      isSolved: Boolean(solves[cellDateKey]),
+      isToday: cellDateKey === dateKey,
+      isFuture: cellDateKey > dateKey,
+      isBlank: false,
+    });
+  }
+
+  while (cells.length < 42) {
+    cells.push({ key: `blank-end-${cells.length}`, isBlank: true });
+  }
+  return cells.slice(0, 42);
+}
+
+function getDailyPuzzleStreak(history, todayKey) {
+  const solves = normalizeDailyPuzzleHistory(history).solves;
+  let cursor = solves[todayKey] ? todayKey : addDaysToDateKey(todayKey, -1);
+  let streak = 0;
+  while (solves[cursor]) {
+    streak += 1;
+    cursor = addDaysToDateKey(cursor, -1);
+    if (streak > 366) break;
+  }
+  return streak;
+}
+
+function getDailyMonthSolvedCount(history, todayKey) {
+  const parts = parseDateKeyParts(todayKey) || parseDateKeyParts(getKstDateKey());
+  const prefix = `${String(parts.year).padStart(4, "0")}-${String(parts.month).padStart(2, "0")}-`;
+  const solves = normalizeDailyPuzzleHistory(history).solves;
+  return Object.keys(solves).filter((dateKey) => dateKey.startsWith(prefix) && dateKey <= todayKey).length;
+}
+
+function formatDailyMonthLabel(dateKey, lang) {
+  const parts = parseDateKeyParts(dateKey) || parseDateKeyParts(getKstDateKey());
+  if (lang === "ko") return `${parts.month}월`;
+  return new Intl.DateTimeFormat("en-US", { month: "short" }).format(new Date(Date.UTC(parts.year, parts.month - 1, 1)));
+}
+
+function getDailySolvedDateKey(solvedPuzzle) {
+  return String(solvedPuzzle?.dailyDate || "").trim() || getKstDateKey();
+}
+
+function buildDailySolvedHistory(history, solvedPuzzle, solvedAt = Date.now()) {
+  const dateKey = getDailySolvedDateKey(solvedPuzzle);
+  const puzzleId = String(solvedPuzzle?.creatorPuzzleId || solvedPuzzle?.id || "").trim();
+  const current = normalizeDailyPuzzleHistory(history);
+  return {
+    solves: {
+      ...current.solves,
+      [dateKey]: {
+        puzzleId,
+        titleKo: solvedPuzzle?.titleKo || "",
+        titleEn: solvedPuzzle?.titleEn || "",
+        solvedAt,
+      },
+    },
+  };
+}
+
+function buildDailyCompletionResult(solvedPuzzle, history, elapsedMs, elapsedSec = 0) {
+  const dateKey = getDailySolvedDateKey(solvedPuzzle);
+  const nextHistory = buildDailySolvedHistory(history, solvedPuzzle);
+  return {
+    dateKey,
+    titleKo: solvedPuzzle?.titleKo || "",
+    titleEn: solvedPuzzle?.titleEn || "",
+    sizeText: solvedPuzzle?.width && solvedPuzzle?.height ? `${solvedPuzzle.width}x${solvedPuzzle.height}` : "",
+    elapsedMs: Math.max(0, Number(elapsedMs || 0)),
+    elapsedSec: Math.max(0, Number(elapsedSec || 0)),
+    streak: getDailyPuzzleStreak(nextHistory, dateKey),
+    monthSolvedCount: getDailyMonthSolvedCount(nextHistory, dateKey),
+  };
+}
+
+const DAILY_MISSION_DEFINITIONS = [
+  {
+    id: "daily-quiz",
+    events: ["daily_solve"],
+    target: 1,
+    xp: 80,
+    uniqueEvent: true,
+    titleKo: "일일퀴즈 완료",
+    titleEn: "Clear daily quiz",
+    descKo: "오늘 퍼즐 1개",
+    descEn: "1 daily puzzle",
+  },
+  {
+    id: "daily-theme-3",
+    events: ["theme_solve"],
+    target: 3,
+    xp: 90,
+    titleKo: "테마 3개 풀기",
+    titleEn: "Clear 3 themes",
+    descKo: "스몰 테마 퍼즐",
+    descEn: "Small theme puzzles",
+  },
+  {
+    id: "daily-total-5",
+    events: ["daily_solve", "theme_solve"],
+    target: 5,
+    xp: 120,
+    uniqueEvent: true,
+    titleKo: "퍼즐 5개 완료",
+    titleEn: "Clear 5 puzzles",
+    descKo: "짧게 자주 풀기",
+    descEn: "Short play streak",
+  },
+];
+
+const WEEKLY_MISSION_DEFINITIONS = [
+  {
+    id: "weekly-daily-5",
+    events: ["daily_solve"],
+    target: 5,
+    xp: 300,
+    uniqueEvent: true,
+    titleKo: "일일퀴즈 5일",
+    titleEn: "5 daily quizzes",
+    descKo: "같은 날짜 중복 제외",
+    descEn: "Distinct days only",
+  },
+  {
+    id: "weekly-theme-15",
+    events: ["theme_solve"],
+    target: 15,
+    xp: 360,
+    titleKo: "테마 15개 완성",
+    titleEn: "Clear 15 themes",
+    descKo: "도감 채우기",
+    descEn: "Fill the collection",
+  },
+  {
+    id: "weekly-ranking",
+    events: ["ranking_visit"],
+    target: 1,
+    xp: 120,
+    uniqueEvent: true,
+    titleKo: "랭킹 확인",
+    titleEn: "Check ranking",
+    descKo: "이번 주 위치 보기",
+    descEn: "Check your weekly spot",
+  },
+];
+
+function getMissionWeekKey(dateKey = getKstDateKey()) {
+  const parts = parseDateKeyParts(dateKey) || parseDateKeyParts(getKstDateKey());
+  const dateMs = Date.UTC(parts.year, parts.month - 1, parts.day);
+  const weekday = new Date(dateMs).getUTCDay();
+  const mondayOffset = (weekday + 6) % 7;
+  const monday = new Date(dateMs - mondayOffset * DAY_MS);
+  return makeDateKey(monday.getUTCFullYear(), monday.getUTCMonth() + 1, monday.getUTCDate());
+}
+
+function formatMissionWeekLabel(weekKey, lang) {
+  const start = parseDateKeyParts(weekKey) || parseDateKeyParts(getMissionWeekKey());
+  const endKey = addDaysToDateKey(makeDateKey(start.year, start.month, start.day), 6);
+  const end = parseDateKeyParts(endKey) || start;
+  if (lang === "ko") return `${start.month}.${start.day}-${end.month}.${end.day}`;
+  return `${start.month}/${start.day}-${end.month}/${end.day}`;
+}
+
+function createMissionBucket(periodKey) {
+  return { periodKey, progress: {}, rewarded: {}, seen: {} };
+}
+
+function normalizeMissionBucket(bucket, periodKey) {
+  if (!bucket || typeof bucket !== "object" || bucket.periodKey !== periodKey) {
+    return createMissionBucket(periodKey);
+  }
+  return {
+    periodKey,
+    progress: bucket.progress && typeof bucket.progress === "object" ? { ...bucket.progress } : {},
+    rewarded: bucket.rewarded && typeof bucket.rewarded === "object" ? { ...bucket.rewarded } : {},
+    seen: bucket.seen && typeof bucket.seen === "object" ? { ...bucket.seen } : {},
+  };
+}
+
+function normalizeMissionState(value, dateKey = getKstDateKey()) {
+  const source = value && typeof value === "object" ? value : {};
+  return {
+    version: 1,
+    totalXp: Math.max(0, Number(source.totalXp || 0)),
+    daily: normalizeMissionBucket(source.daily, dateKey),
+    weekly: normalizeMissionBucket(source.weekly, getMissionWeekKey(dateKey)),
+  };
+}
+
+function readMissionState() {
+  if (!SHOULD_PERSIST_MISSION_STATE) {
+    if (typeof window !== "undefined") {
+      try {
+        localStorage.removeItem(MISSION_STATE_KEY);
+      } catch {
+        // Mission test state is disposable.
+      }
+    }
+    return normalizeMissionState(null);
+  }
+  if (typeof window === "undefined") return normalizeMissionState(null);
+  try {
+    const raw = localStorage.getItem(MISSION_STATE_KEY);
+    return normalizeMissionState(raw ? JSON.parse(raw) : null);
+  } catch {
+    return normalizeMissionState(null);
+  }
+}
+
+function writeMissionState(value) {
+  if (!SHOULD_PERSIST_MISSION_STATE) return;
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.setItem(MISSION_STATE_KEY, JSON.stringify(normalizeMissionState(value)));
+  } catch {
+    // Mission progress is a local prototype until server sync lands.
+  }
+}
+
+function getMissionLevelNeed(level) {
+  return 180 + Math.max(0, Number(level || 1) - 1) * 70;
+}
+
+function getMissionLevelInfo(totalXp) {
+  let remaining = Math.max(0, Number(totalXp || 0));
+  let level = 1;
+  let spentXp = 0;
+  while (remaining >= getMissionLevelNeed(level) && level < 999) {
+    const need = getMissionLevelNeed(level);
+    remaining -= need;
+    spentXp += need;
+    level += 1;
+  }
+  const nextXp = getMissionLevelNeed(level);
+  return {
+    level,
+    totalXp: Math.max(0, Number(totalXp || 0)),
+    currentXp: remaining,
+    nextXp,
+    spentXp,
+    progressPercent: nextXp ? Math.min(100, Math.round((remaining / nextXp) * 100)) : 0,
+  };
+}
+
+function applyMissionDefinitions(bucket, definitions, eventName, amount, eventToken) {
+  let xpGained = 0;
+  let changed = false;
+  const completed = [];
+  const nextBucket = {
+    ...bucket,
+    progress: { ...bucket.progress },
+    rewarded: { ...bucket.rewarded },
+    seen: { ...bucket.seen },
+  };
+
+  definitions.forEach((mission) => {
+    if (!mission.events.includes(eventName)) return;
+    const seenKey = mission.uniqueEvent && eventToken ? `${mission.id}:${eventName}:${eventToken}` : "";
+    if (seenKey && nextBucket.seen[seenKey]) return;
+    const current = Math.min(mission.target, Math.max(0, Number(nextBucket.progress[mission.id] || 0)));
+    if (current >= mission.target) {
+      if (seenKey) nextBucket.seen[seenKey] = true;
+      return;
+    }
+    const next = Math.min(mission.target, current + amount);
+    if (next !== current) {
+      nextBucket.progress[mission.id] = next;
+      changed = true;
+    }
+    if (seenKey) {
+      nextBucket.seen[seenKey] = true;
+      changed = true;
+    }
+    if (next >= mission.target && !nextBucket.rewarded[mission.id]) {
+      nextBucket.rewarded[mission.id] = true;
+      xpGained += mission.xp;
+      completed.push(mission);
+      changed = true;
+    }
+  });
+
+  return { bucket: nextBucket, xpGained, completed, changed };
+}
+
+function applyMissionEvent(state, eventName, options = {}) {
+  const amount = Math.max(1, Number(options.amount || 1));
+  const dateKey = options.dateKey || getKstDateKey();
+  const eventToken = options.eventToken || "";
+  const normalized = normalizeMissionState(state, dateKey);
+  const levelBefore = getMissionLevelInfo(normalized.totalXp);
+  const dailyResult = applyMissionDefinitions(normalized.daily, DAILY_MISSION_DEFINITIONS, eventName, amount, eventToken);
+  const weeklyResult = applyMissionDefinitions(normalized.weekly, WEEKLY_MISSION_DEFINITIONS, eventName, amount, eventToken);
+  const xpGained = dailyResult.xpGained + weeklyResult.xpGained;
+  const nextState = {
+    ...normalized,
+    totalXp: normalized.totalXp + xpGained,
+    daily: dailyResult.bucket,
+    weekly: weeklyResult.bucket,
+  };
+  const levelAfter = getMissionLevelInfo(nextState.totalXp);
+  return {
+    state: nextState,
+    xpGained,
+    completed: [...dailyResult.completed, ...weeklyResult.completed],
+    changed: dailyResult.changed || weeklyResult.changed || xpGained > 0,
+    levelBefore,
+    levelAfter,
+  };
+}
+
+function buildMissionViewItems(definitions, bucket, lang) {
+  return definitions.map((mission) => {
+    const progress = Math.min(mission.target, Math.max(0, Number(bucket?.progress?.[mission.id] || 0)));
+    const isComplete = progress >= mission.target;
+    return {
+      ...mission,
+      title: lang === "ko" ? mission.titleKo : mission.titleEn,
+      desc: lang === "ko" ? mission.descKo : mission.descEn,
+      progress,
+      isComplete,
+      progressPercent: mission.target ? Math.min(100, Math.round((progress / mission.target) * 100)) : 0,
+    };
+  });
+}
 
 const CREATOR_SAMPLE_GROUP_ORDER = ["small", "medium", "large", "xlarge"];
 const CREATOR_GROUP_LABELS = {
@@ -1306,6 +1999,75 @@ const CREATOR_GROUP_LABELS = {
   large: { ko: "라지", en: "Large" },
   xlarge: { ko: "엑스라지", en: "XLarge" },
 };
+
+const THEME_CATEGORY_DEFINITIONS = [
+  { key: "all", ko: "전체", en: "All", keys: [] },
+  {
+    key: "animal",
+    ko: "동물",
+    en: "Animals",
+    keys: ["cat", "dog", "rabbit", "horse", "bird", "fish", "ant", "bug", "butterfly", "paw", "cow", "turtle", "고양이", "개", "토끼", "말", "새", "물고기", "개미"],
+  },
+  {
+    key: "food",
+    ko: "음식",
+    en: "Food",
+    keys: ["cake", "pizza", "burger", "coffee", "beer", "bowl food", "cookie", "ice cream", "fork", "knife", "apple", "bread", "cake", "케이크", "피자", "커피", "맥주", "음식", "사과", "빵"],
+  },
+  {
+    key: "nature",
+    ko: "자연",
+    en: "Nature",
+    keys: ["flower", "tree", "leaf", "moon", "sun", "cloud", "star", "fire", "mountain", "snowflake", "rain", "umbrella", "planet", "달", "해", "구름", "별", "불", "꽃", "나무", "잎", "산", "눈"],
+  },
+  {
+    key: "vehicle",
+    ko: "탈것",
+    en: "Vehicles",
+    keys: ["car", "bus", "truck", "airplane", "rocket", "bicycle", "motorcycle", "train", "boat", "ambulance", "taxi", "scooter", "자동차", "버스", "트럭", "비행기", "로켓", "자전거", "기차", "배", "구급차"],
+  },
+  {
+    key: "place",
+    ko: "공간",
+    en: "Places",
+    keys: ["house", "castle", "building", "storefront", "bank", "map pin", "tent", "lighthouse", "city", "factory", "warehouse", "church", "집", "성", "건물", "가게", "지도", "핀", "도시"],
+  },
+  {
+    key: "play",
+    ko: "놀이",
+    en: "Play",
+    keys: ["basketball", "soccer", "baseball", "tennis", "game", "dice", "puzzle", "music", "guitar", "balloon", "confetti", "ticket", "농구", "축구", "야구", "게임", "주사위", "퍼즐", "음표", "티켓", "말풍선"],
+  },
+  {
+    key: "object",
+    ko: "생활",
+    en: "Everyday",
+    keys: ["gift", "book", "notebook", "camera", "bell", "key", "light bulb", "microphone", "phone", "watch", "wallet", "backpack", "basket", "computer", "photo", "bookmark", "cardholder", "hat", "선물", "책", "노트", "카메라", "종", "열쇠", "전구", "마이크", "사진", "북마크", "지갑", "배낭", "모자"],
+  },
+  {
+    key: "symbol",
+    ko: "상징",
+    en: "Symbols",
+    keys: ["heart", "shield", "badge", "medal", "trophy", "thumb", "check", "sparkles", "crown", "flag", "seal", "warning", "하트", "방패", "배지", "메달", "트로피", "좋아요", "반짝임", "왕관", "깃발"],
+  },
+];
+
+function getThemeCategoryDefinition(categoryKey) {
+  return THEME_CATEGORY_DEFINITIONS.find((category) => category.key === categoryKey) || THEME_CATEGORY_DEFINITIONS[0];
+}
+
+function getThemeCategoryLabel(categoryKey, lang) {
+  const category = getThemeCategoryDefinition(categoryKey);
+  return lang === "ko" ? category.ko : category.en;
+}
+
+function getThemePuzzleCategoryKey(sample) {
+  const descriptor = getSolvedPaintDescriptor(sample);
+  const category = THEME_CATEGORY_DEFINITIONS.find(
+    (item) => item.key !== "all" && item.keys.some((key) => solvedPaintKeyMatches(descriptor, key))
+  );
+  return category?.key || "object";
+}
 
 async function parseJsonSafe(res) {
   const contentType = res.headers.get("content-type") || "";
@@ -1336,11 +2098,13 @@ function isRaceOnlyStatusMessage(message) {
 function App() {
   const [playMode, setPlayMode] = useState(() => {
     if (typeof window === "undefined") return "menu";
-    return getModeFromPath(window.location.pathname);
+    const initialMode = getModeFromPath(window.location.pathname);
+    if (IS_APPS_IN_TOSS && !["menu", "single", "tutorial", "ranking"].includes(initialMode)) return "menu";
+    return initialMode;
   }); // menu | single | create | multi | pvp | tutorial | auth | ranking | replay_hall
-  const [selectedSize, setSelectedSize] = useState("25x25");
-  const [creatorWidthInput, setCreatorWidthInput] = useState("12");
-  const [creatorHeightInput, setCreatorHeightInput] = useState("12");
+  const [selectedSize, setSelectedSize] = useState(IS_APPS_IN_TOSS ? APPS_IN_TOSS_DEFAULT_SIZE : "25x25");
+  const [creatorWidthInput, setCreatorWidthInput] = useState(String(CREATOR_DEFAULT_SIZE));
+  const [creatorHeightInput, setCreatorHeightInput] = useState(String(CREATOR_DEFAULT_SIZE));
   const [creatorTitleInput, setCreatorTitleInput] = useState("");
   const [creatorSamples, setCreatorSamples] = useState(DEFAULT_CREATOR_SAMPLE_PUZZLES);
   const [creatorSamplesLoading, setCreatorSamplesLoading] = useState(false);
@@ -1348,7 +2112,15 @@ function App() {
   const [creatorMyPuzzles, setCreatorMyPuzzles] = useState([]);
   const [creatorMyPuzzlesLoading, setCreatorMyPuzzlesLoading] = useState(false);
   const [creatorMyPuzzlesOpen, setCreatorMyPuzzlesOpen] = useState(false);
+  const [dailyPuzzleHistory, setDailyPuzzleHistory] = useState(() => readDailyPuzzleHistory());
+  const [dailyPuzzleStampDate, setDailyPuzzleStampDate] = useState("");
+  const [dailyCompletionResult, setDailyCompletionResult] = useState(null);
+  const [missionState, setMissionState] = useState(() => readMissionState());
+  const [missionToast, setMissionToast] = useState(null);
+  const [missionRewardFx, setMissionRewardFx] = useState(null);
+  const [showMissionSheet, setShowMissionSheet] = useState(false);
   const [customSizeGroup, setCustomSizeGroup] = useState("small");
+  const [customThemeCategory, setCustomThemeCategory] = useState("all");
   const [communityPuzzles, setCommunityPuzzles] = useState([]);
   const [communityLoading, setCommunityLoading] = useState(false);
   const [communitySizeGroup, setCommunitySizeGroup] = useState("small");
@@ -1368,6 +2140,13 @@ function App() {
   const [puzzle, setPuzzle] = useState(null);
   const [cells, setCells] = useState([]); // 0 empty, 1 filled, 2 marked(X)
   const [solvedRevealProgress, setSolvedRevealProgress] = useState(0);
+  const [puzzleHp, setPuzzleHp] = useState(PUZZLE_MAX_HP);
+  const [puzzleHpDamage, setPuzzleHpDamage] = useState(null);
+  const [puzzleHints, setPuzzleHints] = useState(PUZZLE_MAX_HINTS);
+  const [puzzleHintReveal, setPuzzleHintReveal] = useState(null);
+  const [hintAdLoading, setHintAdLoading] = useState(false);
+  const [reviveAdLoading, setReviveAdLoading] = useState(false);
+  const [reviveAdError, setReviveAdError] = useState("");
   const [status, setStatus] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [activeHints, setActiveHints] = useState(new Set());
@@ -1407,10 +2186,10 @@ function App() {
   const [isMenuTourActive, setIsMenuTourActive] = useState(false);
   const [activeMenuTopTab, setActiveMenuTopTab] = useState("");
   const [lang, setLang] = useState(() => {
+    if (IS_APPS_IN_TOSS) return "ko";
     const saved = localStorage.getItem(LANG_KEY);
     return saved === "en" ? "en" : "ko";
   });
-  const [isDarkMode, setIsDarkMode] = useState(() => localStorage.getItem(THEME_KEY) === "dark");
   const [uiStyleVariant, setUiStyleVariant] = useState(() =>
     normalizeUiStyleVariant(localStorage.getItem(STYLE_VARIANT_KEY))
   );
@@ -1427,9 +2206,8 @@ function App() {
   const [authReturnMode, setAuthReturnMode] = useState("menu");
   const [showNeedLoginPopup, setShowNeedLoginPopup] = useState(false);
   const [needLoginReturnMode, setNeedLoginReturnMode] = useState("multi");
-  const [showPlacementRequiredPopup, setShowPlacementRequiredPopup] = useState(false);
-  const [showPatchNotesModal, setShowPatchNotesModal] = useState(false);
-  const [patchNotesSessionHidden, setPatchNotesSessionHidden] = useState(false);
+  const [tossLoginLoading, setTossLoginLoading] = useState(false);
+  const [viewportWidth, setViewportWidth] = useState(getViewportWidth);
   const [showVoteModal, setShowVoteModal] = useState(false);
   const [activeVote, setActiveVote] = useState(null);
   const [voteSubmitting, setVoteSubmitting] = useState(false);
@@ -1458,22 +2236,9 @@ function App() {
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [mobilePaintMode, setMobilePaintMode] = useState("fill"); // fill | mark
   const [isCoarsePointer, setIsCoarsePointer] = useState(false);
-  const [isNarrowViewport, setIsNarrowViewport] = useState(false);
-  const [mobileBoardScale, setMobileBoardScale] = useState(1);
-  const [mobileBoardFocus, setMobileBoardFocus] = useState(false);
-  const [mobileControlsCollapsed, setMobileControlsCollapsed] = useState(false);
-  const [mobileToolbarPosition, setMobileToolbarPosition] = useState(null);
   const [showMultiResultModal, setShowMultiResultModal] = useState(false);
   const [nowMs, setNowMs] = useState(Date.now());
-  const [soundVolume, setSoundVolume] = useState(() => readInitialSoundVolume());
-  const [showSettingsModal, setShowSettingsModal] = useState(false);
-  const [settingsSaving, setSettingsSaving] = useState(false);
-  const [settingsError, setSettingsError] = useState("");
-  const [settingsDraft, setSettingsDraft] = useState({
-    lang: "en",
-    theme: "light",
-    soundVolume: 100,
-  });
+  const soundVolume = 100;
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [profileModalMode, setProfileModalMode] = useState("self"); // self | public
   const [profileModalLoading, setProfileModalLoading] = useState(false);
@@ -1481,6 +2246,7 @@ function App() {
   const [profileModalError, setProfileModalError] = useState("");
   const [profileModalData, setProfileModalData] = useState(null);
   const [profileDraftAvatarKey, setProfileDraftAvatarKey] = useState(DEFAULT_PROFILE_AVATAR_KEY);
+  const [profileDraftNickname, setProfileDraftNickname] = useState("");
   const [profileAvatarTab, setProfileAvatarTab] = useState("default"); // default | special
   const [profilePickerOpen, setProfilePickerOpen] = useState(false);
   const [publicProfileAvatarCache, setPublicProfileAvatarCache] = useState({});
@@ -1514,7 +2280,6 @@ function App() {
   const [matchSimLogs, setMatchSimLogs] = useState([]);
   const [matchSimFound, setMatchSimFound] = useState(null);
   const [matchFlowTest, setMatchFlowTest] = useState(null);
-  const mobileBoardViewportRef = useRef(null);
   const boardRef = useRef(null);
   const canvasRef = useRef(null);
   const chatBodyRef = useRef(null);
@@ -1524,6 +2289,7 @@ function App() {
   const lastPaintIndexRef = useRef(null);
   const strokeBaseRef = useRef(null);
   const strokeChangedRef = useRef(false);
+  const strokeMistakeChargedRef = useRef(false);
   const cellValuesRef = useRef([]);
   const pendingPaintRef = useRef(new Map());
   const frameRef = useRef(0);
@@ -1552,9 +2318,6 @@ function App() {
   const pvpAuthRefreshDoneRoomRef = useRef("");
   const pvpShowdownSeenRef = useRef("");
   const votePromptedTokenRef = useRef("");
-  const mobilePinchRef = useRef(null);
-  const mobileToolbarRef = useRef(null);
-  const mobileToolbarDragRef = useRef(null);
   const raceFinishedSentRef = useRef(false);
   const raceResultShownRef = useRef(false);
   const raceProgressLastSentRef = useRef(0);
@@ -1569,6 +2332,10 @@ function App() {
   const multiResultShownKeyRef = useRef("");
   const victoryConfettiTimersRef = useRef([]);
   const solvedRevealRafRef = useRef(0);
+  const dailyStampTimerRef = useRef(0);
+  const dailyResultCalendarTimerRef = useRef(0);
+  const missionToastTimerRef = useRef(0);
+  const missionRewardFxTimerRef = useRef(0);
   const puzzleStartedAtMsRef = useRef(0);
   const deferredCells = useDeferredValue(cells);
 
@@ -1584,7 +2351,7 @@ function App() {
   }, [adminCreatorKey, authHeaders]);
   const isLoggedIn = Boolean(authToken && authUser);
 
-  const L = (ko, en) => (lang === "ko" ? ko : en);
+  const L = (ko, en) => (IS_APPS_IN_TOSS || lang === "ko" ? ko : en);
   const normalizeClientEmail = (value) => String(value || "").trim().toLowerCase();
   const clearVictoryConfettiTimers = useCallback(() => {
     if (!victoryConfettiTimersRef.current.length) return;
@@ -1678,11 +2445,27 @@ function App() {
     clearVictoryConfettiTimers();
   }, [clearVictoryConfettiTimers]);
 
+  useEffect(() => () => {
+    if (dailyStampTimerRef.current) window.clearTimeout(dailyStampTimerRef.current);
+    if (dailyResultCalendarTimerRef.current) window.clearTimeout(dailyResultCalendarTimerRef.current);
+    if (missionToastTimerRef.current) window.clearTimeout(missionToastTimerRef.current);
+    if (missionRewardFxTimerRef.current) window.clearTimeout(missionRewardFxTimerRef.current);
+  }, []);
+
+  useEffect(() => {
+    const updateViewportWidth = () => setViewportWidth(getViewportWidth());
+    updateViewportWidth();
+    window.addEventListener("resize", updateViewportWidth);
+    window.visualViewport?.addEventListener("resize", updateViewportWidth);
+    return () => {
+      window.removeEventListener("resize", updateViewportWidth);
+      window.visualViewport?.removeEventListener("resize", updateViewportWidth);
+    };
+  }, []);
+
   const applyUiPreferences = (prefUser) => {
     if (!prefUser || typeof prefUser !== "object") return;
-    setLang(normalizeUiLang(prefUser.ui_lang));
-    setIsDarkMode(normalizeUiTheme(prefUser.ui_theme) === "dark");
-    setSoundVolume(normalizeUiSoundVolume(prefUser.ui_sound_volume, prefUser.ui_sound_on));
+    setLang(IS_APPS_IN_TOSS ? "ko" : normalizeUiLang(prefUser.ui_lang));
   };
 
   const cacheAuthUser = (user, { applyPrefs = false } = {}) => {
@@ -1803,8 +2586,6 @@ function App() {
   };
 
   const buildTierRewardsFromSource = (target) => {
-    const placementDone = target?.placement_done === true || Number(target?.placement_rating || -1) >= 0;
-    if (!placementDone) return [];
     const explicitTierKey = String(target?.placement_tier_key || "").trim().toLowerCase();
     const tierKey =
       Number.isFinite(Number(target?.rating))
@@ -1971,51 +2752,6 @@ function App() {
     };
   };
 
-  const openSettingsModal = () => {
-    setSettingsError("");
-    setSettingsDraft({
-      lang,
-      theme: isDarkMode ? "dark" : "light",
-      soundVolume,
-    });
-    setShowSettingsModal(true);
-  };
-
-  const saveSettings = async () => {
-    const nextUiTheme = settingsDraft.theme === "dark" ? "dark" : "light";
-    const nextStyleVariant = "default";
-    const payload = {
-      ui_lang: normalizeUiLang(settingsDraft.lang),
-      ui_theme: normalizeUiTheme(nextUiTheme),
-      ui_sound_volume: normalizeUiSoundVolume(settingsDraft.soundVolume),
-    };
-    setSettingsError("");
-    setSettingsSaving(true);
-    try {
-      if (isLoggedIn) {
-        const res = await fetch(`${API_BASE}/auth/preferences`, {
-          method: "PUT",
-          headers: { ...authHeaders, "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
-        });
-        const data = await parseJsonSafe(res);
-        if (!res.ok || !data.ok) throw new Error(data.error || L("설정 저장 실패", "Failed to save settings"));
-        cacheAuthUser(data.user, { applyPrefs: true });
-      } else {
-        setLang(payload.ui_lang);
-        setIsDarkMode(payload.ui_theme === "dark");
-        setSoundVolume(payload.ui_sound_volume);
-      }
-      setUiStyleVariant(nextStyleVariant);
-      setShowSettingsModal(false);
-      setStatus(L("설정이 저장되었습니다.", "Settings saved."));
-    } catch (err) {
-      setSettingsError(String(err.message || L("설정 저장 실패", "Failed to save settings")));
-    } finally {
-      setSettingsSaving(false);
-    }
-  };
-
   const closeProfileModal = () => {
     setShowProfileModal(false);
     setProfileModalLoading(false);
@@ -2023,6 +2759,7 @@ function App() {
     setProfileModalError("");
     setProfileModalData(null);
     setProfileDraftAvatarKey(DEFAULT_PROFILE_AVATAR_KEY);
+    setProfileDraftNickname("");
     setProfileAvatarTab("default");
     setProfilePickerOpen(false);
   };
@@ -2037,6 +2774,7 @@ function App() {
     setProfileModalData(null);
     const initialAvatarKey = normalizeProfileAvatarKey(authUser?.profile_avatar_key || DEFAULT_PROFILE_AVATAR_KEY);
     setProfileDraftAvatarKey(initialAvatarKey);
+    setProfileDraftNickname(String(authUser?.nickname || "").slice(0, 24));
     setProfileAvatarTab(isSpecialProfileAvatarKey(initialAvatarKey) ? "special" : "default");
     setProfilePickerOpen(false);
     try {
@@ -2047,6 +2785,7 @@ function App() {
         const fallbackProfile = buildSelfProfileFallback(null, rewardSnapshot, ratingSnapshot);
         setProfileModalData(fallbackProfile);
         setProfileDraftAvatarKey(normalizeProfileAvatarKey(fallbackProfile.profile_avatar_key));
+        setProfileDraftNickname(String(fallbackProfile.nickname || "").slice(0, 24));
         if (fallbackProfile.unlockedSpecialAvatarKeys.length > 0) {
           setProfileAvatarTab("special");
         }
@@ -2058,6 +2797,7 @@ function App() {
       const nextAvatarKey = normalizeProfileAvatarKey(profile?.profile_avatar_key || authUser?.profile_avatar_key || DEFAULT_PROFILE_AVATAR_KEY);
       setProfileModalData(profile);
       setProfileDraftAvatarKey(nextAvatarKey);
+      setProfileDraftNickname(String(profile?.nickname || authUser?.nickname || "").slice(0, 24));
       setProfileAvatarTab(isSpecialProfileAvatarKey(nextAvatarKey) ? "special" : "default");
     } catch (err) {
       const rewardSnapshot = await ensureHallSnapshotForProfile();
@@ -2066,6 +2806,7 @@ function App() {
       setProfileModalData(fallbackProfile);
       const nextAvatarKey = normalizeProfileAvatarKey(fallbackProfile.profile_avatar_key);
       setProfileDraftAvatarKey(nextAvatarKey);
+      setProfileDraftNickname(String(fallbackProfile.nickname || "").slice(0, 24));
       setProfileAvatarTab(
         isSpecialProfileAvatarKey(nextAvatarKey) || fallbackProfile.unlockedSpecialAvatarKeys.length > 0 ? "special" : "default"
       );
@@ -2090,6 +2831,7 @@ function App() {
           setProfileModalError("");
           setProfileModalData(fallbackProfile);
           setProfileDraftAvatarKey(normalizeProfileAvatarKey(fallbackProfile.profile_avatar_key));
+          setProfileDraftNickname("");
         }
       }
       return;
@@ -2105,6 +2847,7 @@ function App() {
     setProfileModalError("");
     setProfileModalData(null);
     setProfileDraftAvatarKey(DEFAULT_PROFILE_AVATAR_KEY);
+    setProfileDraftNickname("");
     setProfileAvatarTab("default");
     setProfilePickerOpen(false);
     try {
@@ -2157,33 +2900,49 @@ function App() {
 
   const saveProfileAvatarSelection = async () => {
     if (!isLoggedIn || profileModalMode !== "self") return;
+    const nextNickname = String(profileDraftNickname || "").trim().slice(0, 24);
+    if (!nextNickname) {
+      setProfileModalError(L("닉네임을 입력해줘.", "Enter your nickname."));
+      return;
+    }
     setProfileModalSaving(true);
     setProfileModalError("");
     try {
       const res = await fetch(`${API_BASE}/profile/me`, {
         method: "PUT",
         headers: { ...authHeaders, "Content-Type": "application/json" },
-        body: JSON.stringify({ profileAvatarKey: profileDraftAvatarKey }),
+        body: JSON.stringify({ profileAvatarKey: profileDraftAvatarKey, nickname: nextNickname }),
       });
       if (res.status === 404) {
         throw new Error(L("프로필 저장 실패", "Failed to save profile."));
       }
       const data = await parseJsonSafe(res);
-      if (!res.ok || !data.ok) throw new Error(data.error || L("프로필 저장 실패", "Failed to save profile."));
+      if (!res.ok || !data.ok) {
+        if (String(data.error || "").includes("nickname already exists")) {
+          throw new Error(L("이미 사용 중인 닉네임입니다.", "Nickname is already in use."));
+        }
+        throw new Error(data.error || L("프로필 저장 실패", "Failed to save profile."));
+      }
       const nextProfile = data.profile || null;
+      const savedNickname = String(nextProfile?.nickname || nextNickname).slice(0, 24);
       if (data.user) {
         writeLocalProfileAvatarOverride(data.user, nextProfile?.profile_avatar_key || profileDraftAvatarKey);
         cacheAuthUser(data.user, { applyPrefs: false });
       }
       setProfileModalData(nextProfile);
       setProfileDraftAvatarKey(normalizeProfileAvatarKey(nextProfile?.profile_avatar_key || profileDraftAvatarKey));
+      setProfileDraftNickname(savedNickname);
       setRaceState((prev) => {
         if (!prev) return prev;
         return {
           ...prev,
           players: (prev.players || []).map((player) =>
             Number(player?.userId) === Number(authUser?.id)
-              ? { ...player, profileAvatarKey: normalizeProfileAvatarKey(nextProfile?.profile_avatar_key || profileDraftAvatarKey) }
+              ? {
+                  ...player,
+                  nickname: savedNickname,
+                  profileAvatarKey: normalizeProfileAvatarKey(nextProfile?.profile_avatar_key || profileDraftAvatarKey),
+                }
               : player
           ),
         };
@@ -2194,12 +2953,20 @@ function App() {
           ...prev,
           players: (prev.players || []).map((player) =>
             Number(player?.userId) === Number(authUser?.id)
-              ? { ...player, profileAvatarKey: normalizeProfileAvatarKey(nextProfile?.profile_avatar_key || profileDraftAvatarKey) }
+              ? {
+                  ...player,
+                  nickname: savedNickname,
+                  profileAvatarKey: normalizeProfileAvatarKey(nextProfile?.profile_avatar_key || profileDraftAvatarKey),
+                }
               : player
           ),
           me:
             prev.me && Number(prev.me.userId) === Number(authUser?.id)
-              ? { ...prev.me, profileAvatarKey: normalizeProfileAvatarKey(nextProfile?.profile_avatar_key || profileDraftAvatarKey) }
+              ? {
+                  ...prev.me,
+                  nickname: savedNickname,
+                  profileAvatarKey: normalizeProfileAvatarKey(nextProfile?.profile_avatar_key || profileDraftAvatarKey),
+                }
               : prev.me,
         };
       });
@@ -2241,18 +3008,6 @@ function App() {
     if (currentPath === targetPath) return;
     window.history.pushState({ mode: playMode }, "", targetPath);
   }, [playMode]);
-
-  useEffect(() => {
-    setPatchNotesSessionHidden(false);
-  }, [authUser?.id]);
-
-  useEffect(() => {
-    if (playMode !== "menu") return;
-    if (!authToken || !authUser?.id) return;
-    if (patchNotesSessionHidden) return;
-    if (String(authUser?.patch_notes_dismissed_version || "") === PATCH_NOTES_VERSION) return;
-    setShowPatchNotesModal(true);
-  }, [playMode, authToken, authUser?.id, authUser?.patch_notes_dismissed_version, patchNotesSessionHidden]);
 
   useEffect(() => {
     const players = Array.isArray(raceState?.players) ? raceState.players : [];
@@ -2304,16 +3059,28 @@ function App() {
   }, [raceState?.players, authToken, authUser?.id, publicProfileAvatarCache]);
 
   useEffect(() => {
-    localStorage.setItem(LANG_KEY, lang);
+    const nextLang = IS_APPS_IN_TOSS ? "ko" : lang;
+    if (IS_APPS_IN_TOSS && lang !== "ko") {
+      setLang("ko");
+      return;
+    }
+    localStorage.setItem(LANG_KEY, nextLang);
   }, [lang]);
 
   useEffect(() => {
+    if (!IS_APPS_IN_TOSS) return;
+    if (!APPS_IN_TOSS_SIZE_KEYS.includes(selectedSize)) {
+      setSelectedSize(APPS_IN_TOSS_DEFAULT_SIZE);
+    }
+  }, [selectedSize]);
+
+  useEffect(() => {
     try {
-      localStorage.setItem(THEME_KEY, isDarkMode ? "dark" : "light");
+      localStorage.removeItem(THEME_KEY);
     } catch {
       // ignore localStorage errors
     }
-  }, [isDarkMode]);
+  }, []);
 
   useEffect(() => {
     try {
@@ -2322,14 +3089,6 @@ function App() {
       // ignore localStorage errors
     }
   }, [uiStyleVariant]);
-
-  useEffect(() => {
-    try {
-      localStorage.setItem(SOUND_KEY, String(soundVolume));
-    } catch {
-      // ignore localStorage errors
-    }
-  }, [soundVolume]);
 
   useEffect(() => {
     try {
@@ -2343,59 +3102,10 @@ function App() {
     }
   }, [adminCreatorKey]);
 
-  const closePatchNotesModal = useCallback(() => {
-    setShowPatchNotesModal(false);
-    setPatchNotesSessionHidden(true);
-  }, []);
-
-  const dismissPatchNotesForever = useCallback(async () => {
-    if (!isLoggedIn) {
-      closePatchNotesModal();
-      return;
-    }
-    try {
-      const res = await fetch(`${API_BASE}/auth/patch-notes/dismiss`, {
-        method: "POST",
-        headers: { ...authHeaders, "Content-Type": "application/json" },
-        body: JSON.stringify({ version: PATCH_NOTES_VERSION }),
-      });
-      const data = await parseJsonSafe(res);
-      if (!res.ok || !data.ok) {
-        throw new Error(data.error || L("패치 노트 저장 실패", "Failed to save patch note preference"));
-      }
-      cacheAuthUser(data.user, { applyPrefs: false });
-      setShowPatchNotesModal(false);
-      setPatchNotesSessionHidden(true);
-    } catch (err) {
-      setStatus(String(err?.message || L("패치 노트 저장 실패", "Failed to save patch note preference")));
-    }
-  }, [API_BASE, authHeaders, cacheAuthUser, closePatchNotesModal, isLoggedIn, L]);
-
-  const openThemePuzzlesFromPatchNotes = useCallback(() => {
-    closePatchNotesModal();
-    setSingleSection("home");
-    setPlayMode("single");
-  }, [closePatchNotesModal]);
-
   useEffect(() => {
     if (typeof window === "undefined" || typeof window.matchMedia !== "function") return;
     const mq = window.matchMedia("(pointer: coarse)");
     const apply = () => setIsCoarsePointer(Boolean(mq.matches));
-    apply();
-    if (typeof mq.addEventListener === "function") {
-      mq.addEventListener("change", apply);
-      return () => mq.removeEventListener("change", apply);
-    }
-    if (typeof mq.addListener === "function") {
-      mq.addListener(apply);
-      return () => mq.removeListener(apply);
-    }
-  }, []);
-
-  useEffect(() => {
-    if (typeof window === "undefined" || typeof window.matchMedia !== "function") return;
-    const mq = window.matchMedia("(max-width: 900px)");
-    const apply = () => setIsNarrowViewport(Boolean(mq.matches));
     apply();
     if (typeof mq.addEventListener === "function") {
       mq.addEventListener("change", apply);
@@ -2547,9 +3257,16 @@ function App() {
   }, [colHints]);
 
   const cellSize = useMemo(() => {
-    if (!puzzle) return 24;
+    if (!puzzle) return IS_APPS_IN_TOSS ? 20 : 24;
+    if (IS_APPS_IN_TOSS && playMode !== "create") {
+      const totalColumns = puzzle.width + Math.max(maxRowHintDepth, 1);
+      const reservedWidth = viewportWidth >= 700 ? 132 : 86;
+      const fittedSize = Math.floor((Math.max(320, viewportWidth) - reservedWidth) / Math.max(totalColumns, 1));
+      const maxSize = viewportWidth >= 700 ? 22 : 20;
+      return Math.max(10, Math.min(maxSize, fittedSize || maxSize));
+    }
     return puzzle.width >= 25 ? 20 : 24;
-  }, [puzzle]);
+  }, [maxRowHintDepth, playMode, puzzle, viewportWidth]);
   const excelSheetCols = useMemo(() => Array.from({ length: 40 }, (_, idx) => toSheetColumnLabel(idx)), []);
   const excelSheetRows = useMemo(() => Array.from({ length: 120 }, (_, idx) => idx + 1), []);
   const excelBoardCols = useMemo(() => {
@@ -2626,7 +3343,13 @@ function App() {
   const shouldShowPuzzleBoard = Boolean(
     puzzle && (((isSingleSoloMode || isModeCreate) && !isInRaceRoom) || ((isModeMulti || isModePvp) && isInRaceRoom))
   );
-  const isMobileBoardUi = shouldShowPuzzleBoard && isCoarsePointer && isNarrowViewport;
+  const isHpPuzzleMode = shouldShowPuzzleBoard && !isModeCreate && !isInRaceRoom;
+  const shouldStopSoloElapsedTimer = !isInRaceRoom && (isModeSingle || isModeTutorial);
+  const shouldShowSingleTimer = shouldShowPuzzleBoard && isModePlacementTest && !isInRaceRoom;
+  const shouldReserveStatusSlot = shouldShowPuzzleBoard && !isInRaceRoom && !isModeAuth;
+  const isPuzzleHpGameOver = isHpPuzzleMode && puzzleHp <= 0 && !isBoardCompleteByHints;
+  const puzzleSolutionCells = useMemo(() => getPuzzleSolutionCells(puzzle), [puzzle]);
+  const canUsePuzzleHint = isHpPuzzleMode && !isPuzzleHpGameOver && !isBoardCompleteByHints;
   const racePhase = raceState?.state || "idle";
   const isRaceLobby = isInRaceRoom && racePhase === "lobby";
   const isRaceCountdown = isInRaceRoom && racePhase === "countdown";
@@ -2634,16 +3357,6 @@ function App() {
   const isRaceFinished = isInRaceRoom && racePhase === "finished";
   const isRacePreStartMasked = isInRaceRoom && (isRaceLobby || isRaceCountdown);
   const canAutoOpenVoteModal = false;
-
-  useEffect(() => {
-    if (isMobileBoardUi) return;
-    setMobileBoardFocus(false);
-    setMobileBoardScale(1);
-    setMobileControlsCollapsed(false);
-    setMobileToolbarPosition(null);
-    mobilePinchRef.current = null;
-    mobileToolbarDragRef.current = null;
-  }, [isMobileBoardUi]);
 
   useEffect(() => {
     if (!isModeCreate || !puzzle) return;
@@ -2654,117 +3367,6 @@ function App() {
     };
   }, [cells, isModeCreate, puzzle]);
 
-  useEffect(() => {
-    if (typeof document === "undefined" || !mobileBoardFocus) return undefined;
-    const prevOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    return () => {
-      document.body.style.overflow = prevOverflow;
-    };
-  }, [mobileBoardFocus]);
-
-  const updateMobileBoardScale = (value) => {
-    const numeric = Number(value);
-    if (!Number.isFinite(numeric)) return;
-    setMobileBoardScale(Math.max(0.5, Math.min(1.9, Number(numeric.toFixed(2)))));
-  };
-
-  const nudgeMobileBoardScale = (delta) => {
-    updateMobileBoardScale(mobileBoardScale + delta);
-  };
-
-  const clampMobileToolbarPosition = (x, y, width = 0, height = 0) => {
-    if (typeof window === "undefined") return { x, y };
-    const margin = 8;
-    const maxX = Math.max(margin, window.innerWidth - width - margin);
-    const maxY = Math.max(margin, window.innerHeight - height - margin);
-    return {
-      x: Math.max(margin, Math.min(maxX, Math.round(x))),
-      y: Math.max(margin, Math.min(maxY, Math.round(y))),
-    };
-  };
-
-  const stopMobileToolbarDrag = () => {
-    mobileToolbarDragRef.current = null;
-    window.removeEventListener("pointermove", handleMobileToolbarPointerMove);
-    window.removeEventListener("pointerup", stopMobileToolbarDrag);
-    window.removeEventListener("pointercancel", stopMobileToolbarDrag);
-  };
-
-  function handleMobileToolbarPointerMove(event) {
-    const drag = mobileToolbarDragRef.current;
-    if (!drag) return;
-    event.preventDefault();
-    const next = clampMobileToolbarPosition(
-      drag.originX + (event.clientX - drag.startX),
-      drag.originY + (event.clientY - drag.startY),
-      drag.width,
-      drag.height
-    );
-    setMobileToolbarPosition(next);
-  }
-
-  const startMobileToolbarDrag = (event) => {
-    if (!isMobileBoardUi) return;
-    const toolbarEl = mobileToolbarRef.current;
-    if (!toolbarEl) return;
-    event.preventDefault();
-    event.stopPropagation();
-    const rect = toolbarEl.getBoundingClientRect();
-    mobileToolbarDragRef.current = {
-      startX: event.clientX,
-      startY: event.clientY,
-      originX: rect.left,
-      originY: rect.top,
-      width: rect.width,
-      height: rect.height,
-    };
-    window.addEventListener("pointermove", handleMobileToolbarPointerMove, { passive: false });
-    window.addEventListener("pointerup", stopMobileToolbarDrag);
-    window.addEventListener("pointercancel", stopMobileToolbarDrag);
-  };
-
-  useEffect(() => {
-    return () => stopMobileToolbarDrag();
-  }, []);
-
-  useEffect(() => {
-    if (!isMobileBoardUi || typeof window === "undefined") return undefined;
-    const syncToolbarPosition = () => {
-      const toolbarEl = mobileToolbarRef.current;
-      if (!toolbarEl) return;
-      const rect = toolbarEl.getBoundingClientRect();
-      setMobileToolbarPosition((prev) => {
-        if (prev && Number.isFinite(prev.x) && Number.isFinite(prev.y)) {
-          const next = clampMobileToolbarPosition(prev.x, prev.y, rect.width, rect.height);
-          if (next.x === prev.x && next.y === prev.y) return prev;
-          return next;
-        }
-        const defaultPos = clampMobileToolbarPosition(
-          (window.innerWidth - rect.width) / 2,
-          mobileBoardFocus ? 10 : 82,
-          rect.width,
-          rect.height
-        );
-        return defaultPos;
-      });
-    };
-    const raf = window.requestAnimationFrame(syncToolbarPosition);
-    window.addEventListener("resize", syncToolbarPosition);
-    return () => {
-      window.cancelAnimationFrame(raf);
-      window.removeEventListener("resize", syncToolbarPosition);
-    };
-  }, [isMobileBoardUi, mobileBoardFocus, mobileControlsCollapsed]);
-
-  const mobileToolbarInlineStyle = mobileToolbarPosition
-    ? {
-        left: `${mobileToolbarPosition.x}px`,
-        top: `${mobileToolbarPosition.y}px`,
-        transform: "none",
-      }
-    : undefined;
-
   const finishActiveStroke = () => {
     if (dragRef.current && strokeChangedRef.current && strokeBaseRef.current) {
       pushUndo(strokeBaseRef.current);
@@ -2773,12 +3375,7 @@ function App() {
     lastPaintIndexRef.current = null;
     strokeBaseRef.current = null;
     strokeChangedRef.current = false;
-  };
-
-  const getTouchDistance = (touchA, touchB) => {
-    const dx = Number(touchA?.clientX || 0) - Number(touchB?.clientX || 0);
-    const dy = Number(touchA?.clientY || 0) - Number(touchB?.clientY || 0);
-    return Math.hypot(dx, dy);
+    strokeMistakeChargedRef.current = false;
   };
 
   useEffect(() => {
@@ -2823,8 +3420,17 @@ function App() {
     if (!raceState || !racePlayerId) return null;
     return raceState.players?.find((p) => p.playerId === racePlayerId) || null;
   }, [raceState, racePlayerId]);
+  const raceTotalAnswerCells = Math.max(0, Number(raceState?.totalAnswerCells || 0));
+  const getRaceProgressPercent = (player) =>
+    raceTotalAnswerCells
+      ? Math.max(0, Math.min(100, Math.round(((Number(player?.correctAnswerCells) || 0) / raceTotalAnswerCells) * 100)))
+      : 0;
+  const myRaceProgressPercent = getRaceProgressPercent(myRacePlayer);
   const isMyRaceFinished = isInRaceRoom && Number.isInteger(myRacePlayer?.elapsedSec);
-  const canInteractBoard = !isInRaceRoom || (isRacePlaying && !isMyRaceFinished);
+  const canInteractBoard =
+    (!isInRaceRoom || (isRacePlaying && !isMyRaceFinished)) &&
+    (!isHpPuzzleMode || puzzleHp > 0 || isBoardCompleteByHints);
+  const canResetBoard = Boolean(puzzle) && (!isInRaceRoom || (isRacePlaying && !isMyRaceFinished));
 
   const raceResultText = useMemo(() => {
     if (!raceState?.winner) return "";
@@ -3044,7 +3650,6 @@ function App() {
     isModePvp &&
     pvpSearching &&
     (
-      pvpMatchState === "ban" ||
       pvpMatchState === "reveal" ||
       (pvpMatchState === "accept" && pvpMatch?.me?.accepted === true)
     );
@@ -3371,15 +3976,24 @@ function App() {
     setPuzzle(p);
     applySnapshot(initial);
     setActiveHints(new Set());
+    setPuzzleHp(PUZZLE_MAX_HP);
+    setPuzzleHpDamage(null);
+    setPuzzleHints(PUZZLE_MAX_HINTS);
+    setPuzzleHintReveal(null);
+    setHintAdLoading(false);
+    setReviveAdLoading(false);
+    setReviveAdError("");
+    strokeMistakeChargedRef.current = false;
     resetHistory();
     autoSolvedShownRef.current = false;
     raceFinishedSentRef.current = false;
     raceResultShownRef.current = false;
     raceProgressLastSentRef.current = 0;
-    puzzleStartedAtMsRef.current = startTimer ? Date.now() : 0;
+    const shouldStartElapsedTimer = startTimer && !shouldStopSoloElapsedTimer;
+    puzzleStartedAtMsRef.current = shouldStartElapsedTimer ? Date.now() : 0;
     setElapsedMs(0);
     setElapsedSec(0);
-    setTimerRunning(startTimer);
+    setTimerRunning(shouldStartElapsedTimer);
     setStatus(suppressStatus ? "" : message || `Puzzle ${p.id} loaded.`);
   };
 
@@ -3395,16 +4009,19 @@ function App() {
     return data.puzzle;
   };
 
-  const loadRandomBySize = async () => {
+  const loadRandomBySizeKey = async (sizeKey = selectedSize) => {
     if (isInRaceRoom) {
-      setStatus("You cannot change puzzle while in a race room.");
+      setStatus(L("방 플레이 중에는 퍼즐을 바꿀 수 없습니다.", "You cannot change puzzle while in a race room."));
       return;
     }
-    const [wStr, hStr] = selectedSize.split("x");
+    const safeSizeKey = IS_APPS_IN_TOSS && !APPS_IN_TOSS_SIZE_KEYS.includes(sizeKey)
+      ? APPS_IN_TOSS_DEFAULT_SIZE
+      : sizeKey;
+    const [wStr, hStr] = safeSizeKey.split("x");
     const width = Number(wStr);
     const height = Number(hStr);
     if (!Number.isInteger(width) || !Number.isInteger(height)) {
-      setStatus("Invalid size selection.");
+      setStatus(L("퍼즐 크기를 다시 선택해 주세요.", "Invalid size selection."));
       return;
     }
 
@@ -3412,9 +4029,17 @@ function App() {
     setStatus("");
     try {
       const puzzleData = await fetchRandomPuzzleBySize(width, height);
+      setSelectedSize(safeSizeKey);
       initializePuzzle(puzzleData, {
         resume: true,
-        message: `Puzzle ${puzzleData.id} (${puzzleData.width}x${puzzleData.height}) loaded.`,
+        message: L(
+          IS_APPS_IN_TOSS
+            ? `${puzzleData.width}x${puzzleData.height} 배틀 퍼즐을 불러왔습니다.`
+            : `${puzzleData.width}x${puzzleData.height} 퍼즐을 불러왔습니다.`,
+          IS_APPS_IN_TOSS
+            ? `Battle puzzle ${puzzleData.width}x${puzzleData.height} loaded.`
+            : `Puzzle ${puzzleData.id} (${puzzleData.width}x${puzzleData.height}) loaded.`
+        ),
       });
       playSfx("ui");
     } catch (err) {
@@ -3422,6 +4047,10 @@ function App() {
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const loadRandomBySize = async () => {
+    await loadRandomBySizeKey(selectedSize);
   };
 
   const clearPuzzleViewState = () => {
@@ -3461,7 +4090,8 @@ function App() {
     if (message) setStatus(message);
   }, []);
 
-  const goCreateMode = () => {
+  const goCreateMode = (options = {}) => {
+    const showSubmissions = options?.submissions === true;
     if (pvpSearching && !isInRaceRoom) {
       void cancelPvpQueue({ silent: true });
     }
@@ -3469,9 +4099,16 @@ function App() {
       setStatus(L("방 플레이 중에는 제작기를 열 수 없습니다.", "The creator is unavailable during a live room."));
       return;
     }
+    if (IS_APPS_IN_TOSS) {
+      setPlayMode("single");
+      setSingleSection("community");
+      setStatus(L("앱에서는 만들기 없이 승인된 유저 퍼즐과 댓글 중심으로 운영합니다.", "Create Puzzle is removed from the app flow."));
+      return;
+    }
     setPlayMode("create");
+    setCreatorMyPuzzlesOpen(showSubmissions);
     setStatus("");
-    if (isLoggedIn && creatorMyPuzzlesOpen) {
+    if (isLoggedIn && showSubmissions) {
       void loadMyCreatorPuzzles({ silent: true });
     }
     const draft = creatorDraftRef.current;
@@ -3512,8 +4149,30 @@ function App() {
         unique: sample.unique === true,
         needsGuess: sample.needsGuess === true,
         isSolved: sample.isSolved === true,
+        solvedAt: sample.solvedAt || "",
+        bestElapsedSec: Number(sample.bestElapsedSec || 0),
+        lastElapsedSec: Number(sample.lastElapsedSec || 0),
+        solveCount: Number(sample.solveCount || 0),
         sourceType: sample.sourceType || "sample",
       }));
+      if (IS_APPS_IN_TOSS) {
+        const serverById = new Map(nextSamples.map((sample) => [String(sample.id || ""), sample]));
+        setCreatorSamples(
+          DEFAULT_CREATOR_SAMPLE_PUZZLES.map((sample) => {
+            const serverSample = serverById.get(String(sample.id || ""));
+            if (!serverSample) return sample;
+            return {
+              ...sample,
+              isSolved: serverSample.isSolved === true,
+              solvedAt: serverSample.solvedAt || "",
+              bestElapsedSec: Number(serverSample.bestElapsedSec || 0),
+              lastElapsedSec: Number(serverSample.lastElapsedSec || 0),
+              solveCount: Number(serverSample.solveCount || 0),
+            };
+          })
+        );
+        return;
+      }
       if (nextSamples.length) setCreatorSamples(nextSamples);
       else setCreatorSamples([]);
     } catch (err) {
@@ -3644,6 +4303,49 @@ function App() {
     }
   }, [API_BASE, authHeaders, isLoggedIn, lang]);
 
+  const trackMissionEvent = useCallback((eventName, options = {}) => {
+    const result = applyMissionEvent(missionState, eventName, options);
+    if (!result.changed) return;
+    setMissionState(result.state);
+    writeMissionState(result.state);
+    if (result.xpGained > 0) {
+      const primaryMission = result.completed[0];
+      const leveledUp = result.levelAfter.level > result.levelBefore.level;
+      const missionTitle = primaryMission
+        ? lang === "ko"
+          ? primaryMission.titleKo
+          : primaryMission.titleEn
+        : L("미션 완료", "Mission Complete");
+      const rewardFx = {
+        key: `${Date.now()}-${eventName}`,
+        title: missionTitle,
+        xpGained: result.xpGained,
+        fromLevel: result.levelBefore.level,
+        level: result.levelAfter.level,
+        fromPercent: result.levelBefore.progressPercent,
+        toPercent: result.levelAfter.progressPercent,
+        gaugeToPercent: leveledUp ? 100 : result.levelAfter.progressPercent,
+        currentXp: result.levelAfter.currentXp,
+        nextXp: result.levelAfter.nextXp,
+        leveledUp,
+      };
+      setMissionToast(rewardFx);
+      setMissionRewardFx(rewardFx);
+      if (typeof window !== "undefined") {
+        if (missionToastTimerRef.current) window.clearTimeout(missionToastTimerRef.current);
+        missionToastTimerRef.current = window.setTimeout(() => {
+          setMissionToast(null);
+          missionToastTimerRef.current = 0;
+        }, 4400);
+        if (missionRewardFxTimerRef.current) window.clearTimeout(missionRewardFxTimerRef.current);
+        missionRewardFxTimerRef.current = window.setTimeout(() => {
+          setMissionRewardFx(null);
+          missionRewardFxTimerRef.current = 0;
+        }, leveledUp ? 3600 : 1900);
+      }
+    }
+  }, [L, lang, missionState]);
+
   const markCommunityPuzzleSolved = useCallback((puzzleId) => {
     const targetId = String(puzzleId || "").trim();
     if (!targetId) return;
@@ -3658,9 +4360,41 @@ function App() {
   const markCustomSampleSolved = useCallback((sampleId) => {
     const targetId = String(sampleId || "").trim();
     if (!targetId) return;
+    const solvedAt = new Date().toISOString();
     setCreatorSamples((prev) =>
-      prev.map((sample) => (String(sample.id || "") === targetId ? { ...sample, isSolved: true } : sample))
+      prev.map((sample) =>
+        String(sample.id || "") === targetId
+          ? {
+              ...sample,
+              isSolved: true,
+              solvedAt: sample.solvedAt || solvedAt,
+              lastElapsedSec: Math.max(0, Math.floor(Number(elapsedSec || 0))),
+              bestElapsedSec:
+                Number(sample.bestElapsedSec || 0) > 0 && Number(elapsedSec || 0) > 0
+                  ? Math.min(Number(sample.bestElapsedSec || 0), Math.floor(Number(elapsedSec || 0)))
+                  : Math.max(Number(sample.bestElapsedSec || 0), Math.floor(Number(elapsedSec || 0))),
+              solveCount: Math.max(1, Number(sample.solveCount || 0) + 1),
+            }
+          : sample
+      )
     );
+  }, [elapsedSec]);
+
+  const markDailyPuzzleSolved = useCallback((solvedPuzzle) => {
+    const dateKey = getDailySolvedDateKey(solvedPuzzle);
+    if (typeof window !== "undefined") {
+      if (dailyStampTimerRef.current) window.clearTimeout(dailyStampTimerRef.current);
+      setDailyPuzzleStampDate(dateKey);
+      dailyStampTimerRef.current = window.setTimeout(() => {
+        setDailyPuzzleStampDate((current) => (current === dateKey ? "" : current));
+        dailyStampTimerRef.current = 0;
+      }, SOLVED_REVEAL_DURATION_MS + 5200);
+    }
+    setDailyPuzzleHistory((prev) => {
+      const next = buildDailySolvedHistory(prev, solvedPuzzle);
+      writeDailyPuzzleHistory(next);
+      return next;
+    });
   }, []);
 
   const loadSingleCustomSample = (sample) => {
@@ -3874,11 +4608,13 @@ function App() {
       const res = await fetch(`${API_BASE}/creator-samples/${encodeURIComponent(targetId)}/solve`, {
         method: "POST",
         headers: { "Content-Type": "application/json", ...authHeaders },
+        body: JSON.stringify({ elapsedSec }),
       });
       const data = await parseJsonSafe(res);
       if (!res.ok || !data.ok) {
         throw new Error(data.error || "Failed to save custom solve.");
       }
+      await loadCreatorSamples({ silent: true });
     } catch (err) {
       setStatus(err.message || L("테마 퍼즐 해제 저장에 실패했습니다.", "Failed to save themed puzzle unlock."));
     }
@@ -3953,7 +4689,7 @@ function App() {
     if (draft) {
       loadCreatorCanvas(draft.width, draft.height, draft.cells, L("편집 화면으로 돌아왔습니다.", "Returned to the editor."));
     } else {
-      loadCreatorCanvas(12, 12);
+      loadCreatorCanvas(CREATOR_DEFAULT_SIZE, CREATOR_DEFAULT_SIZE);
     }
     playSfx("ui");
   };
@@ -4006,6 +4742,17 @@ function App() {
     setStatus("");
   };
 
+  const goDailyMode = () => {
+    if (pvpSearching && !isInRaceRoom) {
+      void cancelPvpQueue({ silent: true });
+    }
+    if (!isInRaceRoom) clearPuzzleViewState();
+    setSingleSection("daily");
+    setPlayMode("single");
+    setStatus("");
+    playSfx("ui");
+  };
+
   const goSingleSection = (section, { clear = true } = {}) => {
     if (section === "admin" && !isCreatorAdminUser) {
       setStatus(L("관리자 계정으로만 접근할 수 있습니다.", "This section is only available to the admin account."));
@@ -4036,6 +4783,10 @@ function App() {
   }, [isCreatorAdminUser, singleSection]);
 
   const openAuthScreen = (tab = "login", returnMode = "menu") => {
+    if (IS_APPS_IN_TOSS) {
+      void loginWithTossGame(returnMode);
+      return;
+    }
     setAuthTab(tab);
     setAuthReturnMode(returnMode);
     setLoginError("");
@@ -4050,6 +4801,10 @@ function App() {
   };
 
   const goMultiMode = () => {
+    if (IS_APPS_IN_TOSS && !isLoggedIn) {
+      void loginWithTossGame("multi");
+      return;
+    }
     if (!isLoggedIn) {
       setNeedLoginReturnMode("multi");
       setShowNeedLoginPopup(true);
@@ -4065,13 +4820,9 @@ function App() {
 
   const goPvpMode = () => {
     if (!isLoggedIn) {
-      setNeedLoginReturnMode("pvp");
-      setShowNeedLoginPopup(true);
-      return;
-    }
-    if (!hasPlacementQualification) {
-      setShowPlacementRequiredPopup(true);
-      setStatus(L("PvP 입장 전 배치고사를 완료해야 합니다.", "You must complete placement before entering PvP."));
+      if (!isInRaceRoom) clearPuzzleViewState();
+      setPlayMode("pvp");
+      setStatus(L("로그인 없이 테스트 배틀을 바로 시작할 수 있습니다.", "You can start a test battle without logging in."));
       return;
     }
     if (!isInRaceRoom) clearPuzzleViewState();
@@ -4086,9 +4837,16 @@ function App() {
     if (!isInRaceRoom) clearPuzzleViewState();
     setPlayMode("ranking");
     setStatus("");
+    trackMissionEvent("ranking_visit", {
+      eventToken: getMissionWeekKey(getKstDateKey()),
+    });
   };
 
   const goReplayHallMode = () => {
+    if (IS_APPS_IN_TOSS) {
+      setPlayMode("ranking");
+      return;
+    }
     if (pvpSearching && !isInRaceRoom) {
       void cancelPvpQueue({ silent: true });
     }
@@ -4102,11 +4860,7 @@ function App() {
     setShowCreateModal(false);
     setShowJoinModal(false);
     setShowNeedLoginPopup(false);
-    setShowPlacementRequiredPopup(false);
-    setShowPatchNotesModal(false);
-    setPatchNotesSessionHidden(true);
     setShowPvpTierGuideModal(false);
-    setShowSettingsModal(false);
     setSignupPolicyModal("");
     setCreatorMyPuzzlesOpen(false);
   };
@@ -4193,18 +4947,7 @@ function App() {
   };
 
   const goPlacementTestMode = () => {
-    if (!isLoggedIn) {
-      setNeedLoginReturnMode("placement_test");
-      setShowNeedLoginPopup(true);
-      return;
-    }
-    if (pvpSearching && !isInRaceRoom) {
-      void cancelPvpQueue({ silent: true });
-    }
-    if (!isInRaceRoom) clearPuzzleViewState();
-    resetPlacementTest();
-    setPlayMode("placement_test");
-    setStatus("");
+    goPvpMode();
   };
 
   const applyPlacementResultToCurrentUser = async (results, elapsedSec, currentStageProgress, fallbackEvaluated = null) => {
@@ -4449,25 +5192,17 @@ function App() {
     cacheAuthUser(user, { applyPrefs: true });
   };
 
-  const routeAfterAuth = (user, returnMode = "menu") => {
-    const placementRating = Number(user?.placement_rating || 0);
-    const canEnterPvp = Boolean(user?.placement_done) && Number.isFinite(placementRating) && placementRating >= 0;
+  const routeAfterAuth = (_user, returnMode = "menu") => {
     if (returnMode === "multi") {
       setPlayMode("multi");
       return;
     }
     if (returnMode === "placement_test") {
-      setPlayMode("placement_test");
+      setPlayMode("pvp");
       return;
     }
     if (returnMode === "pvp") {
-      if (canEnterPvp) {
-        setPlayMode("pvp");
-      } else {
-        setPlayMode("menu");
-        setShowPlacementRequiredPopup(true);
-        setStatus(L("PvP 입장 전 배치고사를 완료해야 합니다.", "You must complete placement before entering PvP."));
-      }
+      setPlayMode("pvp");
       return;
     }
     setPlayMode("menu");
@@ -4483,6 +5218,67 @@ function App() {
     closeProfileModal();
     localStorage.removeItem(AUTH_TOKEN_KEY);
     localStorage.removeItem(AUTH_USER_KEY);
+  };
+
+  const loginWithTossGame = async (returnMode = "menu") => {
+    if (!IS_APPS_IN_TOSS || tossLoginLoading) return;
+    setTossLoginLoading(true);
+    setStatus(L("토스 계정으로 연결 중...", "Connecting with Toss..."));
+    try {
+      const keyResult = await getAnonymousKey();
+      if (!keyResult || keyResult === "ERROR" || typeof keyResult !== "object" || !keyResult.hash) {
+        throw new Error(
+          keyResult === "INVALID_CATEGORY"
+            ? "invalid_category"
+            : keyResult ? "toss_key_error" : "unsupported_toss_version"
+        );
+      }
+
+      const payload = await buildTossGameAuthPayload(keyResult.hash);
+      let res = await fetch(`${API_BASE}/auth/signup`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      let data = await parseJsonSafe(res);
+
+      if (!res.ok || !data.ok) {
+        const shouldLoginExisting =
+          res.status === 409 ||
+          String(data.error || "").includes("username already exists") ||
+          String(data.error || "").includes("nickname already exists");
+        if (!shouldLoginExisting) {
+          throw new Error(data.error || "toss_signup_failed");
+        }
+        res = await fetch(`${API_BASE}/auth/login`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ username: payload.username, password: payload.password }),
+        });
+        data = await parseJsonSafe(res);
+      }
+
+      if (!res.ok || !data.ok || !data.token || !data.user) {
+        throw new Error(data.error || "toss_login_failed");
+      }
+
+      storeAuth(data.token, data.user);
+      setStatus(L(`토스 계정 연결 완료: ${data.user.nickname}`, `Connected with Toss: ${data.user.nickname}`));
+      routeAfterAuth(data.user, returnMode);
+    } catch (err) {
+      const code = String(err?.message || "");
+      const message =
+        code === "invalid_category"
+          ? L("앱 카테고리가 게임으로 설정되어야 토스 게임 로그인을 쓸 수 있어요.", "The app category must be Game to use game login.")
+          : code === "unsupported_toss_version"
+            ? L("토스 앱을 최신 버전으로 업데이트한 뒤 다시 시도해줘.", "Update the Toss app and try again.")
+            : code === "crypto_not_supported"
+              ? L("이 실행 환경에서는 토스 로그인 키를 만들 수 없어요.", "This environment cannot create the Toss login key.")
+              : L("토스 계정 연결에 실패했어요. 콘솔 QR로 토스 앱에서 다시 열어줘.", "Could not connect with Toss. Open it from the console QR in the Toss app.");
+      setStatus(message);
+    } finally {
+      setTossLoginLoading(false);
+    }
   };
 
   const signup = async () => {
@@ -4904,7 +5700,7 @@ function App() {
     clearMatchFlowTimers();
     dismissPvpRatingFx();
     const myNickname = authUser?.nickname || L("테스터", "Tester");
-    const scriptedOptions = PVP_SIZE_KEYS.map((sizeKey) => ({
+    const scriptedOptions = PVP_BATTLE_SIZE_KEYS.map((sizeKey) => ({
       sizeKey,
       bannedByNicknames: [],
       banned: false,
@@ -4984,69 +5780,30 @@ function App() {
         prev
           ? {
               ...prev,
-              phase: "ban",
+              phase: "reveal",
               showdown: false,
-              phaseEndsAtMs: Date.now() + 3200,
+              revealIndex: 0,
+              revealSpinning: true,
+              phaseEndsAtMs: Date.now() + 4200,
               options: scriptedOptions,
             }
           : prev
       );
-      playSfx("ui");
-    });
-    schedule(7050, () => {
-      setMatchFlowTest((prev) =>
-        prev
-          ? {
-              ...prev,
-              options: prev.options.map((option) =>
-                option.sizeKey === "25x25"
-                  ? { ...option, bannedByNicknames: [prev.opponent.nickname], banned: true }
-                  : option
-              ),
-            }
-          : prev
-      );
-    });
-    schedule(8350, () => {
-      setMatchFlowTest((prev) =>
-        prev
-          ? {
-              ...prev,
-              options: prev.options.map((option) =>
-                option.sizeKey === "20x20"
-                  ? { ...option, bannedByNicknames: [prev.me.nickname], banned: true }
-                  : option
-              ),
-            }
-          : prev
-      );
-    });
-    schedule(9400, () => {
-      setMatchFlowTest((prev) =>
-        prev
-          ? {
-              ...prev,
-              phase: "reveal",
-              revealIndex: 0,
-              revealSpinning: true,
-              phaseEndsAtMs: Date.now() + 4200,
-            }
-          : prev
-      );
+      playSfx("countdown");
       let revealIdx = 0;
       if (matchFlowRevealRef.current) clearInterval(matchFlowRevealRef.current);
       matchFlowRevealRef.current = window.setInterval(() => {
-        revealIdx = (revealIdx + 1) % PVP_SIZE_KEYS.length;
+        revealIdx = (revealIdx + 1) % PVP_BATTLE_SIZE_KEYS.length;
         setMatchFlowTest((prev) => (prev ? { ...prev, revealIndex: revealIdx } : prev));
         playSfx("roulette-tick");
       }, 150);
     });
-    schedule(12600, () => {
+    schedule(10200, () => {
       if (matchFlowRevealRef.current) {
         clearInterval(matchFlowRevealRef.current);
         matchFlowRevealRef.current = 0;
       }
-      const finalIndex = PVP_SIZE_KEYS.indexOf(chosenSizeKey);
+      const finalIndex = PVP_BATTLE_SIZE_KEYS.indexOf(chosenSizeKey);
       setMatchFlowTest((prev) =>
         prev
           ? {
@@ -5058,7 +5815,7 @@ function App() {
       );
       playSfx("roulette-stop");
     });
-    schedule(14500, () => {
+    schedule(12100, () => {
       setMatchFlowTest((prev) =>
         prev
           ? {
@@ -5070,7 +5827,7 @@ function App() {
       );
       playSfx("countdown");
     });
-    schedule(16500, () => {
+    schedule(14100, () => {
       const result = outcome === "loss" ? "loss" : "win";
       const toRating = result === "loss" ? 563 : 621;
       startPvpRatingAnimation(MATCH_FLOW_TEST_BASE_RATING, toRating, roomCode, {
@@ -5214,14 +5971,41 @@ function App() {
     }, 900);
   };
 
+  const startGuestPvpBattle = async () => {
+    if (isInRaceRoom) {
+      setStatus(L("이미 배틀에 참여 중입니다.", "You are already in a battle."));
+      return;
+    }
+    if (pvpSearching) return;
+    setIsLoading(true);
+    resetPvpQueueState();
+    try {
+      const res = await fetch(`${API_BASE}/pvp/guest/start`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          nickname: authUser?.nickname || "테스터",
+        }),
+      });
+      const data = await parseJsonSafe(res);
+      if (!res.ok || !data.ok) throw new Error(data.error || L("테스트 배틀 시작 실패", "Failed to start test battle"));
+      applyPvpMatch(data);
+      setStatus(IS_APPS_IN_TOSS ? "" : L("상대와 같은 퍼즐로 바로 대결합니다.", "Battle started on the same puzzle."));
+    } catch (err) {
+      setStatus(err.message || L("테스트 배틀을 시작하지 못했습니다.", "Could not start test battle."));
+      resetPvpQueueState();
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const joinPvpQueue = async () => {
     if (!isLoggedIn) {
-      setNeedLoginReturnMode("pvp");
-      setShowNeedLoginPopup(true);
+      await startGuestPvpBattle();
       return;
     }
     if (isInRaceRoom) {
-      setStatus(L("이미 경기 방에 참여 중입니다.", "You are already in a match room."));
+      setStatus(L("이미 배틀에 참여 중입니다.", "You are already in a battle."));
       return;
     }
     if (pvpSearching) return;
@@ -5240,7 +6024,7 @@ function App() {
       }
       setStatus(
         nextState === "matching"
-          ? L("수락 요청 도착. ACCEPT MATCH를 눌러주세요.", "Acceptance requested. Press ACCEPT MATCH.")
+          ? L("상대가 잡혔습니다. 시작하기를 눌러주세요.", "Opponent found. Press start.")
           : L("상대를 찾는 중...", "Searching for opponent...")
       );
       setPlayMode("pvp");
@@ -5248,13 +6032,7 @@ function App() {
       playSfx("ui");
     } catch (err) {
       const message = String(err.message || "");
-      if (message.includes("Placement required")) {
-        setPlayMode("menu");
-        setShowPlacementRequiredPopup(true);
-        setStatus(L("PvP 입장 전 배치고사를 완료해야 합니다.", "You must complete placement before entering PvP."));
-      } else {
-        setStatus(message);
-      }
+      setStatus(message);
       resetPvpQueueState();
     } finally {
       setIsLoading(false);
@@ -5388,7 +6166,7 @@ function App() {
     raceFinishedSentRef.current = false;
     raceResultShownRef.current = false;
     raceProgressLastSentRef.current = 0;
-    setTimerRunning(true);
+    setTimerRunning(false);
     playSfx("ui");
   };
 
@@ -5721,6 +6499,182 @@ function App() {
     }
   };
 
+  const isWrongPuzzleInput = (index, value, current) => {
+    if (!isHpPuzzleMode || isBoardCompleteByHints || value === 0 || current === value) return false;
+    if (!Array.isArray(puzzleSolutionCells)) return false;
+    const answer = puzzleSolutionCells[index];
+    if (value === 1) return answer !== 1;
+    if (value === 2) return answer === 1;
+    return false;
+  };
+
+  const triggerPuzzleMistake = (index) => {
+    if (!isHpPuzzleMode || puzzleHp <= 0 || isBoardCompleteByHints) return;
+    const nextHp = Math.max(0, puzzleHp - 1);
+    setPuzzleHp(nextHp);
+    setPuzzleHpDamage({ id: Date.now(), index, hpAfter: nextHp });
+    setStatus("");
+    if (nextHp <= 0) {
+      setTimerRunning(false);
+      playSfx("lose");
+      return;
+    }
+    playSfx("rank-down");
+  };
+
+  const revivePuzzleFromAdReward = () => {
+    setPuzzleHp(1);
+    setPuzzleHpDamage(null);
+    setReviveAdError("");
+    setStatus("");
+    strokeMistakeChargedRef.current = false;
+    playSfx("ready");
+  };
+
+  const shouldUseReviveAdFallback = () =>
+    !IS_APPS_IN_TOSS || !REVIVE_AD_GROUP_ID || REVIVE_AD_TEST_FALLBACK || isLocalNativeRuntime();
+
+  const canUseRealReviveAd = () =>
+    Boolean(REVIVE_AD_GROUP_ID) && isBridgeMethodSupported(GoogleAdMob.showAppsInTossAdMob);
+
+  const showRealReviveAd = () =>
+    new Promise((resolve, reject) => {
+      let cleanup = null;
+      let settled = false;
+      const timeoutId = window.setTimeout(() => finish(false, new Error("ad_timeout")), REVIVE_AD_TIMEOUT_MS);
+
+      function finish(rewarded, error = null) {
+        if (settled) return;
+        settled = true;
+        window.clearTimeout(timeoutId);
+        cleanupBridgeListener(cleanup);
+        if (error) reject(error);
+        else resolve(rewarded);
+      }
+
+      try {
+        const nextCleanup = GoogleAdMob.showAppsInTossAdMob({
+          options: { adGroupId: REVIVE_AD_GROUP_ID },
+          onEvent: (event) => {
+            if (event?.type === "userEarnedReward") finish(true);
+            if (event?.type === "failedToShow") finish(false, new Error("ad_failed"));
+            if (event?.type === "dismissed") window.setTimeout(() => finish(false), 80);
+          },
+          onError: (error) => finish(false, error instanceof Error ? error : new Error("ad_error")),
+        });
+        cleanup = nextCleanup;
+        if (settled) cleanupBridgeListener(cleanup);
+      } catch (error) {
+        finish(false, error instanceof Error ? error : new Error("ad_error"));
+      }
+    });
+
+  const requestPuzzleRewardAd = async () => {
+    const useFallback = shouldUseReviveAdFallback();
+    const useRealAd = canUseRealReviveAd();
+
+    try {
+      if (useRealAd) {
+        const rewarded = await showRealReviveAd();
+        return { rewarded, reason: rewarded ? "rewarded" : "dismissed" };
+      }
+      if (useFallback) {
+        await delay(REVIVE_AD_TEST_MS);
+        return { rewarded: true, reason: "fallback" };
+      }
+      return { rewarded: false, reason: "unavailable" };
+    } catch {
+      if (useFallback) {
+        await delay(REVIVE_AD_TEST_MS);
+        return { rewarded: true, reason: "fallback" };
+      }
+      return { rewarded: false, reason: "failed" };
+    }
+  };
+
+  const handleReviveWithAd = async () => {
+    if (!isPuzzleHpGameOver || reviveAdLoading) return;
+    setReviveAdLoading(true);
+    setReviveAdError("");
+
+    try {
+      const result = await requestPuzzleRewardAd();
+      if (!result.rewarded) {
+        if (result.reason === "dismissed") {
+          setReviveAdError(L("광고를 끝까지 보면 이어서 할 수 있어요.", "Watch the full ad to revive."));
+          return;
+        }
+        setReviveAdError(L("광고를 아직 불러올 수 없어요. 잠시 후 다시 시도해줘.", "The ad is not ready yet. Try again shortly."));
+        return;
+      }
+
+      revivePuzzleFromAdReward();
+    } catch {
+      setReviveAdError(L("광고 재생에 실패했어요. 잠시 후 다시 시도해줘.", "Could not play the ad. Try again shortly."));
+    } finally {
+      setReviveAdLoading(false);
+    }
+  };
+
+  const revealPuzzleHintCell = () => {
+    if (!canUsePuzzleHint || hintAdLoading) return;
+    if (puzzleHints <= 0) {
+      setStatus(L("광고를 보면 힌트를 더 쓸 수 있어요.", "Watch an ad to get another hint."));
+      return;
+    }
+    if (!puzzle || !Array.isArray(puzzleSolutionCells)) {
+      setStatus(L("이 퍼즐은 힌트를 사용할 수 없어요.", "Hints are not available for this puzzle."));
+      return;
+    }
+
+    const current = cellValuesRef.current;
+    const candidates = [];
+    for (let index = 0; index < puzzleSolutionCells.length; index += 1) {
+      if (puzzleSolutionCells[index] === 1 && current[index] !== 1) {
+        candidates.push(index);
+      }
+    }
+
+    if (!candidates.length) {
+      setStatus(L("공개할 정답 칸이 없습니다.", "No answer cell to reveal."));
+      return;
+    }
+
+    const targetIndex = candidates[Math.floor(Math.random() * candidates.length)];
+    const next = current.slice();
+    next[targetIndex] = 1;
+    pushUndo(current.slice());
+    applySnapshot(next);
+    setPuzzleHints((value) => Math.max(0, value - 1));
+    setPuzzleHintReveal({ id: Date.now(), index: targetIndex });
+    setStatus("");
+    playSfx("ready");
+  };
+
+  const handleHintAd = async () => {
+    if (!canUsePuzzleHint || hintAdLoading) return;
+    setHintAdLoading(true);
+    setStatus("");
+
+    try {
+      const result = await requestPuzzleRewardAd();
+      if (!result.rewarded) {
+        setStatus(
+          result.reason === "dismissed"
+            ? L("광고를 끝까지 보면 힌트가 추가돼요.", "Watch the full ad to get a hint.")
+            : L("광고를 아직 불러올 수 없어요. 잠시 후 다시 시도해줘.", "The ad is not ready yet. Try again shortly.")
+        );
+        return;
+      }
+      setPuzzleHints((value) => value + PUZZLE_HINT_REWARD_AMOUNT);
+      playSfx("ready");
+    } catch {
+      setStatus(L("광고 재생에 실패했어요. 잠시 후 다시 시도해줘.", "Could not play the ad. Try again shortly."));
+    } finally {
+      setHintAdLoading(false);
+    }
+  };
+
   const flushQueuedPaint = () => {
     frameRef.current = 0;
     const pending = pendingPaintRef.current;
@@ -5747,7 +6701,13 @@ function App() {
     // Keep filled cells and X marks from overwriting each other during drag paint.
     if (value === 1 && current === 2) return;
     if (value === 2 && current === 1) return;
-    pendingPaintRef.current.set(index, value);
+    const isMistake = isWrongPuzzleInput(index, value, current);
+    const nextValue = isMistake ? 2 : value;
+    if (!strokeMistakeChargedRef.current && isMistake) {
+      strokeMistakeChargedRef.current = true;
+      triggerPuzzleMistake(index);
+    }
+    pendingPaintRef.current.set(index, nextValue);
     if (!frameRef.current) {
       frameRef.current = requestAnimationFrame(flushQueuedPaint);
     }
@@ -5814,12 +6774,14 @@ function App() {
     if (!dragRef.current) {
       strokeBaseRef.current = cellValuesRef.current.slice();
       strokeChangedRef.current = false;
+      strokeMistakeChargedRef.current = false;
     }
     dragRef.current = { button: buttonType, paintValue, ignoreButtons: options.ignoreButtons === true };
     lastPaintIndexRef.current = index;
+    const mistakeChargedBeforePaint = strokeMistakeChargedRef.current;
     queueCellPaint(index, paintValue);
     const now = Date.now();
-    if (now - lastPaintSfxAtRef.current > 30) {
+    if ((mistakeChargedBeforePaint || !strokeMistakeChargedRef.current) && now - lastPaintSfxAtRef.current > 30) {
       playSfx(paintValue === 2 ? "paint-x" : "paint-fill");
       lastPaintSfxAtRef.current = now;
     }
@@ -5833,7 +6795,7 @@ function App() {
       pointerType === "touch" ||
       pointerType === "pen" ||
       (isCoarsePointer && pointerType !== "mouse");
-    if (isTouchLike && event.button !== 2) {
+    if (!isModeCreate && event.button !== 2) {
       const modeButton = mobilePaintMode === "mark" ? "right" : "left";
       startPaint(index, modeButton, { ignoreButtons: true });
       return;
@@ -5862,35 +6824,6 @@ function App() {
     return row * puzzle.width + col;
   };
 
-  const onMobileBoardTouchStart = (event) => {
-    if (!isMobileBoardUi) return;
-    if (event.touches.length >= 2) {
-      event.preventDefault();
-      finishActiveStroke();
-      const distance = getTouchDistance(event.touches[0], event.touches[1]);
-      mobilePinchRef.current = {
-        startDistance: distance,
-        startScale: mobileBoardScale,
-      };
-    }
-  };
-
-  const onMobileBoardTouchMove = (event) => {
-    const pinch = mobilePinchRef.current;
-    if (!isMobileBoardUi || !pinch || event.touches.length < 2) return;
-    event.preventDefault();
-    const distance = getTouchDistance(event.touches[0], event.touches[1]);
-    if (!distance || !pinch.startDistance) return;
-    const nextScale = pinch.startScale * (distance / pinch.startDistance);
-    updateMobileBoardScale(nextScale);
-  };
-
-  const onMobileBoardTouchEnd = () => {
-    const pinch = mobilePinchRef.current;
-    if (!pinch) return;
-    mobilePinchRef.current = null;
-  };
-
   useEffect(() => {
     if (!puzzle || !canvasRef.current) return;
 
@@ -5907,8 +6840,9 @@ function App() {
     if (!ctx) return;
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, w, h);
-    const revealProgress = Math.max(0, Math.min(1, solvedRevealProgress));
-    const revealEase = 1 - (1 - revealProgress) ** 3;
+    const revealProgress = clamp01(solvedRevealProgress);
+    const revealEase = easeOutCubic(revealProgress);
+    const solvedPaintPalette = getSolvedPaintPalette(puzzle);
 
     const palette = uiStyleVariant === "excel"
       ? {
@@ -5919,16 +6853,6 @@ function App() {
           grid: "rgba(122, 143, 168, 0.9)",
           gridStrong: "rgba(76, 99, 128, 0.95)",
           border: "rgba(76, 99, 128, 0.95)",
-        }
-      : isDarkMode
-      ? {
-          empty: "#0f172a",
-          filled: "#e2e8f0",
-          filledBorder: "#64748b",
-          mark: "#f87171",
-          grid: "#475569",
-          gridStrong: "#e2e8f0",
-          border: "#f8fafc",
         }
       : {
           empty: "#e6e6e6",
@@ -5961,10 +6885,34 @@ function App() {
             ctx.strokeRect(px + 0.5, py + 0.5, cellSize - 1, cellSize - 1);
             ctx.restore();
           }
+          if (revealProgress > 0.01) {
+            const denominator = Math.max(1, puzzle.width + puzzle.height - 2);
+            const waveDelay = ((x + y) / denominator) * 0.56;
+            const cellProgress = clamp01((revealProgress - waveDelay) / 0.44);
+            if (cellProgress > 0) {
+              const paintEase = easeOutCubic(cellProgress);
+              const inset = (1 - paintEase) * Math.min(cellSize * 0.46, 9);
+              ctx.save();
+              ctx.globalAlpha = 0.28 + paintEase * 0.72;
+              ctx.fillStyle = getSolvedPaintColor(puzzle, x, y, solvedPaintPalette);
+              ctx.fillRect(
+                px + inset,
+                py + inset,
+                Math.max(0, cellSize - inset * 2),
+                Math.max(0, cellSize - inset * 2)
+              );
+              if (cellProgress < 1) {
+                ctx.globalAlpha = 0.32 * (1 - cellProgress);
+                ctx.fillStyle = "#ffffff";
+                ctx.fillRect(px + inset, py + inset, Math.max(0, cellSize - inset * 2), Math.max(1, cellSize * 0.18));
+              }
+              ctx.restore();
+            }
+          }
           if (revealEase > 0.02) {
             ctx.save();
-            ctx.globalAlpha = 0.16 * revealEase;
-            ctx.fillStyle = isDarkMode ? "#ffffff" : "#fffef8";
+            ctx.globalAlpha = 0.12 * revealEase;
+            ctx.fillStyle = "#fffef8";
             ctx.fillRect(px, py, cellSize, cellSize);
             ctx.restore();
           }
@@ -6025,7 +6973,7 @@ function App() {
     ctx.strokeStyle = palette.border;
     ctx.lineWidth = 1;
     ctx.strokeRect(0.5, 0.5, w - 1, h - 1);
-  }, [puzzle, cells, cellSize, isDarkMode, uiStyleVariant, solvedRevealProgress]);
+  }, [puzzle, cells, cellSize, uiStyleVariant, solvedRevealProgress]);
 
   useEffect(() => {
     const onWindowPointerMove = (event) => {
@@ -6067,14 +7015,61 @@ function App() {
     pushUndo(cellValuesRef.current.slice());
     applySnapshot(new Array(puzzle.width * puzzle.height).fill(0));
     setActiveHints(new Set());
+    setPuzzleHp(PUZZLE_MAX_HP);
+    setPuzzleHpDamage(null);
+    setPuzzleHints(PUZZLE_MAX_HINTS);
+    setPuzzleHintReveal(null);
+    setHintAdLoading(false);
+    strokeMistakeChargedRef.current = false;
     autoSolvedShownRef.current = false;
-    puzzleStartedAtMsRef.current = !isModeCreate ? Date.now() : 0;
+    const shouldRestartElapsedTimer = !isModeCreate && !shouldStopSoloElapsedTimer;
+    puzzleStartedAtMsRef.current = shouldRestartElapsedTimer ? Date.now() : 0;
     setElapsedMs(0);
     setElapsedSec(0);
-    setTimerRunning(!isModeCreate);
+    setTimerRunning(shouldRestartElapsedTimer);
     setStatus(isModeCreate ? L("캔버스를 비웠습니다.", "Cleared the canvas.") : "Grid cleared.");
     playSfx("clear");
   };
+
+  useEffect(() => {
+    if (!puzzleHpDamage) return undefined;
+    const timer = window.setTimeout(() => setPuzzleHpDamage(null), PUZZLE_HP_DAMAGE_MS);
+    return () => window.clearTimeout(timer);
+  }, [puzzleHpDamage?.id]);
+
+  useEffect(() => {
+    if (!puzzleHintReveal) return undefined;
+    const timer = window.setTimeout(() => setPuzzleHintReveal(null), PUZZLE_HINT_REVEAL_MS);
+    return () => window.clearTimeout(timer);
+  }, [puzzleHintReveal?.id]);
+
+  useEffect(() => {
+    if (!isPuzzleHpGameOver) {
+      setReviveAdError("");
+      setReviveAdLoading(false);
+    }
+  }, [isPuzzleHpGameOver]);
+
+  useEffect(() => {
+    if (canUsePuzzleHint) return;
+    setHintAdLoading(false);
+  }, [canUsePuzzleHint]);
+
+  useEffect(() => {
+    if (!isHpPuzzleMode || !puzzle || isBoardCompleteByHints || !REVIVE_AD_GROUP_ID) return undefined;
+    if (!isBridgeMethodSupported(GoogleAdMob.loadAppsInTossAdMob)) return undefined;
+    let cleanup = null;
+    try {
+      cleanup = GoogleAdMob.loadAppsInTossAdMob({
+        options: { adGroupId: REVIVE_AD_GROUP_ID },
+        onEvent: () => {},
+        onError: () => {},
+      });
+    } catch {
+      return undefined;
+    }
+    return () => cleanupBridgeListener(cleanup);
+  }, [isHpPuzzleMode, isBoardCompleteByHints, puzzle?.id, puzzle?.width, puzzle?.height]);
 
   const toggleHint = (hintId) => {
     setActiveHints((prev) => {
@@ -6087,6 +7082,7 @@ function App() {
 
   useEffect(() => {
     if (!puzzle) return;
+    if (puzzle?.isDailyPuzzle) return;
     const timer = setTimeout(() => {
       localStorage.setItem(`nonogram-progress-${puzzle.id}`, JSON.stringify(cells));
     }, 250);
@@ -6096,6 +7092,7 @@ function App() {
   useEffect(() => {
     if (!puzzle || !timerRunning) return undefined;
     if (isInRaceRoom) return undefined;
+    if (shouldStopSoloElapsedTimer) return undefined;
     if (!puzzleStartedAtMsRef.current) {
       puzzleStartedAtMsRef.current = Date.now() - Math.max(0, Number(elapsedMs || 0));
     }
@@ -6105,7 +7102,15 @@ function App() {
       setElapsedSec(Math.floor(nextElapsedMs / 1000));
     }, 50);
     return () => clearInterval(id);
-  }, [puzzle, timerRunning, isInRaceRoom, elapsedMs]);
+  }, [puzzle, timerRunning, isInRaceRoom, shouldStopSoloElapsedTimer, elapsedMs]);
+
+  useEffect(() => {
+    if (!timerRunning || !shouldStopSoloElapsedTimer) return;
+    puzzleStartedAtMsRef.current = 0;
+    setElapsedMs(0);
+    setElapsedSec(0);
+    setTimerRunning(false);
+  }, [timerRunning, shouldStopSoloElapsedTimer]);
 
   useEffect(() => {
     if (!isRacePlaying || !raceRoomCode || !racePlayerId) return;
@@ -6121,7 +7126,7 @@ function App() {
       isModePvp &&
       !isInRaceRoom &&
       pvpSearching &&
-      (pvpMatchState === "accept" || pvpMatchState === "ban" || pvpMatchState === "reveal");
+      (pvpMatchState === "accept" || pvpMatchState === "reveal");
     const shouldTickPlacement = isModePlacementTest && (placementRunning || Boolean(matchFlowTest?.active));
     if (!shouldTickRace && !shouldTickPvp && !shouldTickPlacement) return undefined;
     const id = setInterval(() => setNowMs(Date.now()), 200);
@@ -6215,9 +7220,7 @@ function App() {
     }
     if (isBoardCompleteByHints && !autoSolvedShownRef.current) {
       autoSolvedShownRef.current = true;
-      if (puzzle?.isCustom) {
-        startSolvedReveal();
-      }
+      startSolvedReveal();
       setTimerRunning(false);
       if (isModePlacementTest && !isInRaceRoom && placementRunning) {
         setStatus(L("단계 완료! 다음 퍼즐로 이동합니다.", "Stage cleared! Moving to next puzzle."));
@@ -6228,18 +7231,36 @@ function App() {
         setStatus(L("완주! 다른 플레이어 결과 대기중...", "Finished! Waiting for other players..."));
         submitRaceFinish();
       } else {
-        setStatus("Success! Puzzle solved.");
+        setStatus(puzzle?.isDailyPuzzle ? L("오늘의 퍼즐 완료! 달력에 표시했어요.", "Daily puzzle cleared and marked on the calendar.") : "Success! Puzzle solved.");
         if (isModeSingle && !isInRaceRoom) {
           if (puzzle?.isCustom) {
             triggerVictoryFx("single");
           }
-          if (puzzle?.isCustomLibrary) {
+          if (puzzle?.isDailyPuzzle) {
+            setDailyCompletionResult(buildDailyCompletionResult(puzzle, dailyPuzzleHistory, elapsedMs, elapsedSec));
+            trackMissionEvent("daily_solve", {
+              dateKey: getDailySolvedDateKey(puzzle),
+              eventToken: getDailySolvedDateKey(puzzle),
+            });
+            markDailyPuzzleSolved(puzzle);
+            if (typeof window !== "undefined") {
+              if (dailyResultCalendarTimerRef.current) window.clearTimeout(dailyResultCalendarTimerRef.current);
+              dailyResultCalendarTimerRef.current = window.setTimeout(() => {
+                clearPuzzleViewState();
+                setSingleSection("daily");
+                setPlayMode("single");
+                dailyResultCalendarTimerRef.current = 0;
+              }, SOLVED_REVEAL_DURATION_MS + 900);
+            }
+          }
+          if (puzzle?.isCustomLibrary && !puzzle?.isDailyPuzzle) {
+            trackMissionEvent("theme_solve");
             markCustomSampleSolved(puzzle?.creatorPuzzleId || puzzle?.id);
             void submitCustomSampleSolve(puzzle?.creatorPuzzleId || puzzle?.id);
           }
           if (puzzle?.isCommunityPuzzle) {
             void submitCommunityPuzzleSolve();
-          } else {
+          } else if (!puzzle?.isDailyPuzzle) {
             void submitSingleFinish();
           }
         }
@@ -6247,6 +7268,8 @@ function App() {
     }
     if (!isBoardCompleteByHints) {
       autoSolvedShownRef.current = false;
+      stopSolvedReveal();
+      setSolvedRevealProgress(0);
     }
   }, [
     isBoardCompleteByHints,
@@ -6258,10 +7281,16 @@ function App() {
     isModeTutorial,
     isModeSingle,
     isModeCreate,
+    dailyPuzzleHistory,
+    elapsedMs,
+    elapsedSec,
+    markDailyPuzzleSolved,
     markCustomSampleSolved,
     submitCommunityPuzzleSolve,
     submitCustomSampleSolve,
     startSolvedReveal,
+    stopSolvedReveal,
+    trackMissionEvent,
     triggerVictoryFx,
   ]);
 
@@ -6403,7 +7432,7 @@ function App() {
     if (!isModePvp || isInRaceRoom || !pvpSearching) return;
     const matchId = String(pvpMatch?.matchId || "").trim();
     if (!matchId) return;
-    const shouldShow = pvpMatchState === "ban" || (pvpMatchState === "accept" && pvpAllAccepted);
+    const shouldShow = pvpMatchState === "reveal" || (pvpMatchState === "accept" && pvpAllAccepted);
     if (!shouldShow) return;
     if (pvpShowdownSeenRef.current === matchId) return;
     pvpShowdownSeenRef.current = matchId;
@@ -6528,9 +7557,8 @@ function App() {
   }, [showEmojiPicker]);
 
   const isExcelMode = uiStyleVariant === "excel";
-  const isDarkThemeActive = isDarkMode && !isExcelMode;
-  const brandTitle = "Nonogram Arena";
-  const modeTagText = L("로그인 필요", "Login Required");
+  const brandTitle = IS_APPS_IN_TOSS ? "노노그램 아레나" : "Nonogram Arena";
+  const modeTagText = IS_APPS_IN_TOSS ? L("토스 로그인", "Toss Login") : L("로그인 필요", "Login Required");
   const excelMainStyle = isExcelMode ? { "--excel-cell-size": `${cellSize}px` } : undefined;
   const placementDisplayCard = placementResultCard
     || (hasPlacementQualification && placementAssignedTier
@@ -6554,11 +7582,284 @@ function App() {
       ? placementDisplayCard.tier.labelKo
       : placementDisplayCard.tier.labelEn
     : "";
-  const pvpModeTagText = !isLoggedIn
+  const pvpModeTagText = IS_APPS_IN_TOSS
+    ? ""
+    : !isLoggedIn
     ? modeTagText
-    : !hasPlacementQualification
-      ? L("배치고사 필요", "Placement Required")
-      : "";
+    : "";
+  const displayedCustomGroupKeys = IS_APPS_IN_TOSS ? ["small"] : CREATOR_SAMPLE_GROUP_ORDER;
+  const activeCustomSizeGroup = IS_APPS_IN_TOSS ? "small" : customSizeGroup;
+  const visibleCreatorSamples = creatorSamples.filter((sample) => sample.sizeGroup === activeCustomSizeGroup);
+  const visibleCreatorSampleCount = IS_APPS_IN_TOSS ? visibleCreatorSamples.length : creatorSamples.length;
+  const themeCategoryStats = THEME_CATEGORY_DEFINITIONS.map((category) => {
+    const samples = category.key === "all"
+      ? visibleCreatorSamples
+      : visibleCreatorSamples.filter((sample) => getThemePuzzleCategoryKey(sample) === category.key);
+    const solvedCount = samples.filter((sample) => sample.isSolved).length;
+    return {
+      key: category.key,
+      label: getThemeCategoryLabel(category.key, lang),
+      count: samples.length,
+      solvedCount,
+    };
+  }).filter((category) => category.key === "all" || category.count > 0);
+  const activeThemeCategoryKey = themeCategoryStats.some((category) => category.key === customThemeCategory)
+    ? customThemeCategory
+    : "all";
+  const activeThemeCategoryStat = themeCategoryStats.find((category) => category.key === activeThemeCategoryKey) || themeCategoryStats[0];
+  const visibleThemeSamples = activeThemeCategoryKey === "all"
+    ? visibleCreatorSamples
+    : visibleCreatorSamples.filter((sample) => getThemePuzzleCategoryKey(sample) === activeThemeCategoryKey);
+  const themeSolvedCount = visibleCreatorSamples.filter((sample) => sample.isSolved).length;
+  const themeProgressPercent = visibleCreatorSamples.length
+    ? Math.min(100, Math.round((themeSolvedCount / visibleCreatorSamples.length) * 100))
+    : 0;
+  const todayDailyDateKey = getKstDateKey(new Date(nowMs));
+  const dailyPuzzleHistorySafe = normalizeDailyPuzzleHistory(dailyPuzzleHistory);
+  const dailyPuzzleSample = getDailyPuzzleForDate(creatorSamples, todayDailyDateKey);
+  const dailyPuzzleTitle = dailyPuzzleSample ? (lang === "ko" ? dailyPuzzleSample.titleKo : dailyPuzzleSample.titleEn) || dailyPuzzleSample.id : L("준비 중", "Preparing");
+  const dailyPuzzleSizeText = dailyPuzzleSample ? `${dailyPuzzleSample.width}x${dailyPuzzleSample.height}` : "";
+  const isDailyPuzzleSolvedToday = Boolean(dailyPuzzleHistorySafe.solves[todayDailyDateKey]);
+  const dailyPuzzleStreak = getDailyPuzzleStreak(dailyPuzzleHistorySafe, todayDailyDateKey);
+  const dailyMonthSolvedCount = getDailyMonthSolvedCount(dailyPuzzleHistorySafe, todayDailyDateKey);
+  const dailyMonthCells = getDailyMonthCells(todayDailyDateKey, dailyPuzzleHistorySafe);
+  const dailyMonthElapsedDays = dailyMonthCells.filter((cell) => !cell.isBlank && !cell.isFuture).length;
+  const dailyMonthProgressPercent = dailyMonthElapsedDays
+    ? Math.min(100, Math.round((dailyMonthSolvedCount / dailyMonthElapsedDays) * 100))
+    : 0;
+  const dailyMonthLabel = formatDailyMonthLabel(todayDailyDateKey, lang);
+  const dailyWeekdayLabels = lang === "ko" ? DAILY_WEEKDAY_LABELS_KO : DAILY_WEEKDAY_LABELS_EN;
+  const missionStateSafe = normalizeMissionState(missionState, todayDailyDateKey);
+  const missionLevelInfo = getMissionLevelInfo(missionStateSafe.totalXp);
+  const dailyMissionItems = buildMissionViewItems(DAILY_MISSION_DEFINITIONS, missionStateSafe.daily, lang);
+  const weeklyMissionItems = buildMissionViewItems(WEEKLY_MISSION_DEFINITIONS, missionStateSafe.weekly, lang);
+  const dailyMissionDoneCount = dailyMissionItems.filter((mission) => mission.isComplete).length;
+  const weeklyMissionDoneCount = weeklyMissionItems.filter((mission) => mission.isComplete).length;
+  const missionWeekLabel = formatMissionWeekLabel(missionStateSafe.weekly.periodKey, lang);
+  const renderMissionItem = (mission, scope) => (
+    <div key={`mission-${scope}-${mission.id}`} className={`appsMissionItem ${mission.isComplete ? "complete" : ""}`}>
+      <span className="appsMissionCheck">
+        {mission.isComplete ? <CheckCircle2 size={15} /> : <span>{mission.progress}</span>}
+      </span>
+      <span className="appsMissionCopy">
+        <strong>{mission.title}</strong>
+        <em>{mission.desc}</em>
+      </span>
+      <span className="appsMissionReward">+{mission.xp}</span>
+      <span className="appsMissionBar" aria-hidden="true">
+        <i style={{ width: `${mission.progressPercent}%` }} />
+      </span>
+      <span className="appsMissionCount">{mission.progress}/{mission.target}</span>
+    </div>
+  );
+  const renderMissionPanel = (variant = "main") => (
+    <section className={[
+      "appsMissionPanel",
+      variant === "compact" ? "compact" : "",
+      missionRewardFx ? "rewardPulse" : "",
+      missionRewardFx?.leveledUp ? "levelUpPulse" : "",
+    ].filter(Boolean).join(" ")}>
+      <div className="appsMissionLevelCard">
+        <div className="appsMissionLevelBadge">Lv.{missionLevelInfo.level}</div>
+        <div className="appsMissionLevelCopy">
+          <strong>{L("오늘의 성장", "Today's Growth")}</strong>
+          <span>{missionLevelInfo.currentXp}/{missionLevelInfo.nextXp} XP</span>
+          <b aria-hidden="true">
+            <i style={{ width: `${missionLevelInfo.progressPercent}%` }} />
+          </b>
+        </div>
+      </div>
+
+      <div className="appsMissionColumns">
+        <div className="appsMissionGroup">
+          <div className="appsMissionGroupHead">
+            <span>{L("일일 미션", "Daily Missions")}</span>
+            <strong>{dailyMissionDoneCount}/{dailyMissionItems.length}</strong>
+          </div>
+          <div className="appsMissionList">
+            {dailyMissionItems.map((mission) => renderMissionItem(mission, "daily"))}
+          </div>
+        </div>
+        <div className="appsMissionGroup">
+          <div className="appsMissionGroupHead">
+            <span>{L("주간 미션", "Weekly Missions")}</span>
+            <strong>{missionWeekLabel} · {weeklyMissionDoneCount}/{weeklyMissionItems.length}</strong>
+          </div>
+          <div className="appsMissionList">
+            {weeklyMissionItems.map((mission) => renderMissionItem(mission, "weekly"))}
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+  const openMissionSheet = () => {
+    setShowMissionSheet(true);
+    playSfx("ui");
+  };
+  const closeMissionSheet = () => {
+    setShowMissionSheet(false);
+    playSfx("ui");
+  };
+  const loadDailyPuzzle = () => {
+    if (isInRaceRoom) {
+      setStatus(L("방 플레이 중에는 오늘의 퍼즐로 이동할 수 없습니다.", "You cannot open the daily puzzle while in a room."));
+      return;
+    }
+    if (!dailyPuzzleSample) {
+      setStatus(L("오늘의 퍼즐을 준비 중입니다.", "Daily puzzle is preparing."));
+      return;
+    }
+    if (pvpSearching && !isInRaceRoom) {
+      void cancelPvpQueue({ silent: true });
+    }
+    if (typeof window !== "undefined" && dailyResultCalendarTimerRef.current) {
+      window.clearTimeout(dailyResultCalendarTimerRef.current);
+      dailyResultCalendarTimerRef.current = 0;
+    }
+    const dailyPuzzle = buildCreatorPuzzle(dailyPuzzleSample.width, dailyPuzzleSample.height, dailyPuzzleSample.cells, {
+      id: `daily-${todayDailyDateKey}-${dailyPuzzleSample.id}`,
+      isLibrary: true,
+      isDailyPuzzle: true,
+      dailyDate: todayDailyDateKey,
+      creatorPuzzleId: dailyPuzzleSample.id,
+      titleKo: dailyPuzzleSample.titleKo || "",
+      titleEn: dailyPuzzleSample.titleEn || "",
+    });
+    if (typeof window !== "undefined") {
+      clearStoredDailyPuzzleState();
+    }
+    setDailyCompletionResult(null);
+    initializePuzzle(dailyPuzzle, {
+      resume: false,
+      startTimer: true,
+      message:
+        lang === "ko"
+          ? `오늘의 퍼즐 "${dailyPuzzleSample.titleKo || dailyPuzzleSample.id}"을 불러왔습니다.`
+          : `Loaded daily puzzle "${dailyPuzzleSample.titleEn || dailyPuzzleSample.id}".`,
+    });
+    setSingleSection("daily");
+    setPlayMode("single");
+    playSfx("ui");
+  };
+  const renderDailyPanel = () => (
+    <div className={`appsDailyPanel ${isDailyPuzzleSolvedToday ? "solved" : ""}`}>
+      {dailyCompletionResult && (
+        <div className="appsDailyResultCard">
+          <div className="appsDailyResultBadge">
+            <Trophy size={18} />
+            <span>{L("오늘 완료", "Cleared Today")}</span>
+          </div>
+          <div className="appsDailyResultTitle">
+            <small>{dailyCompletionResult.sizeText || dailyPuzzleSizeText}</small>
+            <strong>{(lang === "ko" ? dailyCompletionResult.titleKo : dailyCompletionResult.titleEn) || dailyPuzzleTitle}</strong>
+          </div>
+          <div className="appsDailyResultStats">
+            <span>
+              <CheckCircle2 size={15} />
+              {formatRaceElapsedMs(dailyCompletionResult.elapsedMs, dailyCompletionResult.elapsedSec)}
+            </span>
+            <span>
+              <Flame size={15} />
+              {L(`연속 ${dailyCompletionResult.streak}일`, `${dailyCompletionResult.streak} day streak`)}
+            </span>
+            <span>
+              <CalendarDays size={15} />
+              {L(`${dailyCompletionResult.monthSolvedCount}일 완료`, `${dailyCompletionResult.monthSolvedCount} days cleared`)}
+            </span>
+          </div>
+          <div className="appsDailyResultActions">
+            <button type="button" onClick={loadDailyPuzzle}>
+              <Shuffle size={15} />
+              <span>{L("다시 테스트", "Test Again")}</span>
+            </button>
+            <button type="button" onClick={() => setDailyCompletionResult(null)}>
+              <CheckCircle2 size={15} />
+              <span>{L("확인", "OK")}</span>
+            </button>
+          </div>
+        </div>
+      )}
+
+      <button type="button" className="appsDailyCard" onClick={loadDailyPuzzle}>
+        <span className="appsDailyIcon">
+          {isDailyPuzzleSolvedToday ? <CheckCircle2 size={28} /> : <CalendarDays size={28} />}
+        </span>
+        <span className="appsDailyCopy">
+          <small>{L("일일퀴즈", "Daily Quiz")}</small>
+          <strong>{dailyPuzzleTitle}</strong>
+          <em>
+            {dailyPuzzleSizeText}
+            {dailyPuzzleSizeText ? " · " : ""}
+            {isDailyPuzzleSolvedToday ? L("오늘 완료", "Cleared today") : L("오늘 도전", "Play today")}
+          </em>
+        </span>
+        <span className="appsDailyBadge">{isDailyPuzzleSolvedToday ? L("완료", "Done") : L("도전", "Play")}</span>
+      </button>
+
+      <div className="appsDailyStats">
+        <span>
+          <Flame size={15} />
+          {L(`연속 ${dailyPuzzleStreak}일`, `${dailyPuzzleStreak} day streak`)}
+        </span>
+        <span>
+          <CalendarDays size={15} />
+          {L(`${dailyMonthLabel} ${dailyMonthSolvedCount}일 완료`, `${dailyMonthSolvedCount} days in ${dailyMonthLabel}`)}
+        </span>
+      </div>
+
+      <div className="appsDailyCalendar" aria-label={L("일일 퍼즐 달력", "Daily puzzle calendar")}>
+        <div className="appsDailyCalendarTop">
+          <strong>{dailyMonthLabel}</strong>
+          <div className="appsDailyCalendarProgress">
+            <span>
+              {L(
+                `이번 달 ${dailyMonthSolvedCount}/${dailyMonthElapsedDays}`,
+                `${dailyMonthSolvedCount}/${dailyMonthElapsedDays} this month`
+              )}
+            </span>
+            <b aria-hidden="true">
+              <i style={{ width: `${dailyMonthProgressPercent}%` }} />
+            </b>
+          </div>
+        </div>
+        <div className="appsDailyWeekdays">
+          {dailyWeekdayLabels.map((label, index) => (
+            <span key={`daily-weekday-${label}-${index}`}>{label}</span>
+          ))}
+        </div>
+        <div className="appsDailyCalendarGrid">
+          {dailyMonthCells.map((cell) => (
+            <span
+              key={cell.key}
+              className={[
+                "appsDailyDay",
+                cell.isBlank ? "blank" : "",
+                cell.isSolved ? "solved" : "",
+                cell.isToday ? "today" : "",
+                cell.isFuture ? "future" : "",
+                cell.dateKey === dailyPuzzleStampDate ? "justSolved" : "",
+              ].filter(Boolean).join(" ")}
+              style={!cell.isBlank ? { "--daily-day-delay": `${Math.min(cell.day || 0, 31) * 20}ms` } : undefined}
+            >
+              {!cell.isBlank && (
+                <>
+                  <span className="appsDailyDayNumber">{cell.day}</span>
+                  {cell.isSolved && <span className="appsDailyDayStamp" aria-hidden="true" />}
+                  {cell.isToday && <span className="appsDailyTodayDot" aria-hidden="true" />}
+                </>
+              )}
+            </span>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+  const displayedCommunityGroupKeys = IS_APPS_IN_TOSS ? ["small"] : CREATOR_SAMPLE_GROUP_ORDER;
+  const activeCommunitySizeGroup = IS_APPS_IN_TOSS ? "small" : communitySizeGroup;
+  const visibleCommunityPuzzles = communityPuzzles.filter((sample) => sample.sizeGroup === activeCommunitySizeGroup);
+  const visibleCommunityPuzzleCount = IS_APPS_IN_TOSS ? visibleCommunityPuzzles.length : communityPuzzles.length;
+  const getCommunityReactionTotal = (sample) =>
+    CREATOR_REACTION_OPTIONS.reduce((sum, reaction) => sum + Number(sample?.reactionCounts?.[reaction.key] || 0), 0);
   const pvpFxBracketNow = pvpRatingFx ? getTierBracketInfo(pvpRatingFx.ratingNow, pvpRatingFx.done ? pvpRatingFx.toRank : pvpRatingFx.fromRank) : null;
   const pvpFxTierNow = pvpFxBracketNow?.tier || pvpRatingFx?.toTier || null;
   const pvpFxTierClass = pvpFxTierNow ? `tier-${pvpFxTierNow.key}` : "";
@@ -6631,6 +7932,10 @@ function App() {
     profileModalMode === "self" &&
     normalizeProfileAvatarKey(profileModalData?.profile_avatar_key || DEFAULT_PROFILE_AVATAR_KEY) !==
       normalizeProfileAvatarKey(profileDraftAvatarKey);
+  const profileNicknameDirty =
+    profileModalMode === "self" &&
+    String(profileModalData?.nickname || "").trim() !== String(profileDraftNickname || "").trim();
+  const profileDirty = profileAvatarDirty || profileNicknameDirty;
   const activeMenuTourStep = MENU_TOUR_STEPS[menuTourIndex % MENU_TOUR_STEPS.length] || MENU_TOUR_STEPS[0];
   const activeMenuTourPoints = lang === "ko" ? activeMenuTourStep.pointsKo : activeMenuTourStep.pointsEn;
   const aboutPageLink = CONTENT_PAGE_LINKS[0];
@@ -6639,16 +7944,232 @@ function App() {
   const rankingGuidePageLink = CONTENT_PAGE_LINKS[3];
   const updatesPageLink = CONTENT_PAGE_LINKS[4];
   const faqPageLink = CONTENT_PAGE_LINKS[5];
+  const renderPuzzleHpCellFx = () => {
+    if (!isHpPuzzleMode || !puzzle || !puzzleHpDamage) return null;
+    const index = Number(puzzleHpDamage.index);
+    if (!Number.isInteger(index) || index < 0 || index >= puzzle.width * puzzle.height) return null;
+    const x = index % puzzle.width;
+    const y = Math.floor(index / puzzle.width);
+    return (
+      <span
+        key={puzzleHpDamage.id}
+        className="puzzleHpCellFx"
+        style={{
+          left: `${x * cellSize}px`,
+          top: `${y * cellSize}px`,
+          width: `${cellSize}px`,
+          height: `${cellSize}px`,
+        }}
+        aria-hidden="true"
+      />
+    );
+  };
+  const renderPuzzleHintCellFx = () => {
+    if (!isHpPuzzleMode || !puzzle || !puzzleHintReveal) return null;
+    const index = Number(puzzleHintReveal.index);
+    if (!Number.isInteger(index) || index < 0 || index >= puzzle.width * puzzle.height) return null;
+    const x = index % puzzle.width;
+    const y = Math.floor(index / puzzle.width);
+    return (
+      <span
+        key={puzzleHintReveal.id}
+        className="puzzleHintCellFx"
+        style={{
+          left: `${x * cellSize}px`,
+          top: `${y * cellSize}px`,
+          width: `${cellSize}px`,
+          height: `${cellSize}px`,
+        }}
+        aria-hidden="true"
+      />
+    );
+  };
+  const renderBoardTopToolbar = () => {
+    if (!shouldShowPuzzleBoard || isModeCreate) return null;
+    const hintButtonLabel =
+      puzzleHints > 0
+        ? L(`힌트 ${puzzleHints}`, `${puzzleHints} hints`)
+        : hintAdLoading
+          ? L("광고", "Ad")
+          : L("광고 힌트", "Ad hint");
+    const hintButtonDisabled =
+      !canUsePuzzleHint ||
+      hintAdLoading ||
+      (puzzleHints > 0 && !Array.isArray(puzzleSolutionCells));
+    return (
+      <div className="boardTopToolbar" role="toolbar" aria-label={L("퍼즐 도구", "Puzzle tools")}>
+        {isHpPuzzleMode && (
+          <div
+            className={`puzzleHpMeter ${puzzleHpDamage ? "damage" : ""}`}
+            aria-label={L(`남은 HP ${puzzleHp}/${PUZZLE_MAX_HP}`, `HP ${puzzleHp}/${PUZZLE_MAX_HP}`)}
+          >
+            {Array.from({ length: PUZZLE_MAX_HP }).map((_, index) => {
+              const active = index < puzzleHp;
+              const lost = Boolean(puzzleHpDamage && index === puzzleHpDamage.hpAfter);
+              return (
+                <span
+                  key={`${index}-${lost ? puzzleHpDamage.id : "steady"}`}
+                  className={`puzzleHpHeart ${active ? "active" : "empty"} ${lost ? "lost" : ""}`}
+                  aria-hidden="true"
+                >
+                  {active ? "♥" : "♡"}
+                </span>
+              );
+            })}
+          </div>
+        )}
+        {isHpPuzzleMode && (
+          <div className="boardHintGroup" role="group" aria-label={L("힌트", "Hints")}>
+            <button
+              type="button"
+              className={`boardHintBtn ${puzzleHints <= 0 ? "ad" : ""}`}
+              onClick={puzzleHints > 0 ? revealPuzzleHintCell : handleHintAd}
+              disabled={hintButtonDisabled}
+              aria-label={hintButtonLabel}
+              title={hintButtonLabel}
+            >
+              <Lightbulb size={17} />
+              <span>{hintAdLoading ? "..." : puzzleHints > 0 ? puzzleHints : "AD"}</span>
+            </button>
+          </div>
+        )}
+        <div className="boardModeGroup" role="group" aria-label={L("입력 모드", "Input mode")}>
+          <button
+            type="button"
+            className={`boardModeBtn fill ${mobilePaintMode === "fill" ? "active" : ""}`}
+            onClick={() => setMobilePaintMode("fill")}
+            aria-label={L("색칠 모드", "Fill mode")}
+            title={L("색칠", "Fill")}
+          >
+            <Palette size={18} />
+          </button>
+          <button
+            type="button"
+            className={`boardModeBtn mark ${mobilePaintMode === "mark" ? "active" : ""}`}
+            onClick={() => setMobilePaintMode("mark")}
+            aria-label={L("X 표시 모드", "Mark X mode")}
+            title={L("X 표시", "Mark X")}
+          >
+            <X size={18} />
+          </button>
+        </div>
+        <div className="boardActionGroup" role="group" aria-label={L("편집 도구", "Edit tools")}>
+          <button
+            type="button"
+            className="boardToolIconBtn"
+            onClick={undo}
+            disabled={!canUndo || !canInteractBoard}
+            aria-label={L("되돌리기", "Undo")}
+            title={L("되돌리기", "Undo")}
+          >
+            <Undo2 size={18} />
+          </button>
+          <button
+            type="button"
+            className="boardToolIconBtn"
+            onClick={redo}
+            disabled={!canRedo || !canInteractBoard}
+            aria-label={L("다시하기", "Redo")}
+            title={L("다시하기", "Redo")}
+          >
+            <Redo2 size={18} />
+          </button>
+          <button
+            type="button"
+            className="boardToolIconBtn danger"
+            onClick={resetGrid}
+            disabled={!canResetBoard}
+            aria-label={L("초기화", "Clear")}
+            title={L("초기화", "Clear")}
+          >
+            <Eraser size={18} />
+          </button>
+        </div>
+      </div>
+    );
+  };
 
   return (
-    <main className={`page ${isExcelMode ? "excelSkin" : ""} ${isDarkThemeActive ? "themeDark" : ""} ${isModeCreate ? "pageCreateMode" : ""}`} style={excelMainStyle}>
+    <main className={`page ${IS_APPS_IN_TOSS ? "appsInToss" : ""} ${isExcelMode ? "excelSkin" : ""} ${isModeCreate ? "pageCreateMode" : ""}`} style={excelMainStyle}>
       <div className="bgGlow bgGlowA" />
       <div className="bgGlow bgGlowB" />
+      {missionToast && (
+        <div
+          key={missionToast.key}
+          className={`appsMissionToast ${missionToast.leveledUp ? "levelUp" : ""}`}
+          style={{
+            "--xp-from": `${missionToast.fromPercent}%`,
+            "--xp-to": `${missionToast.gaugeToPercent}%`,
+          }}
+        >
+          <Trophy size={17} />
+          <div className="appsMissionToastCopy">
+            <span className="appsMissionToastTop">
+              <strong>{missionToast.leveledUp ? L(`레벨 ${missionToast.level} 달성`, `Level ${missionToast.level}`) : missionToast.title}</strong>
+              <em>+{missionToast.xpGained} XP</em>
+            </span>
+            <span className="appsMissionToastGauge" aria-hidden="true">
+              <i />
+            </span>
+            <span className="appsMissionToastMeta">
+              {missionToast.leveledUp
+                ? L(`Lv.${missionToast.fromLevel} → Lv.${missionToast.level}`, `Lv.${missionToast.fromLevel} → Lv.${missionToast.level}`)
+                : L(`Lv.${missionToast.level} · ${missionToast.currentXp}/${missionToast.nextXp} XP`, `Lv.${missionToast.level} · ${missionToast.currentXp}/${missionToast.nextXp} XP`)}
+            </span>
+          </div>
+        </div>
+      )}
+      {missionRewardFx?.leveledUp && (
+        <div key={`level-fx-${missionRewardFx.key}`} className="appsLevelUpFx" aria-hidden="true">
+          <span className="appsLevelUpRing primary" />
+          <span className="appsLevelUpRing secondary" />
+          <div className="appsLevelUpParticles">
+            {Array.from({ length: 12 }).map((_, index) => (
+              <i
+                key={`level-particle-${index}`}
+                style={{
+                  "--particle-angle": `${index * 30}deg`,
+                  "--particle-delay": `${(index % 4) * 70}ms`,
+                }}
+              />
+            ))}
+          </div>
+          <div className="appsLevelUpCard">
+            <Trophy size={26} />
+            <span>{L("레벨업", "LEVEL UP")}</span>
+            <strong>Lv.{missionRewardFx.level}</strong>
+          </div>
+        </div>
+      )}
+      {showMissionSheet && (
+        <div className="appsMissionSheetBackdrop" role="presentation" onClick={closeMissionSheet}>
+          <motion.div
+            className="appsMissionSheet"
+            role="dialog"
+            aria-modal="true"
+            aria-label={L("미션", "Missions")}
+            initial={{ opacity: 0, y: 28 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.22, ease: "easeOut" }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="appsMissionSheetHandle" aria-hidden="true" />
+            <div className="appsMissionSheetTop">
+              <div>
+                <span>{L("미션", "Missions")}</span>
+                <strong>Lv.{missionLevelInfo.level}</strong>
+              </div>
+              <button type="button" onClick={closeMissionSheet}>{L("닫기", "Close")}</button>
+            </div>
+            {renderMissionPanel()}
+          </motion.div>
+        </div>
+      )}
       <motion.section
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.35, ease: "easeOut" }}
-        className={`panel ${isModeMenu || isModeAuth ? "panelMenu" : ""} ${isModeCreate ? "panelCreateMode" : ""} ${lang === "en" ? "langEn" : "langKo"}`}
+        className={`panel ${isModeMenu || isModeAuth ? "panelMenu" : ""} ${shouldShowPuzzleBoard && !isInRaceRoom ? "panelPuzzleFixed" : ""} ${isModeCreate ? "panelCreateMode" : ""} ${lang === "en" ? "langEn" : "langKo"}`}
       >
         <div className="topBar">
           <button type="button" className="brandWrap" onClick={backToMenu}>
@@ -6657,9 +8178,6 @@ function App() {
           </button>
           {!isModeAuth && (
             <div className="topAuth">
-              <button type="button" className="settingsBtn" onClick={openSettingsModal}>
-                <Settings size={15} /> {L("설정", "Settings")}
-              </button>
               {isLoggedIn ? (
                 <>
                   <button type="button" className="userChip userChipBtn" onClick={openOwnProfile}>
@@ -6671,6 +8189,16 @@ function App() {
                   </button>
                   <button onClick={logout}>{L("로그아웃", "Logout")}</button>
                 </>
+              ) : IS_APPS_IN_TOSS ? (
+                <button
+                  type="button"
+                  className="userChip userChipBtn"
+                  onClick={() => loginWithTossGame("menu")}
+                  disabled={tossLoginLoading}
+                >
+                  <User size={15} />
+                  {tossLoginLoading ? L("연결 중", "Connecting") : L("토스 로그인", "Toss Login")}
+                </button>
               ) : (
                 <>
                   <span className="guestIcon" aria-hidden="true">
@@ -6705,6 +8233,7 @@ function App() {
 
         {isModeMenu && (
           <section className="menuStage">
+            {!IS_APPS_IN_TOSS && (
             <div className="menuTopMeta">
               <div className="menuTopTabs" role="tablist" aria-label={L("상단 메뉴", "Top menu")}>
                 <button
@@ -6777,7 +8306,7 @@ function App() {
                               {link.href === aboutPageLink.href
                                 ? L("사이트 구조와 모드 차이를 한눈에 정리", "See the full site structure and mode overview.")
                                 : link.href === pvpGuidePageLink.href
-                                  ? L("등급전 규칙과 배치 흐름 확인", "Read ranked rules and placement flow.")
+                                  ? L("등급전 규칙과 매칭 흐름 확인", "Read ranked rules and matchmaking flow.")
                                   : L("랭킹과 명예의 전당 기록 체계 확인", "Understand rankings and hall records.")}
                             </span>
                           </span>
@@ -6788,23 +8317,27 @@ function App() {
 
                   {activeMenuTopTab === "community" && (
                     <div className="menuTopPanelGrid">
-                      <button type="button" className="menuTopLinkRow" onClick={goCreateMode}>
-                        <span className="menuTopLinkCopy">
-                          <strong>{L("퍼즐 만들기", "Create Puzzle")}</strong>
-                          <span>{L("직접 만든 퍼즐을 테스트하고 제출", "Build, test, and submit your own board.")}</span>
-                        </span>
-                      </button>
-                      <a
-                        className="menuTopLinkRow"
-                        href="https://discord.gg/42Mqmy9Ka"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                      >
-                        <span className="menuTopLinkCopy">
-                          <strong>{L("디스코드", "Discord")}</strong>
-                          <span>{L("공지, 피드백, 커뮤니티 소식을 확인", "Join the server for updates and feedback.")}</span>
-                        </span>
-                      </a>
+                      {!IS_APPS_IN_TOSS && (
+                        <button type="button" className="menuTopLinkRow" onClick={goCreateMode}>
+                          <span className="menuTopLinkCopy">
+                            <strong>{L("퍼즐 만들기", "Create Puzzle")}</strong>
+                            <span>{L("직접 만든 퍼즐을 테스트하고 제출", "Build, test, and submit your own board.")}</span>
+                          </span>
+                        </button>
+                      )}
+                      {!IS_APPS_IN_TOSS && (
+                        <a
+                          className="menuTopLinkRow"
+                          href="https://discord.gg/42Mqmy9Ka"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                        >
+                          <span className="menuTopLinkCopy">
+                            <strong>{L("디스코드", "Discord")}</strong>
+                            <span>{L("공지, 피드백, 커뮤니티 소식을 확인", "Join the server for updates and feedback.")}</span>
+                          </span>
+                        </a>
+                      )}
                       <a className="menuTopLinkRow" href={updatesPageLink.href}>
                         <span className="menuTopLinkCopy">
                           <strong>{lang === "ko" ? updatesPageLink.labelKo : updatesPageLink.labelEn}</strong>
@@ -6816,7 +8349,61 @@ function App() {
                 </motion.div>
               ) : null}
             </div>
+            )}
 
+            {IS_APPS_IN_TOSS ? (
+              <div className="appsMiniMenu appsModeMenu">
+                <div className="appsMiniSubActions appsMiniTopActions">
+                  <button type="button" className="appsMiniTutorialBtn appsMiniMissionBtn" onClick={openMissionSheet}>
+                    <Trophy size={16} />
+                    <span>{L("미션", "Missions")}</span>
+                    <strong>{dailyMissionDoneCount}/{dailyMissionItems.length}</strong>
+                  </button>
+                  <button type="button" className="appsMiniTutorialBtn" onClick={startTutorialMode} data-tutorial="menu-tutorial">
+                    <BookOpen size={16} />
+                    <span>{L("튜토리얼", "Tutorial")}</span>
+                  </button>
+                </div>
+                <div className="modeChooser appsModeChooser">
+                  <motion.button
+                    whileHover={{ y: -3 }}
+                    whileTap={{ scale: 0.98 }}
+                    className="modeBtn modeSingle"
+                    onClick={goSingleMode}
+                    data-tutorial="menu-single"
+                  >
+                    <span className="modeName">혼자 풀기</span>
+                  </motion.button>
+                  <motion.button
+                    whileHover={{ y: -3 }}
+                    whileTap={{ scale: 0.98 }}
+                    className={`modeBtn modeDaily ${isDailyPuzzleSolvedToday ? "solved" : ""}`}
+                    onClick={goDailyMode}
+                    data-tutorial="menu-daily"
+                  >
+                    <span className="modeTag">{isDailyPuzzleSolvedToday ? "완료" : "미완료"}</span>
+                    <span className="modeName">일일퀴즈</span>
+                  </motion.button>
+                  <motion.button
+                    whileHover={{ y: -3 }}
+                    whileTap={{ scale: 0.98 }}
+                    className="modeBtn modePvp"
+                    onClick={goPvpMode}
+                  >
+                    {pvpModeTagText && <span className="modeTag">{pvpModeTagText}</span>}
+                    <span className="modeName">배틀</span>
+                  </motion.button>
+                  <motion.button
+                    whileHover={{ y: -3 }}
+                    whileTap={{ scale: 0.98 }}
+                    className="modeBtn modeRank"
+                    onClick={goRankingMode}
+                  >
+                    <span className="modeName">랭킹</span>
+                  </motion.button>
+                </div>
+              </div>
+            ) : (
             <div className="modeChooser">
               <motion.button
                 whileHover={{ y: -3 }}
@@ -6855,185 +8442,17 @@ function App() {
                 <span className="modeName">RANKING</span>
               </motion.button>
             </div>
+            )}
 
-            <div className="menuAdfitSection">
-              <AdFitBanner
-                className="menuAdfitShell"
-                adUnit="DAN-ivliYnZMv2yV3VVG"
-                width={728}
-                height={90}
-              />
-            </div>
+            {!IS_APPS_IN_TOSS && (
+              <div className="menuAdfitSection">
+                <div className="menuAdfitShell" />
+              </div>
+            )}
 
             <div className="menuDust menuDustA" />
             <div className="menuDust menuDustB" />
             <div className="menuDust menuDustC" />
-          </section>
-        )}
-
-        {isModePlacementTest && (
-          <section className="placementScreen">
-            <div className="placementHead">
-              <h2>{L("배치고사", "Placement")}</h2>
-              <p>
-                {hasPlacementQualification
-                  ? L(
-                      "배치고사가 완료되었습니다. 현재 배정된 티어와 시작 레이팅이 PvP 기준으로 사용됩니다.",
-                      "Placement is complete. Your assigned tier and starting rating are now used for PvP."
-                    )
-                  : L(
-                      "5분 동안 5x5 -> 10x10 -> 10x10 -> 15x15 -> 15x15 순서로 실제 퍼즐이 출제됩니다. 풀면 자동으로 다음 단계로 이동합니다.",
-                      "Real puzzles are served in order for 5 minutes: 5x5 -> 10x10 -> 10x10 -> 15x15 -> 15x15. Solving one advances automatically."
-                    )}
-              </p>
-              {!hasPlacementQualification && (
-                <div className="placementEntryWarning">
-                  {L(
-                    "주의! 배치고사는 계정당 한 번만 볼 수 있습니다.",
-                    "Warning! Placement can only be taken once per account."
-                  )}
-                </div>
-              )}
-            </div>
-
-            <div className="placementMeta">
-              {placementRunning && (
-                <div className="placementTimer">
-                  {L("남은 시간", "Time Left")}: <b>{placementTimerText}</b>
-                </div>
-              )}
-            </div>
-
-            <div className="placementActions">
-              {!placementRunning && !hasPlacementQualification && (
-                <button className="singleActionBtn" onClick={() => void startPlacementTest()} disabled={placementLoading}>
-                  {placementLoading ? L("로딩 중...", "Loading...") : L("배치고사 시작", "Start Placement")}
-                </button>
-              )}
-              {!placementRunning && hasPlacementQualification && (
-                <button className="singleActionBtn" onClick={goPvpMode}>
-                  {L("랭크전 시작", "Start Ranked")}
-                </button>
-              )}
-              <button
-                className="singleHomeBtn"
-                onClick={() => {
-                  resetPlacementTest();
-                  void backToMenu();
-                }}
-              >
-                HOME
-              </button>
-            </div>
-
-            {placementDisplayCard && (
-              <div className={`placementResultCard ${placementResultTierClass}`}>
-                <div className="placementResultBadge">{L("배치 결과", "Placement Result")}</div>
-                <div className="placementTierMedia">
-                  <img
-                    src={TIER_IMAGE_MAP[placementDisplayCard.tier.key] || TIER_IMAGE_MAP.bronze}
-                    alt={placementDisplayCard.tier.labelEn}
-                  />
-                </div>
-                <div className="placementResultText">
-                  <div className="placementTierNameRow">
-                    <div className="placementTierName">{placementResultTierLabel}</div>
-                    <div className="placementTierRating">R {placementDisplayCard.rating}</div>
-                  </div>
-                </div>
-              </div>
-            )}
-            {placementRevealOpen && placementResultCard && (
-              <div className={`placementRevealOverlay ${placementResultTierClass}`}>
-                <motion.div
-                  className={`placementRevealCard ${placementResultTierClass}`}
-                  initial={{ opacity: 0, scale: 0.84, y: 28 }}
-                  animate={{ opacity: 1, scale: 1, y: 0 }}
-                  transition={{ type: "spring", stiffness: 240, damping: 24, mass: 0.9 }}
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  <div className="placementRevealEyebrow">{L("배치 평가", "Placement Evaluation")}</div>
-                  {placementRevealPhase !== "reveal" && (
-                    <div className="placementRevealHead">
-                      {placementRevealPhase === "analyzing"
-                        ? L("결과 분석 중", "Analyzing")
-                        : L("점수 집계 중", "Counting Score")}
-                    </div>
-                  )}
-
-                  <div className="placementRevealScorePanel">
-                    <div className="placementRevealScoreLabel">{L("배치 점수", "Placement Rating")}</div>
-                    <div className={`placementRevealScore ${placementRevealPhase === "counting" ? "counting" : ""}`}>
-                      R {placementRevealRating}
-                    </div>
-                  </div>
-
-                  {placementRevealPhase !== "reveal" && (
-                    <div className="placementRevealAnalyzePanel">
-                      <div className="placementRevealStatusRow">
-                        <span>{L("단계 데이터", "Stage Data")}</span>
-                        <strong>{placementResultCard.solvedSequential}/{PLACEMENT_STAGES.length}</strong>
-                      </div>
-                      <div className="placementRevealStatusRow">
-                        <span>{L("기록 정렬", "Time Sync")}</span>
-                        <strong>{placementResultElapsedText}</strong>
-                      </div>
-                      <div className="placementRevealAnalyzing">
-                        <span />
-                      </div>
-                    </div>
-                  )}
-
-                  <motion.div
-                    className={`placementRevealTierWrap ${placementRevealPhase === "reveal" ? "show" : ""}`}
-                    initial={false}
-                    animate={{
-                      opacity: placementRevealPhase === "reveal" ? 1 : 0,
-                      scale: placementRevealPhase === "reveal" ? 1 : 0.82,
-                      y: placementRevealPhase === "reveal" ? 0 : 16,
-                    }}
-                    transition={{ type: "spring", stiffness: 190, damping: 18, mass: 0.84 }}
-                  >
-                    <span className="placementRevealImpactRing primary" />
-                    <span className="placementRevealImpactRing secondary" />
-                    <span className="placementRevealTierHalo" />
-                    <div className="placementRevealTierMedia">
-                      <img
-                        src={TIER_IMAGE_MAP[placementResultCard.tier.key] || TIER_IMAGE_MAP.bronze}
-                        alt={placementResultCard.tier.labelEn}
-                      />
-                    </div>
-                    <div className="placementRevealTierStamp">{L("배치 확정", "ASSIGNED")}</div>
-                  </motion.div>
-                  {placementRevealPhase === "reveal" && (
-                    <>
-                      <div className="placementRevealTierName">{placementResultTierLabel}</div>
-                      <div className="placementRevealActions">
-                        <button
-                          className="singleHomeBtn placementRevealClose placementRevealCloseSecondary"
-                          onClick={() => {
-                            setPlacementRevealOpen(false);
-                            resetPlacementTest();
-                            void backToMenu();
-                          }}
-                        >
-                          HOME
-                        </button>
-                        <button
-                          className="singleActionBtn placementRevealClose placementRevealClosePrimary"
-                          onClick={() => {
-                            setPlacementRevealOpen(false);
-                            goPvpMode();
-                          }}
-                        >
-                          {L("랭크전 시작", "Start Ranked")}
-                        </button>
-                      </div>
-                    </>
-                  )}
-                </motion.div>
-              </div>
-            )}
           </section>
         )}
 
@@ -7328,13 +8747,15 @@ function App() {
                   onClick={() => void fetchRatingUsers(isModeLegacyRanking ? "legacy" : "current")}
                   disabled={ratingLoading}
                 >
-                  {ratingLoading ? "LOADING..." : "REFRESH"}
+                  {ratingLoading ? L("불러오는 중...", "LOADING...") : L("새로고침", "REFRESH")}
                 </button>
-                <button className="singleSfxBtn replayOpenBtn" onClick={goReplayHallMode} disabled={replayLoading}>
-                  {replayLoading ? L("로딩 중...", "Loading...") : L("명예의 전당", "HALL OF FAME")}
-                </button>
+                {!IS_APPS_IN_TOSS && (
+                  <button className="singleSfxBtn replayOpenBtn" onClick={goReplayHallMode} disabled={replayLoading}>
+                    {replayLoading ? L("로딩 중...", "Loading...") : L("명예의 전당", "HALL OF FAME")}
+                  </button>
+                )}
                 <button className="singleHomeBtn" onClick={backToMenu}>
-                  HOME
+                  {L("홈", "HOME")}
                 </button>
               </div>
             </div>
@@ -7418,7 +8839,7 @@ function App() {
                 {L("랭킹으로", "Go Ranking")}
               </button>
               <button className="singleHomeBtn" onClick={backToMenu}>
-                HOME
+                {L("홈", "HOME")}
               </button>
             </div>
 
@@ -7509,7 +8930,14 @@ function App() {
         )}
 
         {isModeSingle && (
-          <div className="controls singleTopControls" data-tutorial="single-controls">
+          <div
+            className={`controls singleTopControls ${
+              IS_APPS_IN_TOSS && !isInRaceRoom && !isCustomPreviewPuzzle && !shouldShowPuzzleBoard && singleSection !== "home"
+                ? "appsSingleNavControls"
+                : ""
+            }`}
+            data-tutorial="single-controls"
+          >
             {!isInRaceRoom && (
               isCustomPreviewPuzzle ? (
                 <button className="singleActionBtn" onClick={backToCreateMode}>
@@ -7518,19 +8946,24 @@ function App() {
               ) : shouldShowPuzzleBoard && singleSection === "official" ? (
                 <>
                   <select value={selectedSize} onChange={(e) => setSelectedSize(e.target.value)} disabled={isLoading}>
-                    <option value="5x5">5x5</option>
-                    <option value="10x10">10x10</option>
-                    <option value="15x15">15x15</option>
-                    <option value="20x20">20x20</option>
-                    <option value="25x25">25x25</option>
+                    {SINGLE_SIZE_KEYS.map((sizeKey) => (
+                      <option key={`top-size-${sizeKey}`} value={sizeKey}>{sizeKey}</option>
+                    ))}
                   </select>
                   <button className="singleActionBtn" onClick={loadRandomBySize} disabled={isLoading}>
-                    {isLoading ? "Loading..." : L("퍼즐 바꾸기", "Change Puzzle")}
+                    {isLoading ? L("불러오는 중...", "Loading...") : L("퍼즐 바꾸기", "Change Puzzle")}
                   </button>
                 </>
               ) : singleSection !== "home" ? (
                 <button className="singleSfxBtn" onClick={() => goSingleSection("home")}>
-                  {L("싱글 홈", "SINGLE HOME")}
+                  {IS_APPS_IN_TOSS ? (
+                    <>
+                      <ArrowLeft size={15} />
+                      <span>{L("퍼즐 홈", "Puzzle Home")}</span>
+                    </>
+                  ) : (
+                    L("싱글 홈", "SINGLE HOME")
+                  )}
                 </button>
               ) : (
                 <>
@@ -7539,12 +8972,40 @@ function App() {
               )
             )}
             <button className="singleHomeBtn" onClick={backToMenu} disabled={isInRaceRoom}>
-              HOME
+              {IS_APPS_IN_TOSS ? (
+                <>
+                  <Home size={15} />
+                  <span>{L("메인", "Main")}</span>
+                </>
+              ) : (
+                L("홈", "HOME")
+              )}
             </button>
           </div>
         )}
 
         {isModeSingle && !isInRaceRoom && !isCustomPreviewPuzzle && !shouldShowPuzzleBoard && singleSection === "home" && (
+          IS_APPS_IN_TOSS ? (
+          <section className="singleMenuHub appsSingleHub appsSingleHubV2 appsSingleChoiceHub">
+            <button type="button" className="appsSinglePuzzleCard theme" onClick={() => goSingleSection("custom")}>
+              <span className="appsSinglePuzzleIcon"><Palette size={30} /></span>
+              <span className="appsSinglePuzzleCopy">
+                <small>{L("스몰 테마", "Small themes")}</small>
+                <strong>{L("테마퍼즐", "Theme Puzzle")}</strong>
+                <em>{L(`${themeSolvedCount}/${visibleCreatorSamples.length} 완료`, `${themeSolvedCount}/${visibleCreatorSamples.length} cleared`)}</em>
+              </span>
+            </button>
+
+            <button type="button" className="appsSinglePuzzleCard battle" onClick={() => goSingleSection("official")}>
+              <span className="appsSinglePuzzleIcon"><Flame size={30} /></span>
+              <span className="appsSinglePuzzleCopy">
+                <small>{L("혼자 연습", "Solo practice")}</small>
+                <strong>{L("배틀 퍼즐", "Battle Puzzle")}</strong>
+                <em>5x5 · 10x10 · 15x15</em>
+              </span>
+            </button>
+          </section>
+          ) : (
           <section className="singleMenuHub">
             <div className="singleMenuGrid">
               <button type="button" className="singleMenuCard official" onClick={() => goSingleSection("official")}>
@@ -7571,25 +9032,34 @@ function App() {
               )}
             </div>
           </section>
+          )
+        )}
+
+        {IS_APPS_IN_TOSS && isModeSingle && !isInRaceRoom && !isCustomPreviewPuzzle && !shouldShowPuzzleBoard && singleSection === "daily" && (
+          <section className="singleMenuHub appsSingleHub appsSingleHubV2 appsDailyPage">
+            {renderDailyPanel()}
+          </section>
         )}
 
         {isModeSingle && !isInRaceRoom && !isCustomPreviewPuzzle && !shouldShowPuzzleBoard && singleSection === "official" && (
           <section className="singleSourcePanel">
             <div className="singleSourceHeader">
               <div>
-                <div className="singleSourceTitle">{L("공식 퍼즐", "Official")}</div>
+                <div className="singleSourceTitle">{IS_APPS_IN_TOSS ? L("배틀 퍼즐", "Battle Puzzle") : L("공식 퍼즐", "Official")}</div>
               </div>
             </div>
             <div className="singleSourceBody">
               <select value={selectedSize} onChange={(e) => setSelectedSize(e.target.value)}>
-                <option value="5x5">5x5</option>
-                <option value="10x10">10x10</option>
-                <option value="15x15">15x15</option>
-                <option value="20x20">20x20</option>
-                <option value="25x25">25x25</option>
+                {SINGLE_SIZE_KEYS.map((sizeKey) => (
+                  <option key={`official-size-${sizeKey}`} value={sizeKey}>{sizeKey}</option>
+                ))}
               </select>
               <button className="singleActionBtn" onClick={loadRandomBySize} disabled={isLoading}>
-                {isLoading ? "Loading..." : L("랜덤 불러오기", "Load Random")}
+                {isLoading
+                  ? L("불러오는 중...", "Loading...")
+                  : IS_APPS_IN_TOSS
+                    ? L("배틀 퍼즐 불러오기", "Load Battle Puzzle")
+                    : L("랜덤 불러오기", "Load Random")}
               </button>
             </div>
           </section>
@@ -7601,50 +9071,82 @@ function App() {
               <div>
                 <div className="singleSourceTitle">{L("테마 퍼즐", "Theme Puzzles")}</div>
               </div>
-              <span className="singleSourceCount">{creatorSamples.length}</span>
+              <span className="singleSourceCount">{visibleCreatorSampleCount}</span>
             </div>
 
-            <div className="singleGroupTabs">
-              {CREATOR_SAMPLE_GROUP_ORDER.map((groupKey) => {
-                const label = lang === "ko" ? CREATOR_GROUP_LABELS[groupKey]?.ko || groupKey : CREATOR_GROUP_LABELS[groupKey]?.en || groupKey;
-                const count = creatorSamples.filter((sample) => sample.sizeGroup === groupKey).length;
-                return (
-                  <button
-                    key={`custom-tab-${groupKey}`}
-                    type="button"
-                    className={`singleGroupTab ${customSizeGroup === groupKey ? "active" : ""}`}
-                    onClick={() => setCustomSizeGroup(groupKey)}
-                  >
-                    <span>{label}</span>
-                    <strong>{count}</strong>
-                  </button>
-                );
-              })}
+            {!IS_APPS_IN_TOSS && (
+              <div className="singleGroupTabs">
+                {displayedCustomGroupKeys.map((groupKey) => {
+                  const label = lang === "ko" ? CREATOR_GROUP_LABELS[groupKey]?.ko || groupKey : CREATOR_GROUP_LABELS[groupKey]?.en || groupKey;
+                  const count = creatorSamples.filter((sample) => sample.sizeGroup === groupKey).length;
+                  return (
+                    <button
+                      key={`custom-tab-${groupKey}`}
+                      type="button"
+                      className={`singleGroupTab ${activeCustomSizeGroup === groupKey ? "active" : ""}`}
+                      onClick={() => {
+                        setCustomSizeGroup(groupKey);
+                        setCustomThemeCategory("all");
+                      }}
+                    >
+                      <span>{label}</span>
+                      <strong>{count}</strong>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+
+            <div className="themeProgressPanel">
+              <div className="themeProgressHeader">
+                <span>{L("테마 진행률", "Theme Progress")}</span>
+                <strong>{themeSolvedCount}/{visibleCreatorSamples.length}</strong>
+              </div>
+              <div className="themeProgressTrack" aria-hidden="true">
+                <span style={{ width: `${themeProgressPercent}%` }} />
+              </div>
+              <div className="themeProgressMeta">
+                <span>{L("풀어둔 테마가 여기 쌓입니다.", "Solved themes stack up here.")}</span>
+                <em>{themeProgressPercent}%</em>
+              </div>
+            </div>
+
+            <div className="themeCategoryTabs" role="tablist" aria-label={L("테마 카테고리", "Theme categories")}>
+              {themeCategoryStats.map((category) => (
+                <button
+                  key={`theme-category-${category.key}`}
+                  type="button"
+                  role="tab"
+                  aria-selected={activeThemeCategoryKey === category.key}
+                  className={`themeCategoryTab ${activeThemeCategoryKey === category.key ? "active" : ""}`}
+                  onClick={() => setCustomThemeCategory(category.key)}
+                >
+                  <span>{category.label}</span>
+                  <strong>{category.solvedCount}/{category.count}</strong>
+                </button>
+              ))}
             </div>
 
             <div className="singleCustomSections">
               {(() => {
-                const groupSamples = creatorSamples.filter((sample) => sample.sizeGroup === customSizeGroup);
+                const groupSamples = visibleThemeSamples;
                 if (!groupSamples.length) {
                   return (
                     <div className="singleCommunityEmpty">
-                      {L("이 사이즈에는 아직 퍼즐이 없습니다.", "There are no puzzles in this size yet.")}
+                      {L("이 카테고리에는 아직 퍼즐이 없습니다.", "There are no puzzles in this category yet.")}
                     </div>
                   );
                 }
-                const groupLabel =
-                  lang === "ko"
-                    ? groupSamples[0].groupTitleKo || CREATOR_GROUP_LABELS[customSizeGroup]?.ko || customSizeGroup
-                    : groupSamples[0].groupTitleEn || CREATOR_GROUP_LABELS[customSizeGroup]?.en || customSizeGroup;
                 return (
                   <section className="createSampleSection singleSelectedGroupSection">
                     <div className="createSampleSectionTitle">
-                      <span>{groupLabel}</span>
-                      <span className="createSampleSectionCount">{groupSamples.length}</span>
+                      <span>{activeThemeCategoryStat?.label || L("전체", "All")}</span>
+                      <span className="createSampleSectionCount">{activeThemeCategoryStat?.count || groupSamples.length}</span>
                     </div>
                     <div className="createSamplesGrid singleCustomGrid">
                       {groupSamples.map((sample) => {
-                        const isSolved = sample.isSolved === true;
+                        const isThemeSolved = sample.isSolved === true;
+                        const previewPalette = getSolvedPaintPalette(sample);
                         return (
                           <div key={`single-${sample.id}`} className="createSampleCard singleSampleCard singleSampleCardLarge">
                             <button
@@ -7652,30 +9154,33 @@ function App() {
                               className="createSampleLoadBtn singleCustomListBtn singleCustomListBtnLarge"
                               onClick={() => loadSingleCustomSample(sample)}
                             >
-                              {isSolved ? (
-                                <div
-                                  className="createSamplePreview singleCustomThumbPreview singleCustomThumbPreviewLarge"
-                                  style={{
-                                    gridTemplateColumns: `repeat(${sample.width}, 1fr)`,
-                                    gridTemplateRows: `repeat(${sample.height}, 1fr)`,
-                                  }}
-                                >
-                                  {sample.cells.map((value, idx) => (
+                              <div
+                                className={`createSamplePreview singleCustomThumbPreview singleCustomThumbPreviewLarge ${isThemeSolved ? "solved" : "locked"}`}
+                                style={{
+                                  gridTemplateColumns: `repeat(${sample.width}, 1fr)`,
+                                  gridTemplateRows: `repeat(${sample.height}, 1fr)`,
+                                }}
+                              >
+                                {isThemeSolved ? (
+                                  sample.cells.map((value, idx) => (
                                     <span
                                       key={`single-preview-${sample.id}-${idx}`}
                                       className={`createSamplePixel ${value === 1 ? "filled" : ""}`}
+                                      style={getSolvedPreviewPixelStyle(sample, idx, value, previewPalette)}
                                     />
-                                  ))}
-                                </div>
-                              ) : (
-                                <div className="singleCustomThumb locked singleCustomThumbLarge">
-                                  <span className="singleCustomThumbSize">{sample.width}x{sample.height}</span>
-                                  <span className="singleCustomThumbState">{L("미해결", "Unsolved")}</span>
-                                </div>
-                              )}
+                                  ))
+                                ) : (
+                                  <span className="themePreviewLock" aria-hidden="true">
+                                    <Lock size={22} />
+                                  </span>
+                                )}
+                              </div>
                               <div className="createSampleMeta singleCustomMetaLarge">
                                 <div className="createSampleLabel">{lang === "ko" ? sample.titleKo : sample.titleEn}</div>
-                                <div className="createSampleSize">{sample.width}x{sample.height}</div>
+                                <div className="createSampleSize">
+                                  {sample.width}x{sample.height}
+                                  {!isThemeSolved && <span>{L("미리보기 잠김", "Preview locked")}</span>}
+                                </div>
                               </div>
                             </button>
                           </div>
@@ -7695,18 +9200,20 @@ function App() {
               <div>
                 <div className="singleSourceTitle">{L("유저 퍼즐", "User Puzzles")}</div>
               </div>
-              <span className="singleSourceCount">{communityPuzzles.length}</span>
+              <div className="singleSourceHeaderActions">
+                <span className="singleSourceCount">{visibleCommunityPuzzleCount}</span>
+              </div>
             </div>
 
             <div className="singleGroupTabs">
-              {CREATOR_SAMPLE_GROUP_ORDER.map((groupKey) => {
+              {displayedCommunityGroupKeys.map((groupKey) => {
                 const label = lang === "ko" ? CREATOR_GROUP_LABELS[groupKey]?.ko || groupKey : CREATOR_GROUP_LABELS[groupKey]?.en || groupKey;
                 const count = communityPuzzles.filter((sample) => sample.sizeGroup === groupKey).length;
                 return (
                   <button
                     key={`community-tab-${groupKey}`}
                     type="button"
-                    className={`singleGroupTab ${communitySizeGroup === groupKey ? "active" : ""}`}
+                    className={`singleGroupTab ${activeCommunitySizeGroup === groupKey ? "active" : ""}`}
                     onClick={() => setCommunitySizeGroup(groupKey)}
                   >
                     <span>{label}</span>
@@ -7716,17 +9223,17 @@ function App() {
               })}
             </div>
 
-            {!communityPuzzles.length ? (
+            {!visibleCommunityPuzzles.length ? (
               <div className="singleCommunityEmpty">
                 {communityLoading
                   ? L("유저 퍼즐을 불러오는 중입니다...", "Loading user puzzles...")
-                  : L("아직 승인된 유저 퍼즐이 없습니다.", "There are no approved user puzzles yet.")}
+                  : L("아직 앱용 유저 퍼즐이 없습니다.", "There are no app-sized user puzzles yet.")}
               </div>
             ) : (
               <div className="communityHub">
                 <div className="communityBrowserPanel">
                   {(() => {
-                    const groupPuzzles = communityPuzzles.filter((sample) => sample.sizeGroup === communitySizeGroup);
+                    const groupPuzzles = visibleCommunityPuzzles;
                     if (!groupPuzzles.length) {
                       return (
                         <div className="singleCommunityEmpty">
@@ -7736,8 +9243,8 @@ function App() {
                     }
                     const groupLabel =
                       lang === "ko"
-                        ? groupPuzzles[0].groupTitleKo || CREATOR_GROUP_LABELS[communitySizeGroup]?.ko || communitySizeGroup
-                        : groupPuzzles[0].groupTitleEn || CREATOR_GROUP_LABELS[communitySizeGroup]?.en || communitySizeGroup;
+                        ? groupPuzzles[0].groupTitleKo || CREATOR_GROUP_LABELS[activeCommunitySizeGroup]?.ko || activeCommunitySizeGroup
+                        : groupPuzzles[0].groupTitleEn || CREATOR_GROUP_LABELS[activeCommunitySizeGroup]?.en || activeCommunitySizeGroup;
                     return (
                       <section className="communityGroupSection communitySelectedGroupSection">
                         <div className="communityGroupTitle">
@@ -7746,8 +9253,8 @@ function App() {
                         </div>
                         <div className="communityGroupList communityGroupListLarge">
                           {groupPuzzles.map((sample) => {
-                            const isSolved = sample.isSolved === true;
                             const isSelected = communitySelectedId === sample.id;
+                            const previewPalette = getSolvedPaintPalette(sample);
                             return (
                               <button
                                 key={`community-${sample.id}`}
@@ -7755,32 +9262,28 @@ function App() {
                                 className={`communityListCard communityListCardLarge ${isSelected ? "selected" : ""}`}
                                 onClick={() => setCommunitySelectedId(sample.id)}
                               >
-                                {isSolved ? (
-                                  <div
-                                    className="createSamplePreview communitySamplePreview communityListPreview communityListPreviewLarge"
-                                    style={{
-                                      gridTemplateColumns: `repeat(${sample.width}, 1fr)`,
-                                      gridTemplateRows: `repeat(${sample.height}, 1fr)`,
-                                    }}
-                                  >
-                                    {sample.cells.map((value, idx) => (
-                                      <span
-                                        key={`community-${sample.id}-${idx}`}
-                                        className={`createSamplePixel ${value === 1 ? "filled" : ""}`}
-                                      />
-                                    ))}
-                                  </div>
-                                ) : (
-                                  <div className="singleCustomThumb locked communityLockedThumb communityLockedThumbLarge">
-                                    <span className="singleCustomThumbSize">{sample.width}x{sample.height}</span>
-                                    <span className="singleCustomThumbState">{L("미해결", "Unsolved")}</span>
-                                  </div>
-                                )}
+                                <div
+                                  className="createSamplePreview communitySamplePreview communityListPreview communityListPreviewLarge"
+                                  style={{
+                                    gridTemplateColumns: `repeat(${sample.width}, 1fr)`,
+                                    gridTemplateRows: `repeat(${sample.height}, 1fr)`,
+                                  }}
+                                >
+                                  {sample.cells.map((value, idx) => (
+                                    <span
+                                      key={`community-${sample.id}-${idx}`}
+                                      className={`createSamplePixel ${value === 1 ? "filled" : ""}`}
+                                      style={getSolvedPreviewPixelStyle(sample, idx, value, previewPalette)}
+                                    />
+                                  ))}
+                                </div>
                                 <div className="communityListCardBody communityListCardBodyLarge">
                                   <div className="createSampleLabel">{lang === "ko" ? sample.titleKo : sample.titleEn}</div>
                                   <div className="createSampleSize">{sample.width}x{sample.height}</div>
                                   <div className="communitySampleMetaRow">
                                     <span>{sample.createdByNickname || L("익명", "Anonymous")}</span>
+                                    <span>{L(`댓글 ${sample.commentCount || 0}`, `${sample.commentCount || 0} comments`)}</span>
+                                    <span>{L(`반응 ${getCommunityReactionTotal(sample)}`, `${getCommunityReactionTotal(sample)} reactions`)}</span>
                                   </div>
                                 </div>
                               </button>
@@ -7796,29 +9299,24 @@ function App() {
                   {communityDiscussion ? (
                     <section className="communityDiscussionPanel">
                       <div className="communityDetailHero">
-                        {communityDiscussion.isSolved ? (
-                          <div
-                            className="createSamplePreview communitySamplePreview communityDetailPreview"
-                            style={{
-                              gridTemplateColumns: `repeat(${communityDiscussion.width}, 1fr)`,
-                              gridTemplateRows: `repeat(${communityDiscussion.height}, 1fr)`,
-                            }}
-                          >
-                            {communityDiscussion.cells.map((value, idx) => (
+                        <div
+                          className="createSamplePreview communitySamplePreview communityDetailPreview"
+                          style={{
+                            gridTemplateColumns: `repeat(${communityDiscussion.width}, 1fr)`,
+                            gridTemplateRows: `repeat(${communityDiscussion.height}, 1fr)`,
+                          }}
+                        >
+                          {(() => {
+                            const previewPalette = getSolvedPaintPalette(communityDiscussion);
+                            return communityDiscussion.cells.map((value, idx) => (
                               <span
                                 key={`community-detail-${communityDiscussion.id}-${idx}`}
                                 className={`createSamplePixel ${value === 1 ? "filled" : ""}`}
+                                style={getSolvedPreviewPixelStyle(communityDiscussion, idx, value, previewPalette)}
                               />
-                            ))}
-                          </div>
-                        ) : (
-                          <div className="communityDetailHiddenThumb">
-                            <span className="communityDetailHiddenSize">
-                              {communityDiscussion.width}x{communityDiscussion.height}
-                            </span>
-                            <span className="communityDetailHiddenState">{L("미해결", "Unsolved")}</span>
-                          </div>
-                        )}
+                            ));
+                          })()}
+                        </div>
 
                         <div className="communityDetailInfo">
                           <div className="singleSourceTitle">
@@ -7828,6 +9326,12 @@ function App() {
                             <span className="communityMetaChip">{communityDiscussion.width}x{communityDiscussion.height}</span>
                             <span className="communityMetaChip">
                               {L("제작자", "Creator")}: {communityDiscussion.createdByNickname || L("익명", "Anonymous")}
+                            </span>
+                            <span className="communityMetaChip">
+                              {L(`댓글 ${(communityDiscussion.comments || []).length}`, `${(communityDiscussion.comments || []).length} comments`)}
+                            </span>
+                            <span className="communityMetaChip">
+                              {L(`반응 ${getCommunityReactionTotal(communityDiscussion)}`, `${getCommunityReactionTotal(communityDiscussion)} reactions`)}
                             </span>
                           </div>
                           <button className="singleActionBtn communityPlayBtn" onClick={() => loadCommunityPuzzle(communityDiscussion)}>
@@ -7920,56 +9424,63 @@ function App() {
             </div>
             <div className="adminCreatorList">
               {adminCreatorPuzzles.length ? (
-                adminCreatorPuzzles.map((puzzleItem) => (
-                  <article key={`admin-creator-${puzzleItem.id}`} className="adminCreatorCard">
-                    <div className="adminCreatorCardBody">
-                      <div
-                        className="createSamplePreview adminCreatorPreview"
-                        style={{
-                          gridTemplateColumns: `repeat(${puzzleItem.width}, 1fr)`,
-                          gridTemplateRows: `repeat(${puzzleItem.height}, 1fr)`,
-                        }}
-                      >
-                        {(Array.isArray(puzzleItem.rows) ? puzzleItem.rows : []).flatMap((row, rowIndex) =>
-                          Array.from(String(row || "")).map((cell, colIndex) => (
-                            <span
-                              key={`admin-preview-${puzzleItem.id}-${rowIndex}-${colIndex}`}
-                              className={`createSamplePixel ${cell === "#" ? "filled" : ""}`}
-                            />
-                          ))
-                        )}
-                      </div>
+                adminCreatorPuzzles.map((puzzleItem) => {
+                  const previewPalette = getSolvedPaintPalette(puzzleItem);
+                  return (
+                    <article key={`admin-creator-${puzzleItem.id}`} className="adminCreatorCard">
+                      <div className="adminCreatorCardBody">
+                        <div
+                          className="createSamplePreview adminCreatorPreview"
+                          style={{
+                            gridTemplateColumns: `repeat(${puzzleItem.width}, 1fr)`,
+                            gridTemplateRows: `repeat(${puzzleItem.height}, 1fr)`,
+                          }}
+                        >
+                          {(Array.isArray(puzzleItem.rows) ? puzzleItem.rows : []).flatMap((row, rowIndex) =>
+                            Array.from(String(row || "")).map((cell, colIndex) => {
+                              const cellIndex = rowIndex * Number(puzzleItem.width || 1) + colIndex;
+                              return (
+                                <span
+                                  key={`admin-preview-${puzzleItem.id}-${rowIndex}-${colIndex}`}
+                                  className={`createSamplePixel ${cell === "#" ? "filled" : ""}`}
+                                  style={getSolvedPreviewPixelStyle(puzzleItem, cellIndex, cell, previewPalette)}
+                                />
+                              );
+                            })
+                          )}
+                        </div>
 
-                      <div className="adminCreatorCardContent">
-                        <div className="adminCreatorCardTop">
-                          <div>
-                            <strong>{lang === "ko" ? puzzleItem.titleKo : puzzleItem.titleEn}</strong>
-                            <div className="adminCreatorMeta">
-                              <span>{puzzleItem.width}x{puzzleItem.height}</span>
-                              <span>{puzzleItem.createdByNickname || L("익명", "Anonymous")}</span>
-                              <span>{puzzleItem.approvalStatus}</span>
+                        <div className="adminCreatorCardContent">
+                          <div className="adminCreatorCardTop">
+                            <div>
+                              <strong>{lang === "ko" ? puzzleItem.titleKo : puzzleItem.titleEn}</strong>
+                              <div className="adminCreatorMeta">
+                                <span>{puzzleItem.width}x{puzzleItem.height}</span>
+                                <span>{puzzleItem.createdByNickname || L("익명", "Anonymous")}</span>
+                                <span>{puzzleItem.approvalStatus}</span>
+                              </div>
+                            </div>
+                            <div className="adminCreatorActions">
+                              <button className="singleActionBtn" onClick={() => reviewCreatorPuzzle(puzzleItem.id, "approve")}>
+                                {L("승인", "Approve")}
+                              </button>
+                              <button className="singleActionBtn danger" onClick={() => reviewCreatorPuzzle(puzzleItem.id, "reject")}>
+                                {L("반려", "Reject")}
+                              </button>
                             </div>
                           </div>
-                          <div className="adminCreatorActions">
-                            <button className="singleActionBtn" onClick={() => reviewCreatorPuzzle(puzzleItem.id, "approve")}>
-                              {L("승인", "Approve")}
-                            </button>
-                            <button className="singleActionBtn danger" onClick={() => reviewCreatorPuzzle(puzzleItem.id, "reject")}>
-                              {L("반려", "Reject")}
-                            </button>
+
+                          <div className="adminCreatorValidation">
+                            <span className={puzzleItem.unique ? "ok" : "bad"}>{L("유일해", "Unique")}: {puzzleItem.unique ? "OK" : "NO"}</span>
+                            <span className={!puzzleItem.needsGuess ? "ok" : "bad"}>{L("귀류법", "Guessing")}: {puzzleItem.needsGuess ? "Yes" : "No"}</span>
+                            <span>{L("해답 수", "Solutions")}: {puzzleItem.validationSolutionCount}</span>
+                            <span>{L("논리 풀이", "Logical solve")}: {puzzleItem.validationLogicalSolved ? "OK" : "NO"}</span>
                           </div>
                         </div>
-
-                        <div className="adminCreatorValidation">
-                          <span className={puzzleItem.unique ? "ok" : "bad"}>{L("유일해", "Unique")}: {puzzleItem.unique ? "OK" : "NO"}</span>
-                          <span className={!puzzleItem.needsGuess ? "ok" : "bad"}>{L("귀류법", "Guessing")}: {puzzleItem.needsGuess ? "Yes" : "No"}</span>
-                          <span>{L("해답 수", "Solutions")}: {puzzleItem.validationSolutionCount}</span>
-                          <span>{L("논리 풀이", "Logical solve")}: {puzzleItem.validationLogicalSolved ? "OK" : "NO"}</span>
-                        </div>
                       </div>
-                    </div>
-                  </article>
-                ))
+                    </article>
+                  );
+                })
               ) : (
                 <div className="singleCommunityEmpty">
                   {L("검수할 퍼즐이 없습니다. 관리자 키를 입력하고 불러오기를 눌러주세요.", "There are no submissions to review yet. Enter the admin key and load the list.")}
@@ -7997,7 +9508,7 @@ function App() {
                     {creatorMyPuzzlesLoading ? L("불러오는 중...", "Loading...") : L("새로고침", "Refresh")}
                   </button>
                   <button className="singleHomeBtn" onClick={backToMenu}>
-                    HOME
+                    {L("홈", "HOME")}
                   </button>
                 </div>
 
@@ -8009,6 +9520,7 @@ function App() {
                   ) : creatorMyPuzzles.length ? (
                     creatorMyPuzzles.map((item) => {
                       const approvalStatus = String(item.approvalStatus || "pending");
+                      const previewPalette = getSolvedPaintPalette(item);
                       const approvalLabel =
                         approvalStatus === "approved"
                           ? L("승인됨", "Approved")
@@ -8031,12 +9543,16 @@ function App() {
                             }}
                           >
                             {(Array.isArray(item.rows) ? item.rows : []).flatMap((row, rowIndex) =>
-                              Array.from(String(row || "")).map((cell, colIndex) => (
-                                <span
-                                  key={`creator-mine-preview-${item.id}-${rowIndex}-${colIndex}`}
-                                  className={`createSamplePixel ${cell === "#" ? "filled" : ""}`}
-                                />
-                              ))
+                              Array.from(String(row || "")).map((cell, colIndex) => {
+                                const cellIndex = rowIndex * Number(item.width || 1) + colIndex;
+                                return (
+                                  <span
+                                    key={`creator-mine-preview-${item.id}-${rowIndex}-${colIndex}`}
+                                    className={`createSamplePixel ${cell === "#" ? "filled" : ""}`}
+                                    style={getSolvedPreviewPixelStyle(item, cellIndex, cell, previewPalette)}
+                                  />
+                                );
+                              })
                             )}
                           </div>
                           <div className="creatorSubmissionTop">
@@ -8083,7 +9599,7 @@ function App() {
                   <input
                     type="number"
                     min="5"
-                    max="40"
+                    max={CREATOR_MAX_SIZE}
                     value={creatorWidthInput}
                     onChange={(e) => setCreatorWidthInput(e.target.value)}
                   />
@@ -8093,7 +9609,7 @@ function App() {
                   <input
                     type="number"
                     min="5"
-                    max="40"
+                    max={CREATOR_MAX_SIZE}
                     value={creatorHeightInput}
                     onChange={(e) => setCreatorHeightInput(e.target.value)}
                   />
@@ -8128,7 +9644,7 @@ function App() {
                 {L("싱글 테스트", "Test Play")}
               </button>
               <button className="singleHomeBtn" onClick={backToMenu}>
-                HOME
+                {L("홈", "HOME")}
               </button>
             </div>
             )}
@@ -8209,35 +9725,31 @@ function App() {
 
         {isModePvp && (
           <>
-            {!isLoggedIn && (
-              <div className="raceStateBox">
-                <div>{L("오른쪽 상단에서 로그인 후 PvP 매칭을 이용하세요.", "Log in from the top-right to use PvP matchmaking.")}</div>
-              </div>
-            )}
-            {isLoggedIn && !isInRaceRoom && (
+            {!isInRaceRoom && (
               <section className="pvpQueuePanel">
-                <div className="pvpQueueTitle">RANKED PVP MATCH</div>
+                <div className="pvpQueueTitle">{L("배틀", "Battle")}</div>
                 <div className="pvpQueueDescRow">
                   <div className="pvpQueueDesc">
                     {L(
-                      "실버 티어까지는 5x5·10x10·15x15, 골드 티어는 10x10·15x15·20x20, 다이아 티어부터는 10x10·15x15·20x20·25x25 퍼즐이 등장합니다.",
-                      "Up to Silver tier, 5x5/10x10/15x15 puzzles appear. Gold tier uses 10x10/15x15/20x20, and Diamond+ uses 10x10/15x15/20x20/25x25."
+                      "5x5·10x10·15x15 중 하나가 뽑히고, 같은 퍼즐을 먼저 완성하면 승리합니다.",
+                      "One of 5x5, 10x10, or 15x15 is picked. Finish the same puzzle first to win."
                     )}
                   </div>
-                  <button
-                    type="button"
-                    className="pvpTierGuideTrigger"
-                    onClick={() => setShowPvpTierGuideModal(true)}
-                    aria-label={L("티어 안내 보기", "Open tier guide")}
-                    title={L("티어 안내", "Tier guide")}
-                  >
-                    <span className="pvpTierGuideTriggerGlyph">i</span>
-                  </button>
+                  {!IS_APPS_IN_TOSS && (
+                    <button
+                      type="button"
+                      className="pvpTierGuideTrigger"
+                      onClick={() => setShowPvpTierGuideModal(true)}
+                      aria-label={L("티어 안내 보기", "Open tier guide")}
+                      title={L("티어 안내", "Tier guide")}
+                    >
+                      <span className="pvpTierGuideTriggerGlyph">i</span>
+                    </button>
+                  )}
                 </div>
                 <div className="pvpQueueState">
                   {pvpServerState === "matching" && pvpMatchState === "accept" && L("수락 확인 단계", "Acceptance check")}
-                  {pvpServerState === "matching" && pvpMatchState === "ban" && L("퍼즐 밴 단계", "Puzzle ban phase")}
-                  {pvpServerState === "matching" && pvpMatchState === "reveal" && L("최종 퍼즐 추첨 중", "Final puzzle roulette")}
+                  {pvpServerState === "matching" && pvpMatchState === "reveal" && L("퍼즐 추첨 중", "Picking puzzle")}
                   {pvpServerState === "matching" && !pvpMatchState && L("상대 탐색 중", "Searching opponent")}
                   {pvpServerState === "waiting" && L(`매칭 중... 대기열 ${pvpQueueSize}명`, `Matching... queue ${pvpQueueSize}`)}
                   {pvpServerState === "cancelled" && L("매칭 취소됨", "Match cancelled")}
@@ -8320,79 +9832,30 @@ function App() {
                       onClick={acceptPvpMatch}
                       disabled={pvpAcceptBusy || pvpMatch?.me?.accepted === true}
                     >
-                      {pvpMatch?.me?.accepted ? "ACCEPTED" : pvpAcceptBusy ? L("처리중...", "Processing...") : "ACCEPT MATCH"}
-                    </button>
-                  </div>
-                )}
-
-                {!isPvpShowdownActive && pvpMatchState === "ban" && (
-                  <div className="pvpStageCard">
-                    <div className="pvpStageTitle">
-                      {L(
-                        `${pvpDisplayOptions.length}개 유형 중 1개를 밴하거나 스킵하세요`,
-                        `Ban one of ${pvpDisplayOptions.length} available types, or skip`
-                      )}
-                    </div>
-                    <div className="pvpGaugeWrap ban">
-                      <div className="pvpGaugeFill" style={{ width: `${pvpBanPercent}%` }} />
-                    </div>
-                    <div className="pvpDeadlineText">{(pvpBanLeftMs / 1000).toFixed(1)}s</div>
-                    <div
-                      className={`pvpBanGrid count-${Math.max(1, pvpDisplayOptions.length)}`}
-                      style={{ "--pvp-option-count": Math.max(1, pvpDisplayOptions.length) }}
-                    >
-                      {pvpDisplayOptions.map((option) => {
-                        const sizeKey = option.sizeKey || `${option.width}x${option.height}`;
-                        const bannedBy = Array.isArray(option.bannedByNicknames) ? option.bannedByNicknames : [];
-                        const bannedLabel = bannedBy.length ? bannedBy.join(", ") : "";
-                        const isBanned = bannedBy.length > 0 || option.banned;
-                        const isMine = pvpMatch?.me?.bannedSizeKey === sizeKey;
-                        return (
-                          <button
-                            key={sizeKey}
-                            className={`pvpBanCard ${isBanned ? "banned" : ""} ${isMine ? "mine" : ""}`}
-                            onClick={() => submitPvpBan(sizeKey)}
-                            disabled={pvpBanBusy || pvpMatch?.me?.banSubmitted === true}
-                          >
-                            <span className="pvpBanSize">{sizeKey}</span>
-                            {isBanned && <span className="pvpBanMark">X</span>}
-                            {bannedLabel && <span className="pvpBanMeta">{bannedLabel}</span>}
-                          </button>
-                        );
-                      })}
-                    </div>
-                    <button
-                      className="singleHomeBtn"
-                      onClick={() => submitPvpBan("")}
-                      disabled={pvpBanBusy || pvpMatch?.me?.banSubmitted === true}
-                    >
-                      {pvpMatch?.me?.banSubmitted ? L("제출 완료", "Submitted") : "SKIP BAN"}
+                      {pvpMatch?.me?.accepted ? L("준비 완료", "Ready") : pvpAcceptBusy ? L("처리중...", "Processing...") : L("시작하기", "Start")}
                     </button>
                   </div>
                 )}
 
                 {!isPvpShowdownActive && pvpMatchState === "reveal" && (
                   <div className="pvpStageCard">
-                    <div className="pvpStageTitle">{L("밴 제외 유형 중 랜덤 추첨", "Random draw among unbanned types")}</div>
+                    <div className="pvpStageTitle">{L("이번 판 크기를 뽑는 중", "Picking this battle size")}</div>
                     <div
                       className={`pvpRevealTrack count-${Math.max(1, pvpDisplayOptions.length)}`}
                       style={{ "--pvp-option-count": Math.max(1, pvpDisplayOptions.length) }}
                     >
                       {pvpDisplayOptions.map((option, idx) => {
                         const sizeKey = option.sizeKey || `${option.width}x${option.height}`;
-                        const bannedBy = Array.isArray(option.bannedByNicknames) ? option.bannedByNicknames : [];
-                        const isBanned = bannedBy.length > 0 || option.banned;
                         const isActive = idx === pvpRevealIndex;
                         const isChosen = !isPvpRevealSpinning && pvpMatch?.chosenSizeKey === sizeKey;
                         return (
                           <div
                             key={`reveal-${sizeKey}`}
-                            className={`pvpRevealItem ${isActive ? "active" : ""} ${isBanned ? "banned" : ""} ${
+                            className={`pvpRevealItem ${isActive ? "active" : ""} ${
                               isChosen ? "chosen" : ""
                             }`}
                           >
                             <span>{sizeKey}</span>
-                            {isBanned && <span className="pvpRevealBan">X {bannedBy.join(", ")}</span>}
                           </div>
                         );
                       })}
@@ -8415,21 +9878,21 @@ function App() {
 
                 <div className="pvpQueueActions">
                   <button className="singleActionBtn" onClick={joinPvpQueue} disabled={isLoading || pvpSearching}>
-                    {isLoading ? "MATCHING..." : pvpSearching ? "SEARCHING..." : "FIND OPPONENT"}
+                    {isLoading ? L("준비 중...", "Preparing...") : pvpSearching ? L("찾는 중...", "Searching...") : L("배틀 시작", "Start Battle")}
                   </button>
                   <button className="singleHomeBtn" onClick={() => cancelPvpQueue()} disabled={!pvpSearching || isPvpCancelHomeLocked || isPvpShowdownActive}>
-                    CANCEL
+                    {L("취소", "CANCEL")}
                   </button>
                   <button className="singleSfxBtn" onClick={backToMenu} disabled={isPvpCancelHomeLocked || isPvpShowdownActive}>
-                    HOME
+                    {L("홈", "HOME")}
                   </button>
                 </div>
               </section>
             )}
-            {isLoggedIn && isInRaceRoom && (
+            {isInRaceRoom && (
               <div className="racePanel">
                 <button onClick={leaveRace} disabled={!raceRoomCode}>
-                  Leave Match
+                  {L("배틀 나가기", "Leave Battle")}
                 </button>
               </div>
             )}
@@ -8570,22 +10033,27 @@ function App() {
           </div>
         )}
 
-        {(isModeMulti || isModePvp) && isLoggedIn && raceRoomCode && shouldShowPuzzleBoard && (
-          <section
-            className={`raceMatchLayout ${isMobileBoardUi ? "mobileBoardLayout" : ""} ${
-              isMobileBoardUi && mobileBoardFocus ? "mobileBoardFocusLayout" : ""
-            }`}
-          >
+        {((isModeMulti && isLoggedIn) || isModePvp) && raceRoomCode && shouldShowPuzzleBoard && (
+          <section className={`raceMatchLayout ${isModePvp ? "pvpRaceLayout" : ""}`}>
             <aside className="raceInfoPane">
               <div className="raceInfoTitle">
-                {L("경기 상태", "Match Status")}: {racePhaseLabel}
+                {isModePvp ? L("배틀 상태", "Battle Status") : L("경기 상태", "Match Status")}: {racePhaseLabel}
               </div>
-              <div>{L("방", "Room")}: <b>{roomTitleText || raceRoomCode}</b></div>
-              <div>{L("코드", "Code")}: <b>{raceRoomCode}</b></div>
-              <div>{L("인원", "Players")}: {(raceState?.players || []).length}/{raceState?.maxPlayers || 2}</div>
+              {isModeMulti && (
+                <>
+                  <div>{L("방", "Room")}: <b>{roomTitleText || raceRoomCode}</b></div>
+                  <div>{L("코드", "Code")}: <b>{raceRoomCode}</b></div>
+                  <div>{L("인원", "Players")}: {(raceState?.players || []).length}/{raceState?.maxPlayers || 2}</div>
+                </>
+              )}
+              {isModePvp && (
+                <div className="raceInfoGoal">{L("상대보다 먼저 완성하면 승리", "Finish before the opponent to win")}</div>
+              )}
               {myRacePlayer && (
                 <div className="raceInfoMe">
-                  <span>{myRacePlayer.nickname}</span>
+                  <span className="raceInfoMeLabel">{L("플레이어", "Player")}</span>
+                  <strong>{myRacePlayer.nickname}</strong>
+                  {isModePvp && <em>{myRaceProgressPercent}%</em>}
                 </div>
               )}
               <div className="timerBar">{L("시간", "TIME")} {formattedTime}</div>
@@ -8610,18 +10078,10 @@ function App() {
 
             <div className="raceBoardPane">
               <div
-                ref={isMobileBoardUi ? mobileBoardViewportRef : null}
-                className={`boardWrap ${isMobileBoardUi ? "mobileBoardEnabled" : ""} ${isMobileBoardUi && mobileBoardFocus ? "mobileBoardFocus" : ""}`}
+                className="boardWrap hasTopToolbar"
                 onContextMenu={(e) => e.preventDefault()}
-                onTouchStart={isMobileBoardUi ? onMobileBoardTouchStart : undefined}
-                onTouchMove={isMobileBoardUi ? onMobileBoardTouchMove : undefined}
-                onTouchEnd={isMobileBoardUi ? onMobileBoardTouchEnd : undefined}
-                onTouchCancel={isMobileBoardUi ? onMobileBoardTouchEnd : undefined}
               >
-                <div
-                  className={`mobileBoardScaleShell ${isMobileBoardUi ? "active" : ""}`}
-                  style={isMobileBoardUi ? { transform: `scale(${mobileBoardScale})` } : undefined}
-                >
+                {renderBoardTopToolbar()}
                 <div className={`excelBoardScaffold ${isExcelMode ? "active" : ""}`}>
                   {isExcelMode && (
                     <div className="excelBoardHeaderRow" aria-hidden="true">
@@ -8715,7 +10175,7 @@ function App() {
                       </div>
                       <div
                         ref={boardRef}
-                        className="board"
+                        className={`board ${isHpPuzzleMode && puzzleHpDamage ? "hpDamage" : ""}`}
                         style={{
                           width: `${puzzle.width * cellSize}px`,
                           height: `${puzzle.height * cellSize}px`,
@@ -8725,6 +10185,8 @@ function App() {
                         onContextMenu={(e) => e.preventDefault()}
                       >
                         <canvas ref={canvasRef} className="boardCanvas" />
+                        {renderPuzzleHpCellFx()}
+                        {renderPuzzleHintCellFx()}
                         {isRaceFinished && !isModePvp && <div className="countdownOverlay result">{raceResultText}</div>}
                         {showInactivityWarning && (
                           <div className={`idleDangerOverlay ${inactivityLeftSec <= 3 ? "critical" : inactivityLeftSec <= 6 ? "hot" : ""}`}>
@@ -8744,7 +10206,6 @@ function App() {
                     </div>
                   </div>
                 </div>
-                </div>
                 {isRacePreStartMasked && (
                   <div className="racePuzzleMask">
                     {isRaceCountdown ? (
@@ -8755,21 +10216,15 @@ function App() {
                   </div>
                 )}
               </div>
-              <div className={`singleTools ${isMobileBoardUi && mobileBoardFocus ? "mobileBoardFocusTools" : ""}`}>
-                <button className="toolBtn toolUndo" onClick={undo} disabled={!canUndo || !canInteractBoard}>{L("되돌리기", "UNDO")}</button>
-                <button className="toolBtn toolRedo" onClick={redo} disabled={!canRedo || !canInteractBoard}>{L("다시하기", "REDO")}</button>
-                <button className="toolBtn toolClear" onClick={resetGrid} disabled={!canInteractBoard}>{L("초기화", "CLEAR")}</button>
-              </div>
             </div>
 
             <aside className="raceSidePane">
               <div className="raceSidePlayers">
+                {isModePvp && <div className="raceSideTitle">{L("상대 진행률", "Opponent Progress")}</div>}
                 {(raceState?.players || [])
                   .filter((p) => p.playerId !== racePlayerId)
                   .map((p) => {
-                  const percent = raceState?.totalAnswerCells
-                    ? Math.round(((p.correctAnswerCells || 0) / raceState.totalAnswerCells) * 100)
-                    : 0;
+                  const percent = getRaceProgressPercent(p);
                   const canOpenProfile = canOpenUserProfile(p?.userId);
                   return (
                     canOpenProfile ? (
@@ -8798,117 +10253,98 @@ function App() {
                 })}
               </div>
 
-              <div className="chatBox">
-                <div className="chatTitle">{L("방 채팅", "Room Chat")}</div>
-                <div className="chatBody" ref={chatBodyRef}>
-                  {chatMessages.length === 0 ? (
-                    <div className="chatEmpty">{L("아직 채팅이 없습니다.", "No chat yet.")}</div>
-                  ) : (
-                    chatMessages.map((msg) => (
-                      <div className="chatMsg" key={msg.id}>
-                        {canOpenUserProfile(msg.userId) ? (
-                          <button type="button" className="chatProfileBtn" onClick={() => handleOpenUserProfile(msg.userId, msg)}>
+              {isModeMulti && (
+                <div className="chatBox">
+                  <div className="chatTitle">{L("방 채팅", "Room Chat")}</div>
+                  <div className="chatBody" ref={chatBodyRef}>
+                    {chatMessages.length === 0 ? (
+                      <div className="chatEmpty">{L("아직 채팅이 없습니다.", "No chat yet.")}</div>
+                    ) : (
+                      chatMessages.map((msg) => (
+                        <div className="chatMsg" key={msg.id}>
+                          {canOpenUserProfile(msg.userId) ? (
+                            <button type="button" className="chatProfileBtn" onClick={() => handleOpenUserProfile(msg.userId, msg)}>
+                              <b>{msg.nickname}</b>
+                            </button>
+                          ) : (
                             <b>{msg.nickname}</b>
-                          </button>
-                        ) : (
-                          <b>{msg.nickname}</b>
-                        )}
-                        : {msg.text}
-                      </div>
-                    ))
-                  )}
-                </div>
-                <div className="chatInputRow">
-                  <div className="emojiWrap" ref={emojiWrapRef}>
-                    <button type="button" onClick={() => setShowEmojiPicker((prev) => !prev)} title={L("이모지", "Emoji")}>😀</button>
-                    {showEmojiPicker && (
-                      <div className="emojiPopover">
-                        <EmojiPicker
-                          onEmojiClick={(emojiData) => {
-                            setChatInput((prev) => `${prev}${emojiData.emoji}`);
-                            setShowEmojiPicker(false);
-                          }}
-                          skinTonesDisabled
-                          width={300}
-                          height={340}
-                        />
-                      </div>
+                          )}
+                          : {msg.text}
+                        </div>
+                      ))
                     )}
                   </div>
-                  <input
-                    type="text"
-                    value={chatInput}
-                    onChange={(e) => setChatInput(e.target.value)}
-                    placeholder={L("메시지 입력...", "Type a message...")}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") {
-                        e.preventDefault();
-                        sendRaceChat();
-                      }
-                    }}
-                  />
-                  <button onClick={sendRaceChat} disabled={chatSending || !chatInput.trim()}>
-                    {chatSending ? "..." : L("전송", "Send")}
-                  </button>
+                  <div className="chatInputRow">
+                    <div className="emojiWrap" ref={emojiWrapRef}>
+                      <button type="button" onClick={() => setShowEmojiPicker((prev) => !prev)} title={L("이모지", "Emoji")}>😀</button>
+                      {showEmojiPicker && (
+                        <div className="emojiPopover">
+                          <EmojiPicker
+                            onEmojiClick={(emojiData) => {
+                              setChatInput((prev) => `${prev}${emojiData.emoji}`);
+                              setShowEmojiPicker(false);
+                            }}
+                            skinTonesDisabled
+                            width={300}
+                            height={340}
+                          />
+                        </div>
+                      )}
+                    </div>
+                    <input
+                      type="text"
+                      value={chatInput}
+                      onChange={(e) => setChatInput(e.target.value)}
+                      placeholder={L("메시지 입력...", "Type a message...")}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          sendRaceChat();
+                        }
+                      }}
+                    />
+                    <button onClick={sendRaceChat} disabled={chatSending || !chatInput.trim()}>
+                      {chatSending ? "..." : L("전송", "Send")}
+                    </button>
+                  </div>
                 </div>
-              </div>
+              )}
             </aside>
           </section>
         )}
 
         {shouldShowPuzzleBoard && !isSingleSoloMode && !isModeCreate && !isInRaceRoom && (
-          <div className={`timerBar ${isMobileBoardUi && mobileBoardFocus ? "mobileBoardFocusTimer" : ""}`}>TIME {formattedTime}</div>
+          <div className="timerBar">TIME {formattedTime}</div>
         )}
-        {shouldShowPuzzleBoard && !isSingleSoloMode && !isModeCreate && !isInRaceRoom && (
-          <div className={`gameTools ${isMobileBoardUi && mobileBoardFocus ? "mobileBoardFocusGameTools" : ""}`} role="toolbar" aria-label="Board tools">
-            <button
-              className="iconBtn"
-              onClick={undo}
-              disabled={!canUndo || !canInteractBoard}
-              aria-label="Undo"
-              title="Undo"
-            >
-              <Undo2 size={16} />
-            </button>
-            <button
-              className="iconBtn"
-              onClick={redo}
-              disabled={!canRedo || !canInteractBoard}
-              aria-label="Redo"
-              title="Redo"
-            >
-              <Redo2 size={16} />
-            </button>
-            <button
-              className="iconBtn danger"
-              onClick={resetGrid}
-              disabled={!canInteractBoard}
-              aria-label="Clear board"
-              title="Clear"
-            >
-              <Eraser size={16} />
-            </button>
-          </div>
-        )}
-        {shouldShowPuzzleBoard && isSingleSoloMode && (
-          <div className={`singleBottomBar ${isMobileBoardUi && mobileBoardFocus ? "mobileBoardFocusBottomBar" : ""}`}>
-            <div className={`singleTimer ${isMobileBoardUi && mobileBoardFocus ? "mobileBoardFocusTimerReadout" : ""}`}>
-              {isModePlacementTest ? L("남은 시간", "Time Left") : "TIMER"}: {isModePlacementTest ? placementTimerText : formattedTime}
-            </div>
-            <div className={`singleTools ${isMobileBoardUi && mobileBoardFocus ? "mobileBoardFocusTools" : ""}`} data-tutorial="single-tools">
-              <button className="toolBtn toolUndo" onClick={undo} disabled={!canUndo || !canInteractBoard}>
-                UNDO
-              </button>
-              <button className="toolBtn toolRedo" onClick={redo} disabled={!canRedo || !canInteractBoard}>
-                REDO
-              </button>
-              <button className="toolBtn toolClear" onClick={resetGrid} disabled={!canInteractBoard}>
-                CLEAR
-              </button>
+        {shouldShowSingleTimer && (
+          <div className="singleBottomBar">
+            <div className="singleTimer">
+              {L("남은 시간", "Time Left")}: {placementTimerText}
             </div>
           </div>
         )}
-        {status && !isModeAuth && <div className="status">{status}</div>}
+        {(status || shouldReserveStatusSlot) && !isModeAuth && (
+          <div className={`status ${!status ? "empty" : ""}`}>{status || "\u00a0"}</div>
+        )}
+
+        {isPuzzleHpGameOver && (
+          <div className="modalBackdrop puzzleHpGameOverBackdrop" role="dialog" aria-modal="true">
+            <div className="modalCard puzzleHpGameOverCard">
+              <div className="puzzleHpGameOverHearts" aria-hidden="true">♡ ♡ ♡</div>
+              <h2>{L("기회를 모두 사용했어요", "No HP Left")}</h2>
+              <p>{L("광고를 보면 HP 1로 이어서 할 수 있어요.", "Watch an ad to revive with 1 HP.")}</p>
+              <div className="modalActions puzzleHpGameOverActions">
+                <button type="button" className="puzzleHpReviveBtn" onClick={handleReviveWithAd} disabled={reviveAdLoading}>
+                  {reviveAdLoading ? L("광고 준비 중...", "Loading Ad...") : L("광고 보고 부활", "Watch Ad")}
+                </button>
+                <button type="button" className="puzzleHpRetryBtn" onClick={resetGrid} disabled={reviveAdLoading}>
+                  {L("처음부터 다시", "Try Again")}
+                </button>
+              </div>
+              {reviveAdError && <div className="puzzleHpAdError">{reviveAdError}</div>}
+            </div>
+          </div>
+        )}
 
         {pvpRatingFx && (
           <div className={`rankedFxOverlay ${pvpFxTierClass}`} onClick={dismissPvpRatingFx}>
@@ -8997,78 +10433,6 @@ function App() {
               </div>
             </motion.div>
           </div>
-        )}
-
-        {isMobileBoardUi && (
-          mobileControlsCollapsed ? (
-            <button
-              type="button"
-              ref={mobileToolbarRef}
-              className={`mobileControlsReveal ${mobileBoardFocus ? "focusMode" : ""}`}
-              style={mobileToolbarInlineStyle}
-              onClick={() => setMobileControlsCollapsed(false)}
-              aria-label={L("모바일 컨트롤 열기", "Show mobile controls")}
-            >
-              <ChevronDown size={18} />
-              <span>{L("도구", "Tools")}</span>
-            </button>
-          ) : (
-            <div
-              ref={mobileToolbarRef}
-              className={`mobilePaintToggle ${mobileBoardFocus ? "focusMode" : ""}`}
-              style={mobileToolbarInlineStyle}
-              role="group"
-              aria-label={L("모바일 퍼즐 컨트롤", "Mobile puzzle controls")}
-            >
-              <button
-                type="button"
-                className="paintDragHandle"
-                onPointerDown={startMobileToolbarDrag}
-                aria-label={L("도구 위치 이동", "Move toolbar")}
-              >
-                <GripHorizontal size={16} />
-              </button>
-              <button
-                type="button"
-                className={`paintModeBtn ${mobilePaintMode === "fill" ? "active" : ""}`}
-                onClick={() => setMobilePaintMode("fill")}
-              >
-                {L("채우기", "Fill")}
-              </button>
-              <button
-                type="button"
-                className={`paintModeBtn ${mobilePaintMode === "mark" ? "active" : ""}`}
-                onClick={() => setMobilePaintMode("mark")}
-              >
-                {L("X 표시", "Mark X")}
-              </button>
-              <button type="button" className="paintZoomBtn" onClick={() => nudgeMobileBoardScale(-0.12)} aria-label={L("축소", "Zoom out")}>
-                <Minus size={16} />
-              </button>
-              <button type="button" className="paintScaleBtn" onClick={() => updateMobileBoardScale(1)}>
-                {Math.round(mobileBoardScale * 100)}%
-              </button>
-              <button type="button" className="paintZoomBtn" onClick={() => nudgeMobileBoardScale(0.12)} aria-label={L("확대", "Zoom in")}>
-                <Plus size={16} />
-              </button>
-              <button
-                type="button"
-                className={`paintFocusBtn ${mobileBoardFocus ? "active" : ""}`}
-                onClick={() => setMobileBoardFocus((prev) => !prev)}
-              >
-                {mobileBoardFocus ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
-                <span>{mobileBoardFocus ? L("닫기", "Close") : L("보드", "Board")}</span>
-              </button>
-              <button
-                type="button"
-                className="paintCollapseBtn"
-                onClick={() => setMobileControlsCollapsed(true)}
-                aria-label={L("모바일 컨트롤 숨기기", "Hide mobile controls")}
-              >
-                <ChevronDown size={16} />
-              </button>
-            </div>
-          )
         )}
 
         {showMultiResultModal && isModeMulti && isInRaceRoom && isRaceFinished && (
@@ -9297,7 +10661,7 @@ function App() {
               <p>{needLoginReturnMode === "pvp"
                 ? L("PVP 매칭은 로그인 후 이용 가능합니다.", "PVP matchmaking requires login.")
                 : needLoginReturnMode === "placement_test"
-                  ? L("배치고사는 로그인 후 진행할 수 있습니다.", "Placement is available after login.")
+                  ? L("PVP 매칭은 로그인 후 이용 가능합니다.", "PVP matchmaking requires login.")
                   : L("멀티플레이는 로그인 후 이용 가능합니다.", "Multiplayer requires login.")}</p>
               <div className="modalActions">
                 <button onClick={() => setShowNeedLoginPopup(false)}>{L("취소", "Cancel")}</button>
@@ -9308,60 +10672,6 @@ function App() {
                   }}
                 >
                   {L("로그인하러 가기", "Go to Login")}
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {showPatchNotesModal && (
-          <div className="modalBackdrop" onClick={closePatchNotesModal}>
-            <div className="modalCard patchNotesModal" onClick={(e) => e.stopPropagation()}>
-              <div className="patchNotesHeader">
-                <div className="patchNotesEyebrow">{L("패치 노트", "Patch Notes")}</div>
-                <h2>{L("퍼즐 메뉴가 업데이트되었습니다", "Puzzle menus have been updated")}</h2>
-                <p>
-                  {L(
-                    "싱글 플레이에서 테마 퍼즐, 유저 퍼즐, 퍼즐 만들기를 바로 이용할 수 있습니다.",
-                    "You can now access Theme Puzzles, User Puzzles, and Create Puzzle from Single Player."
-                  )}
-                </p>
-              </div>
-
-              <div className="modalActions">
-                <button onClick={closePatchNotesModal}>{L("닫기", "Close")}</button>
-                <button onClick={dismissPatchNotesForever}>{L("다신 보지 않기", "Don't show again")}</button>
-                <button onClick={openThemePuzzlesFromPatchNotes}>{L("싱글 플레이 열기", "Open Single Player")}</button>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {showPlacementRequiredPopup && (
-          <div className="modalBackdrop" onClick={() => setShowPlacementRequiredPopup(false)}>
-            <div className="modalCard" onClick={(e) => e.stopPropagation()}>
-              <h2>{L("배치고사 필요", "Placement Required")}</h2>
-              <p>
-                {L(
-                  "PvP 시작 전 배치고사를 완료해야 합니다. 배치고사 결과로 초기 티어와 시작 레이팅이 부여됩니다.",
-                  "You must complete placement before entering PvP. Your initial tier and starting rating are assigned from the placement result."
-                )}
-              </p>
-              <div className="placementEntryWarning compact">
-                {L(
-                  "주의! 배치고사는 계정당 한 번만 볼 수 있습니다.",
-                  "Warning! Placement can only be taken once per account."
-                )}
-              </div>
-              <div className="modalActions">
-                <button onClick={() => setShowPlacementRequiredPopup(false)}>{L("취소", "Cancel")}</button>
-                <button
-                  onClick={() => {
-                    setShowPlacementRequiredPopup(false);
-                    goPlacementTestMode();
-                  }}
-                >
-                  {L("배치고사 하러 가기", "Go to Placement")}
                 </button>
               </div>
             </div>
@@ -9399,84 +10709,6 @@ function App() {
           </div>
         )}
 
-        {showSettingsModal && (
-          <div className="modalBackdrop" onClick={() => setShowSettingsModal(false)}>
-            <div className="modalCard settingsModal" onClick={(e) => e.stopPropagation()}>
-              <h2>{L("설정", "Settings")}</h2>
-              <div className="settingsSection">
-                <div className="settingsLabel">{L("언어", "Language")}</div>
-                <div className="settingsChoices">
-                  <button
-                    type="button"
-                    className={`settingsChoice ${settingsDraft.lang === "ko" ? "active" : ""}`}
-                    onClick={() => setSettingsDraft((prev) => ({ ...prev, lang: "ko" }))}
-                  >
-                    KO
-                  </button>
-                  <button
-                    type="button"
-                    className={`settingsChoice ${settingsDraft.lang === "en" ? "active" : ""}`}
-                    onClick={() => setSettingsDraft((prev) => ({ ...prev, lang: "en" }))}
-                  >
-                    EN
-                  </button>
-                </div>
-              </div>
-
-              <div className="settingsSection">
-                <div className="settingsLabel">{L("테마", "Theme")}</div>
-                <div className="settingsChoices">
-                  <button
-                    type="button"
-                    className={`settingsChoice ${settingsDraft.theme === "light" ? "active" : ""}`}
-                    onClick={() => setSettingsDraft((prev) => ({ ...prev, theme: "light" }))}
-                  >
-                    <Sun size={14} /> {L("라이트", "Light")}
-                  </button>
-                  <button
-                    type="button"
-                    className={`settingsChoice ${settingsDraft.theme === "dark" ? "active" : ""}`}
-                    onClick={() => setSettingsDraft((prev) => ({ ...prev, theme: "dark" }))}
-                  >
-                    <Moon size={14} /> {L("다크", "Dark")}
-                  </button>
-                </div>
-              </div>
-
-              <div className="settingsSection">
-                <div className="settingsLabel">{L("사운드", "Sound")}</div>
-                <div className="settingsRangeWrap">
-                  <span className="settingsRangeIcon">
-                    {Number(settingsDraft.soundVolume || 0) <= 0 ? <VolumeX size={15} /> : <Volume2 size={15} />}
-                  </span>
-                  <input
-                    className="settingsRange"
-                    type="range"
-                    min="0"
-                    max="100"
-                    step="1"
-                    value={Number(settingsDraft.soundVolume || 0)}
-                    onChange={(e) =>
-                      setSettingsDraft((prev) => ({
-                        ...prev,
-                        soundVolume: normalizeUiSoundVolume(e.target.value),
-                      }))
-                    }
-                  />
-                  <span className="settingsRangeValue">{Number(settingsDraft.soundVolume || 0)}%</span>
-                </div>
-              </div>
-              {settingsError && <div className="modalError">{settingsError}</div>}
-              <div className="modalActions">
-                <button onClick={() => setShowSettingsModal(false)}>{L("취소", "Cancel")}</button>
-                <button onClick={saveSettings} disabled={settingsSaving}>
-                  {settingsSaving ? L("저장 중...", "Saving...") : L("저장", "Save")}
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-
         {showProfileModal && (
           <div className="modalBackdrop" onClick={closeProfileModal}>
             <div className="modalCard profileModal" onClick={(e) => e.stopPropagation()}>
@@ -9493,7 +10725,7 @@ function App() {
                       >
                         <ProfileAvatar
                           avatarKey={profileModalAvatarKey}
-                          nickname={profileModalData?.nickname}
+                          nickname={profileDraftNickname || profileModalData?.nickname}
                           size="xl"
                         />
                         <span className="profileHeroAvatarChevron">
@@ -9511,14 +10743,30 @@ function App() {
                       <div className="profileEyebrow">
                         {profileModalMode === "self" ? L("내 프로필", "My Profile") : L("플레이어 프로필", "Player Profile")}
                       </div>
-                      <h2>{profileModalData?.nickname || L("알 수 없는 플레이어", "Unknown Player")}</h2>
+                      {profileModalMode === "self" ? (
+                        <label className="profileNicknameEditor">
+                          <span>{L("닉네임", "Nickname")}</span>
+                          <input
+                            type="text"
+                            maxLength={24}
+                            value={profileDraftNickname}
+                            onChange={(e) => setProfileDraftNickname(e.target.value.slice(0, 24))}
+                            disabled={profileModalSaving}
+                            placeholder={L("닉네임 입력", "Enter nickname")}
+                          />
+                        </label>
+                      ) : (
+                        <h2>{profileModalData?.nickname || L("알 수 없는 플레이어", "Unknown Player")}</h2>
+                      )}
                       {profileModalTier && (
                         <div className="profileTierLine">
-                          <img
-                            className="profileTierBadge"
-                            src={TIER_IMAGE_MAP[profileModalTier.key] || TIER_IMAGE_MAP.bronze}
-                            alt={profileModalTierLabel}
-                          />
+                          {!IS_APPS_IN_TOSS && (
+                            <img
+                              className="profileTierBadge"
+                              src={TIER_IMAGE_MAP[profileModalTier.key] || TIER_IMAGE_MAP.bronze}
+                              alt={profileModalTierLabel}
+                            />
+                          )}
                           <span>{profileModalTierLabel}</span>
                           <span>R {Number(profileModalData?.rating || 0)}</span>
                           {profileModalRankText && <span>{profileModalRankText}</span>}
@@ -9596,7 +10844,7 @@ function App() {
                                           className={`profileAvatarOption compact ${selected ? "selected" : ""}`}
                                           onClick={() => setProfileDraftAvatarKey(option.key)}
                                         >
-                                          <ProfileAvatar avatarKey={option.key} nickname={profileModalData.nickname} size="picker" />
+                                          <ProfileAvatar avatarKey={option.key} nickname={profileDraftNickname || profileModalData.nickname} size="picker" />
                                         </button>
                                       );
                                     })}
@@ -9622,12 +10870,14 @@ function App() {
                                             if (unlocked) setProfileDraftAvatarKey(option.key);
                                           }}
                                         >
-                                          <ProfileAvatar avatarKey={option.key} nickname={profileModalData.nickname} size="picker" />
-                                          {!unlocked && (
-                                            <span className="profileAvatarLockBadge prominent">
-                                              <Lock size={12} />
+                                          {unlocked ? (
+                                            <ProfileAvatar avatarKey={option.key} nickname={profileDraftNickname || profileModalData.nickname} size="picker" />
+                                          ) : (
+                                            <span className="profileSpecialLockedPreview" aria-hidden="true">
+                                              <Lock size={22} />
                                             </span>
                                           )}
+                                          <span className="profileAvatarTitle">{label}</span>
                                         </button>
                                       );
                                     })}
@@ -9664,7 +10914,7 @@ function App() {
                   <div className="modalActions">
                     <button onClick={closeProfileModal}>{profileModalMode === "self" ? L("닫기", "Close") : L("확인", "Close")}</button>
                     {profileModalMode === "self" && profileModalData && (
-                      <button onClick={saveProfileAvatarSelection} disabled={profileModalSaving || !profileAvatarDirty}>
+                      <button onClick={saveProfileAvatarSelection} disabled={profileModalSaving || !profileDirty}>
                         {profileModalSaving ? L("저장 중...", "Saving...") : L("프로필 저장", "Save Profile")}
                       </button>
                     )}
@@ -9677,19 +10927,11 @@ function App() {
 
         {shouldShowPuzzleBoard && !isInRaceRoom && (
           <div
-                ref={isMobileBoardUi ? mobileBoardViewportRef : null}
-                className={`boardWrap ${isMobileBoardUi ? "mobileBoardEnabled" : ""} ${isMobileBoardUi && mobileBoardFocus ? "mobileBoardFocus" : ""}`}
+                className={`boardWrap puzzleBoardStage ${!isModeCreate ? "hasTopToolbar" : ""}`}
                 onContextMenu={(e) => e.preventDefault()}
                 data-tutorial={isSingleSoloMode ? "single-board" : undefined}
-                onTouchStart={isMobileBoardUi ? onMobileBoardTouchStart : undefined}
-                onTouchMove={isMobileBoardUi ? onMobileBoardTouchMove : undefined}
-                onTouchEnd={isMobileBoardUi ? onMobileBoardTouchEnd : undefined}
-                onTouchCancel={isMobileBoardUi ? onMobileBoardTouchEnd : undefined}
               >
-                <div
-                  className={`mobileBoardScaleShell ${isMobileBoardUi ? "active" : ""}`}
-                  style={isMobileBoardUi ? { transform: `scale(${mobileBoardScale})` } : undefined}
-                >
+                {renderBoardTopToolbar()}
                 <div className={`excelBoardScaffold ${isExcelMode ? "active" : ""}`}>
                   {isExcelMode && (
                     <div className="excelBoardHeaderRow" aria-hidden="true">
@@ -9798,7 +11040,7 @@ function App() {
 
                       <div
                         ref={boardRef}
-                        className="board"
+                        className={`board ${isHpPuzzleMode && puzzleHpDamage ? "hpDamage" : ""}`}
                         style={{
                           width: `${puzzle.width * cellSize}px`,
                           height: `${puzzle.height * cellSize}px`,
@@ -9808,6 +11050,8 @@ function App() {
                         onContextMenu={(e) => e.preventDefault()}
                       >
                         <canvas ref={canvasRef} className="boardCanvas" />
+                        {renderPuzzleHpCellFx()}
+                        {renderPuzzleHintCellFx()}
                         {isModeTutorial && tutorialHighlightCells.length > 0 && (
                           <div className="tutorialGuideLayer" aria-hidden="true">
                             {tutorialHighlightCells.map((index) => {
@@ -9837,8 +11081,7 @@ function App() {
                     </div>
                   </div>
                 </div>
-                </div>
-          </div>
+              </div>
         )}
       </motion.section>
     </main>
