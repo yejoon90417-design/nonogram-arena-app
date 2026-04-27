@@ -2864,11 +2864,13 @@ async function createPvpRoomForMatch(match) {
     return;
   }
 
-  const puzzle = await fetchRandomPuzzleForSize(match.chosenWidth, match.chosenHeight);
-  if (!puzzle) {
-    cancelPvpMatch(match, "no_puzzle_for_selected_size");
-    return;
+  let puzzle = null;
+  try {
+    puzzle = await fetchRandomPuzzleForSize(match.chosenWidth, match.chosenHeight);
+  } catch {
+    puzzle = null;
   }
+  if (!puzzle) puzzle = buildGuestFallbackPuzzle(match.chosenWidth, match.chosenHeight);
 
   let solutionBits = toSolutionBits(puzzle.solution_bits);
   if (!solutionBits) {
