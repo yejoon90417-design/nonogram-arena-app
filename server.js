@@ -28,35 +28,35 @@ const PVP_REVEAL_MS = 4200;
 const PVP_MATCH_DELAY_MIN_MS = Math.max(1000, Number(process.env.PVP_MATCH_DELAY_MIN_MS || 1000));
 const PVP_MATCH_DELAY_MAX_MS = Math.max(
   PVP_MATCH_DELAY_MIN_MS,
-  Number(process.env.PVP_MATCH_DELAY_MAX_MS || 44000)
+  Number(process.env.PVP_MATCH_DELAY_MAX_MS || 4200)
 );
 const RACE_INACTIVITY_TIMEOUT_MS = Math.max(5000, Number(process.env.RACE_INACTIVITY_TIMEOUT_MS || 60000));
 const PVP_BOT_ENABLED_DEFAULT = process.env.PVP_BOT_ENABLED !== "false";
 let pvpBotEnabledRuntime = PVP_BOT_ENABLED_DEFAULT;
 const ADMIN_API_KEY = String(process.env.ADMIN_API_KEY || "").trim();
-const PVP_BOT_WAIT_MS = Math.max(3000, Number(process.env.PVP_BOT_WAIT_MS || 12000));
+const PVP_BOT_WAIT_MS = Math.max(1200, Number(process.env.PVP_BOT_WAIT_MS || 3200));
 const PVP_BOT_WAIT_MIN_MS = Math.max(
-  3000,
-  Number(process.env.PVP_BOT_WAIT_MIN_MS || Math.floor(PVP_BOT_WAIT_MS * 0.7))
+  1000,
+  Number(process.env.PVP_BOT_WAIT_MIN_MS || Math.floor(PVP_BOT_WAIT_MS * 0.55))
 );
 const PVP_BOT_WAIT_MAX_MS = Math.max(
-  PVP_BOT_WAIT_MIN_MS + 1500,
-  Number(process.env.PVP_BOT_WAIT_MAX_MS || Math.floor(PVP_BOT_WAIT_MS * 1.9))
+  PVP_BOT_WAIT_MIN_MS + 1200,
+  Number(process.env.PVP_BOT_WAIT_MAX_MS || Math.floor(PVP_BOT_WAIT_MS * 1.55))
 );
 const PVP_BOT_MATCH_BASE_CHANCE = Math.max(
   0.1,
-  Math.min(0.95, Number(process.env.PVP_BOT_MATCH_BASE_CHANCE || 0.33))
+  Math.min(0.98, Number(process.env.PVP_BOT_MATCH_BASE_CHANCE || 0.92))
 );
 const PVP_BOT_MATCH_MAX_CHANCE = Math.max(
   PVP_BOT_MATCH_BASE_CHANCE,
-  Math.min(0.99, Number(process.env.PVP_BOT_MATCH_MAX_CHANCE || 0.9))
+  Math.min(1, Number(process.env.PVP_BOT_MATCH_MAX_CHANCE || 1))
 );
 const PVP_BOT_RETRY_MIN_MS = Math.max(1000, Number(process.env.PVP_BOT_RETRY_MIN_MS || 1400));
 const PVP_BOT_RETRY_MAX_MS = Math.max(
   PVP_BOT_RETRY_MIN_MS,
   Number(process.env.PVP_BOT_RETRY_MAX_MS || 4200)
 );
-const PVP_BOT_POOL_MIN = 15;
+const PVP_BOT_POOL_MIN = 50;
 const PVP_BOT_EXCLUDE_EASY = process.env.PVP_BOT_EXCLUDE_EASY !== "false";
 const PVP_BOT_LADDER_ENABLED = process.env.PVP_BOT_LADDER_ENABLED !== "false";
 const PVP_BOT_LADDER_INTERVAL_MS = Math.max(
@@ -237,9 +237,56 @@ const DEFAULT_PROFILE_AVATAR_KEYS = [
   "default-anchor",
 ];
 const PVP_BOT_NAME_POOL = [
-  "Mina", "Jisoo", "Hana", "Yuna", "Sora", "Aria", "Noah", "Liam",
-  "Ava", "Ella", "Sena", "Haru", "Minji", "Yejin", "Rina", "Nari",
-  "Leo", "Nico", "Jude", "Evan", "Kira", "Ryu", "Dami", "Suji",
+  "단우",
+  "리안",
+  "서우",
+  "이안",
+  "하윤",
+  "은우",
+  "윤슬",
+  "다온",
+  "가온",
+  "루다",
+  "새벽안개",
+  "밤하늘",
+  "여름별",
+  "푸른바다",
+  "초록달",
+  "달그림자",
+  "숲속바람",
+  "햇살한스푼",
+  "구름조각",
+  "노을빛",
+  "말랑젤리",
+  "초코우유",
+  "복숭아",
+  "포근곰",
+  "치즈볼",
+  "꿀단지",
+  "솜사탕",
+  "붕어빵",
+  "모찌모찌",
+  "딸기라떼",
+  "치킨은살안쪄요",
+  "월급루팡",
+  "내꿈은돈많은백수",
+  "퇴근하고싶다",
+  "배고픈짐승",
+  "민트초코단",
+  "탕수육은찍먹",
+  "라면먹고갈래",
+  "주식은몰라요",
+  "닉네임할게없다",
+  "또바기",
+  "미리내",
+  "아리아",
+  "꼬마여우",
+  "빛나는밤",
+  "어쩌다마주친",
+  "그냥지나가는사람",
+  "오늘도맑음",
+  "행운의편지",
+  "비밀의숲",
 ];
 const BOT_DIFFICULTY_WEIGHTS = [
   ["easy", 20],
@@ -867,7 +914,6 @@ async function buildUserProfilePayload(userId, { includeUsername = false } = {})
     id: Number(user.id),
     username: includeUsername ? String(user.username || "") : undefined,
     nickname: String(user.nickname || ""),
-    isBot: user.is_bot === true,
     rating: getDisplayRating(user),
     ratingRank,
     rating_games: games,
@@ -1884,11 +1930,11 @@ async function ensureBotUsers() {
     .map((r) => normalizeBotSpawnWeight(r?.bot_spawn_weight))
     .filter((v) => Number.isInteger(v));
   const shouldRebalanceSpawnWeights = currentSpawnWeights.length > 0 && new Set(currentSpawnWeights).size <= 1;
-  for (const row of botRows) {
+  for (const [index, row] of botRows.entries()) {
     const botId = Number(row?.id);
     if (!Number.isInteger(botId)) continue;
     const rawSkill = String(row?.bot_skill || "").trim().toLowerCase();
-    const hasValidSkill = rawSkill === "easy" || rawSkill === "normal" || rawSkill === "hard";
+    const hasValidSkill = rawSkill === "easy" || rawSkill === "normal" || rawSkill === "hard" || rawSkill === "expert";
     const fixedSkill = hasValidSkill ? rawSkill : pickRandomBotDifficulty();
     if (rawSkill !== fixedSkill) {
       await pool.query(
@@ -1912,10 +1958,16 @@ async function ensureBotUsers() {
       );
     }
     const currentNickname = String(row?.nickname || "").trim();
-    if (!/\d{3}$/.test(currentNickname)) continue;
+    const baseBotName = PVP_BOT_NAME_POOL[index % PVP_BOT_NAME_POOL.length] || buildBotIdentity().nickname;
+    const desiredNickname =
+      index < PVP_BOT_NAME_POOL.length
+        ? baseBotName
+        : `${baseBotName}${String(index + 1).padStart(2, "0")}`.slice(0, 24);
+    if (currentNickname === desiredNickname && !/\d{3}$/.test(currentNickname)) continue;
     const candidates = [];
+    if (desiredNickname) candidates.push(desiredNickname);
     const cleaned = currentNickname.replace(/\d{3}$/, "").trim();
-    if (cleaned) candidates.push(cleaned);
+    if (cleaned && cleaned !== desiredNickname) candidates.push(cleaned);
     for (let i = 0; i < 40; i += 1) {
       candidates.push(buildBotIdentity().nickname);
     }
@@ -2946,9 +2998,10 @@ async function createGuestPvpRoom({ nickname = "테스터", sizeKey = "" } = {})
   const nowIso = new Date(now).toISOString();
   const guestPlayerId = randomPlayerId();
   const botPlayerId = randomPlayerId();
-  const botIdentity = buildBotIdentity();
-  const botRating = 1200;
-  const botDifficulty = getEffectiveBotDifficulty("normal", botRating);
+  const botTicket = await fetchAvailablePvpBotTicket(now, { userId: "guest", rating: 1200 });
+  const botIdentity = botTicket || buildBotIdentity();
+  const botRating = normalizeRatingValue(botTicket?.rating || 1200);
+  const botDifficulty = getEffectiveBotDifficulty(botTicket?.botSkill || "normal", botRating);
 
   const room = {
     roomCode,
@@ -3008,13 +3061,13 @@ async function createGuestPvpRoom({ nickname = "테스터", sizeKey = "" } = {})
   });
   room.players.set(botPlayerId, {
     playerId: botPlayerId,
-    userId: `bot-${botPlayerId}`,
+    userId: botTicket?.userId || `bot-${botPlayerId}`,
     nickname: botIdentity.nickname || "상대",
     isBot: true,
     botDifficulty,
     botTargetSec: pickBotTargetSec(puzzle.width, puzzle.height, botDifficulty, botRating),
     rating: botRating,
-    profileAvatarKey: DEFAULT_PROFILE_AVATAR_KEY,
+    profileAvatarKey: normalizeProfileAvatarKey(botTicket?.profileAvatarKey || DEFAULT_PROFILE_AVATAR_KEY),
     joinedAt: nowIso,
     finishedAt: null,
     elapsedSec: null,
@@ -3853,13 +3906,8 @@ setInterval(async () => {
     }
   }
   cleanupPvpQueue(now);
-  if (Math.random() < 0.5) {
-    maybeMatchWaitingTicketsWithHuman(now);
-    await maybeMatchWaitingTicketsWithBot(now);
-  } else {
-    await maybeMatchWaitingTicketsWithBot(now);
-    maybeMatchWaitingTicketsWithHuman(now);
-  }
+  maybeMatchWaitingTicketsWithHuman(now);
+  await maybeMatchWaitingTicketsWithBot(now);
   for (const room of raceRooms.values()) {
     syncRoomState(room);
     advanceBotPlayers(room, now);
@@ -4439,12 +4487,12 @@ app.get("/ratings/leaderboard", async (req, res) => {
   try {
     const authUser = await getAuthUserFromReq(req);
     const listSql = legacyView
-      ? `SELECT id, username, nickname, is_bot, rating, rating_games, rating_wins, rating_losses,
+      ? `SELECT id, username, nickname, rating, rating_games, rating_wins, rating_losses,
                 win_streak_current, win_streak_best, profile_avatar_key, placement_done
          FROM users
          ORDER BY rating DESC, rating_wins DESC, rating_games DESC, id ASC
          LIMIT $1 OFFSET $2`
-      : `SELECT id, username, nickname, is_bot,
+      : `SELECT id, username, nickname,
                 rating,
                 rating_games, rating_wins, rating_losses,
                 win_streak_current, win_streak_best, profile_avatar_key, placement_done

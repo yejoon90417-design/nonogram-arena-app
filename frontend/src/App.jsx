@@ -480,8 +480,8 @@ const HOME_FAQ_ITEMS = [
     key: "placement",
     questionKo: "PvP는 바로 플레이할 수 있나요?",
     questionEn: "Can I jump straight into ranked PvP?",
-    answerKo: "네. 로그인하지 않아도 테스트 배틀을 바로 시작할 수 있고, 로그인하면 등급전 매칭으로 이어집니다.",
-    answerEn: "Yes. You can start a test battle without login, and signed-in players can enter ranked matchmaking directly.",
+    answerKo: "네. 로그인하지 않아도 상대 매칭을 시작할 수 있고, 로그인하면 등급전 매칭으로 이어집니다.",
+    answerEn: "Yes. You can start opponent matchmaking without login, and signed-in players can enter ranked matchmaking directly.",
   },
   {
     key: "single",
@@ -2309,6 +2309,7 @@ function App() {
   const raceRoomCodeRef = useRef("");
   const racePlayerIdRef = useRef("");
   const pvpTicketRef = useRef("");
+  const pvpGuestStartSeqRef = useRef(0);
   const pvpMatchPhaseRef = useRef("");
   const pvpRevealSpinPrevRef = useRef(false);
   const pvpRatingAnimRef = useRef(0);
@@ -4822,7 +4823,7 @@ function App() {
     if (!isLoggedIn) {
       if (!isInRaceRoom) clearPuzzleViewState();
       setPlayMode("pvp");
-      setStatus(L("로그인 없이 테스트 배틀을 바로 시작할 수 있습니다.", "You can start a test battle without logging in."));
+      setStatus(L("상대를 찾고 같은 퍼즐로 대결합니다.", "Find an opponent and race on the same puzzle."));
       return;
     }
     if (!isInRaceRoom) clearPuzzleViewState();
@@ -5857,6 +5858,7 @@ function App() {
   };
 
   const resetPvpQueueState = () => {
+    pvpGuestStartSeqRef.current += 1;
     stopPvpPolling();
     stopPvpRevealAnimation();
     stopPvpRatingAnimation();
@@ -5979,7 +5981,15 @@ function App() {
     if (pvpSearching) return;
     setIsLoading(true);
     resetPvpQueueState();
+    const startSeq = pvpGuestStartSeqRef.current;
+    setPlayMode("pvp");
+    setPvpSearching(true);
+    setPvpServerState("waiting");
+    setPvpQueueSize(1);
+    setStatus(L("상대를 찾는 중...", "Searching for opponent..."));
     try {
+      await new Promise((resolve) => window.setTimeout(resolve, 1400 + Math.floor(Math.random() * 1800)));
+      if (pvpGuestStartSeqRef.current !== startSeq) return;
       const res = await fetch(`${API_BASE}/pvp/guest/start`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -5988,11 +5998,11 @@ function App() {
         }),
       });
       const data = await parseJsonSafe(res);
-      if (!res.ok || !data.ok) throw new Error(data.error || L("테스트 배틀 시작 실패", "Failed to start test battle"));
+      if (!res.ok || !data.ok) throw new Error(data.error || L("매칭 시작 실패", "Failed to start matchmaking"));
       applyPvpMatch(data);
-      setStatus(IS_APPS_IN_TOSS ? "" : L("상대와 같은 퍼즐로 바로 대결합니다.", "Battle started on the same puzzle."));
+      setStatus(IS_APPS_IN_TOSS ? "" : L("상대와 같은 퍼즐로 대결합니다.", "Battle started on the same puzzle."));
     } catch (err) {
-      setStatus(err.message || L("테스트 배틀을 시작하지 못했습니다.", "Could not start test battle."));
+      setStatus(err.message || L("매칭을 시작하지 못했습니다.", "Could not start matchmaking."));
       resetPvpQueueState();
     } finally {
       setIsLoading(false);
