@@ -43,6 +43,14 @@ function getViewportWidth() {
   );
 }
 
+function getViewportHeight() {
+  if (typeof window === "undefined") return 860;
+  return Math.max(
+    560,
+    Math.round(window.visualViewport?.height || window.innerHeight || document.documentElement?.clientHeight || 860)
+  );
+}
+
 const SOLVED_PAINT_PALETTE_RULES = [
   { keys: ["ambulance", "구급차"], colors: ["#f8fafc", "#ef4444", "#2563eb", "#fee2e2"] },
   { keys: ["candy-cane", "사탕 지팡이"], colors: ["#f8fafc", "#ef4444", "#16a34a", "#fee2e2"] },
@@ -2314,6 +2322,7 @@ function App() {
   const [needLoginReturnMode, setNeedLoginReturnMode] = useState("multi");
   const [tossLoginLoading, setTossLoginLoading] = useState(false);
   const [viewportWidth, setViewportWidth] = useState(getViewportWidth);
+  const [viewportHeight, setViewportHeight] = useState(getViewportHeight);
   const [showVoteModal, setShowVoteModal] = useState(false);
   const [activeVote, setActiveVote] = useState(null);
   const [voteSubmitting, setVoteSubmitting] = useState(false);
@@ -2567,13 +2576,16 @@ function App() {
   }, []);
 
   useEffect(() => {
-    const updateViewportWidth = () => setViewportWidth(getViewportWidth());
-    updateViewportWidth();
-    window.addEventListener("resize", updateViewportWidth);
-    window.visualViewport?.addEventListener("resize", updateViewportWidth);
+    const updateViewportSize = () => {
+      setViewportWidth(getViewportWidth());
+      setViewportHeight(getViewportHeight());
+    };
+    updateViewportSize();
+    window.addEventListener("resize", updateViewportSize);
+    window.visualViewport?.addEventListener("resize", updateViewportSize);
     return () => {
-      window.removeEventListener("resize", updateViewportWidth);
-      window.visualViewport?.removeEventListener("resize", updateViewportWidth);
+      window.removeEventListener("resize", updateViewportSize);
+      window.visualViewport?.removeEventListener("resize", updateViewportSize);
     };
   }, []);
 
@@ -3376,13 +3388,18 @@ function App() {
     if (!puzzle) return IS_APPS_IN_TOSS ? 20 : 24;
     if (IS_APPS_IN_TOSS && playMode !== "create") {
       const totalColumns = puzzle.width + Math.max(maxRowHintDepth, 1);
-      const usableWidth = Math.max(320, viewportWidth) - (viewportWidth >= 700 ? 132 : 24);
-      const fittedSize = Math.floor(usableWidth / Math.max(totalColumns, 1));
-      const maxSize = puzzle.width <= 5 ? 40 : puzzle.width <= 10 ? 29 : 18;
-      return Math.max(12, Math.min(maxSize, fittedSize || maxSize));
+      const totalRows = puzzle.height + Math.max(maxColHintDepth, 1);
+      const usableWidth = Math.max(320, viewportWidth) - (viewportWidth >= 700 ? 132 : 20);
+      const bottomControlsReserve = viewportWidth <= 380 ? 142 : 150;
+      const topUiReserve = raceRoomCode ? 164 : 212;
+      const usableHeight = Math.max(260, viewportHeight - topUiReserve - bottomControlsReserve);
+      const widthFit = Math.floor(usableWidth / Math.max(totalColumns, 1));
+      const heightFit = Math.floor(usableHeight / Math.max(totalRows, 1));
+      const comfortMax = puzzle.width <= 5 ? 44 : puzzle.width <= 10 ? 31 : 21;
+      return Math.max(12, Math.min(comfortMax, widthFit || comfortMax, heightFit || comfortMax));
     }
     return puzzle.width >= 25 ? 20 : 24;
-  }, [maxRowHintDepth, playMode, puzzle, viewportWidth]);
+  }, [maxColHintDepth, maxRowHintDepth, playMode, puzzle, raceRoomCode, viewportHeight, viewportWidth]);
   const excelSheetCols = useMemo(() => Array.from({ length: 40 }, (_, idx) => toSheetColumnLabel(idx)), []);
   const excelSheetRows = useMemo(() => Array.from({ length: 120 }, (_, idx) => idx + 1), []);
   const excelBoardCols = useMemo(() => {
