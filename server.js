@@ -3457,6 +3457,10 @@ async function applyRatedResultIfNeeded(room) {
     room.ratedResult = {
       winnerUserId,
       loserUserId,
+      winnerRatingBefore: winnerRating,
+      winnerRatingAfter: winnerNext,
+      loserRatingBefore: loserRating,
+      loserRatingAfter: loserNext,
       winnerDelta: winnerNext - winnerRating,
       loserDelta: loserNext - loserRating,
       winnerStreak: winnerNextStreak,
@@ -3850,6 +3854,7 @@ function roomPublicState(room) {
     isFinished: room.state === "finished",
     ratedResultApplied: Boolean(room.ratedResultApplied),
     ratedResultApplying: Boolean(room.ratedResultApplying),
+    ratedResult: room.ratedResult || null,
     inactivityTimeoutMs: RACE_INACTIVITY_TIMEOUT_MS,
     serverNow: Date.now(),
   };

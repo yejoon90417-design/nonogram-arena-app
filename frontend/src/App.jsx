@@ -7382,6 +7382,27 @@ function App() {
   useEffect(() => {
     if (!isLoggedIn || !isModePvp || !isInRaceRoom || racePhase !== "finished" || !raceRoomCode) return;
     if (pvpRatingFxDoneRoomRef.current === raceRoomCode) return;
+    const ratedResult = raceState?.ratedResult || null;
+    const myUserId = Number(authUser?.id);
+    if (ratedResult && Number.isInteger(myUserId)) {
+      const didWin = Number(ratedResult.winnerUserId) === myUserId;
+      const didLose = Number(ratedResult.loserUserId) === myUserId;
+      if (didWin || didLose) {
+        const fromRating = didWin
+          ? Number(ratedResult.winnerRatingBefore)
+          : Number(ratedResult.loserRatingBefore);
+        const toRating = didWin
+          ? Number(ratedResult.winnerRatingAfter)
+          : Number(ratedResult.loserRatingAfter);
+        if (Number.isFinite(fromRating) && Number.isFinite(toRating) && fromRating !== toRating) {
+          pvpRatingFxDoneRoomRef.current = raceRoomCode;
+          startPvpRatingAnimation(fromRating, toRating, raceRoomCode, {
+            result: didWin ? "win" : "loss",
+          });
+          return;
+        }
+      }
+    }
     const fromRating = Number(pvpRatingBaseRef.current);
     const fromGames = Number(pvpRatingBaseGamesRef.current);
     const toRating = Number(authUser?.rating);
@@ -7394,7 +7415,31 @@ function App() {
     startPvpRatingAnimation(fromRating, toRating, raceRoomCode, {
       result: didWin ? "win" : "loss",
     });
-  }, [isLoggedIn, isModePvp, isInRaceRoom, racePhase, raceRoomCode, authUser?.rating, authUser?.rating_games, raceState?.winnerPlayerId, racePlayerId]);
+  }, [
+    isLoggedIn,
+    isModePvp,
+    isInRaceRoom,
+    racePhase,
+    raceRoomCode,
+    authUser?.id,
+    authUser?.rating,
+    authUser?.rating_games,
+    raceState?.ratedResult,
+    raceState?.winnerPlayerId,
+    racePlayerId,
+  ]);
+
+  useEffect(() => {
+    if (isLoggedIn || !isModePvp || !isInRaceRoom || racePhase !== "finished" || !raceRoomCode) return;
+    if (pvpRatingFxDoneRoomRef.current === raceRoomCode) return;
+    const fromRating = Number.isFinite(Number(pvpRatingBaseRef.current)) ? Number(pvpRatingBaseRef.current) : 1500;
+    const didWin = raceState?.winnerPlayerId === racePlayerId;
+    const toRating = Math.max(0, fromRating + (didWin ? 24 : -18));
+    pvpRatingFxDoneRoomRef.current = raceRoomCode;
+    startPvpRatingAnimation(fromRating, toRating, raceRoomCode, {
+      result: didWin ? "win" : "loss",
+    });
+  }, [isLoggedIn, isModePvp, isInRaceRoom, racePhase, raceRoomCode, raceState?.winnerPlayerId, racePlayerId]);
 
   useEffect(() => {
     if (!isRaceCountdown || countdownLeft == null) {
