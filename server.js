@@ -1469,6 +1469,14 @@ async function ensureAuthTables() {
     `CREATE INDEX IF NOT EXISTS idx_user_sessions_expires_at ON user_sessions(expires_at);`
   );
   await pool.query(`
+    CREATE TABLE IF NOT EXISTS user_app_state (
+      user_id BIGINT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+      daily_puzzle_history JSONB NOT NULL DEFAULT '{}'::jsonb,
+      mission_state JSONB NOT NULL DEFAULT '{}'::jsonb,
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+  `);
+  await pool.query(`
     CREATE TABLE IF NOT EXISTS email_verification_requests (
       user_id BIGINT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
       email VARCHAR(320) NOT NULL,
@@ -4272,6 +4280,78 @@ app.get("/auth/me", requireAuth, async (req, res) => {
     ok: true,
     user: buildClientUser(req.authUser),
   });
+});
+
+function normalizeStoredAppJson(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+  return value;
+}
+
+function buildUserAppStatePayload(row) {
+  return {
+    dailyPuzzleHistory: normalizeStoredAppJson(row?.daily_puzzle_history),
+    missionState: normalizeStoredAppJson(row?.mission_state),
+    updatedAtMs: Math.max(0, Math.round(Number(row?.updated_at_ms || 0))),
+  };
+}
+
+async function getOrCreateUserAppState(userId) {
+  const numericUserId = Number(userId || 0);
+  const insertResult = await pool.query(
+    `INSERT INTO user_app_state (user_id)
+     VALUES ($1)
+     ON CONFLICT (user_id) DO NOTHING
+     RETURNING
+       daily_puzzle_history,
+       mission_state,
+       EXTRACT(EPOCH FROM updated_at) * 1000 AS updated_at_ms`,
+    [numericUserId]
+  );
+  if (insertResult.rows.length) return buildUserAppStatePayload(insertResult.rows[0]);
+
+  const { rows } = await pool.query(
+    `SELECT
+       daily_puzzle_history,
+       mission_state,
+       EXTRACT(EPOCH FROM updated_at) * 1000 AS updated_at_ms
+     FROM user_app_state
+     WHERE user_id = $1
+     LIMIT 1`,
+    [numericUserId]
+  );
+  return rows.length ? buildUserAppStatePayload(rows[0]) : buildUserAppStatePayload(null);
+}
+
+app.get("/app-state/me", requireAuth, async (req, res) => {
+  try {
+    const state = await getOrCreateUserAppState(req.authUser.id);
+    return res.json({ ok: true, state });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+app.put("/app-state/me", requireAuth, async (req, res) => {
+  try {
+    const dailyPuzzleHistory = normalizeStoredAppJson(req.body?.dailyPuzzleHistory);
+    const missionState = normalizeStoredAppJson(req.body?.missionState);
+    const { rows } = await pool.query(
+      `INSERT INTO user_app_state (user_id, daily_puzzle_history, mission_state, updated_at)
+       VALUES ($1, $2::jsonb, $3::jsonb, now())
+       ON CONFLICT (user_id) DO UPDATE SET
+         daily_puzzle_history = EXCLUDED.daily_puzzle_history,
+         mission_state = EXCLUDED.mission_state,
+         updated_at = now()
+       RETURNING
+         daily_puzzle_history,
+         mission_state,
+         EXTRACT(EPOCH FROM updated_at) * 1000 AS updated_at_ms`,
+      [Number(req.authUser.id), JSON.stringify(dailyPuzzleHistory), JSON.stringify(missionState)]
+    );
+    return res.json({ ok: true, state: buildUserAppStatePayload(rows[0]) });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: err.message });
+  }
 });
 
 app.get("/vote/current", requireAuth, async (req, res) => {

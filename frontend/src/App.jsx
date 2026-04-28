@@ -1,9 +1,9 @@
 ﻿import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import confetti from "canvas-confetti";
-import { getAnonymousKey, GoogleAdMob } from "@apps-in-toss/web-framework";
+import { closeView, getAnonymousKey, GoogleAdMob, setIosSwipeGestureEnabled } from "@apps-in-toss/web-framework";
 import EmojiPicker from "emoji-picker-react";
 import { motion } from "framer-motion";
-import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, BookOpen, CalendarDays, CheckCircle2, ChevronDown, Eraser, Flame, Home, Lightbulb, Lock, LogIn, Palette, Redo2, Shuffle, Square, Trophy, Undo2, User, UserPlus, X } from "lucide-react";
+import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, BookOpen, CalendarDays, CheckCircle2, ChevronDown, Eraser, Flame, Home, Lightbulb, Lock, LogIn, Palette, Redo2, Shuffle, Square, Trophy, Undo2, User, UserPlus, Volume2, VolumeX, X } from "lucide-react";
 import { GENERATED_CREATOR_SAMPLE_PUZZLES } from "./creatorSamples.generated";
 import { GENERATED_DAILY_PUZZLES } from "./dailyPuzzles.generated";
 import "./App.css";
@@ -152,11 +152,13 @@ const PROFILE_AVATAR_LOCAL_OVERRIDES_KEY = "nonogram-local-profile-avatar-overri
 const LANG_KEY = "nonogram-ui-lang";
 const THEME_KEY = "nonogram-ui-theme";
 const STYLE_VARIANT_KEY = "nonogram-ui-style-variant";
+const SOUND_ENABLED_KEY = "nonogram-sound-enabled-v1";
 const TUTORIAL_SEEN_KEY = "nonogram-tutorial-seen-v1";
 const DAILY_PUZZLE_HISTORY_KEY = "nonogram-daily-puzzle-history-v1";
 const SHOULD_PERSIST_DAILY_PUZZLE_HISTORY = true;
 const MISSION_STATE_KEY = "nonogram-mission-state-v1";
 const SHOULD_PERSIST_MISSION_STATE = true;
+const APP_STATE_SAVE_DEBOUNCE_MS = 700;
 const CREATOR_ADMIN_KEY = "nonogram-creator-admin-key";
 const PVP_SIZE_KEYS = ["5x5", "10x10", "15x15", "20x20", "25x25"];
 const PVP_BATTLE_SIZE_KEYS = ["5x5", "10x10", "15x15"];
@@ -1921,6 +1923,28 @@ function buildDailySolvedHistory(history, solvedPuzzle, solvedAt = Date.now()) {
   };
 }
 
+function pickDailySolveEntry(leftEntry, rightEntry) {
+  if (!leftEntry) return rightEntry;
+  if (!rightEntry) return leftEntry;
+  const left = leftEntry && typeof leftEntry === "object" ? leftEntry : { solvedAt: Number(leftEntry || 0) };
+  const right = rightEntry && typeof rightEntry === "object" ? rightEntry : { solvedAt: Number(rightEntry || 0) };
+  const leftAt = Math.max(0, Number(left.solvedAt || 0));
+  const rightAt = Math.max(0, Number(right.solvedAt || 0));
+  const merged = rightAt >= leftAt ? { ...left, ...right } : { ...right, ...left };
+  merged.solvedAt = Math.max(leftAt, rightAt);
+  return merged;
+}
+
+function mergeDailyPuzzleHistories(leftHistory, rightHistory) {
+  const left = normalizeDailyPuzzleHistory(leftHistory);
+  const right = normalizeDailyPuzzleHistory(rightHistory);
+  const solves = { ...left.solves };
+  Object.entries(right.solves).forEach(([dateKey, entry]) => {
+    solves[dateKey] = pickDailySolveEntry(solves[dateKey], entry);
+  });
+  return { solves };
+}
+
 function buildDailyCompletionResult(solvedPuzzle, history, elapsedMs, elapsedSec = 0) {
   const dateKey = getDailySolvedDateKey(solvedPuzzle);
   const nextHistory = buildDailySolvedHistory(history, solvedPuzzle);
@@ -2075,8 +2099,71 @@ function writeMissionState(value) {
   try {
     localStorage.setItem(MISSION_STATE_KEY, JSON.stringify(normalizeMissionState(value)));
   } catch {
-    // Mission progress is a local prototype until server sync lands.
+    // Local cache is only a fallback; logged-in users are synced to the server.
   }
+}
+
+function mergeTruthyRecord(leftRecord, rightRecord) {
+  const merged = {};
+  [leftRecord, rightRecord].forEach((record) => {
+    if (!record || typeof record !== "object") return;
+    Object.entries(record).forEach(([key, value]) => {
+      if (value) merged[key] = true;
+    });
+  });
+  return merged;
+}
+
+function mergeMissionProgress(leftProgress, rightProgress) {
+  const merged = {};
+  [leftProgress, rightProgress].forEach((progress) => {
+    if (!progress || typeof progress !== "object") return;
+    Object.entries(progress).forEach(([key, value]) => {
+      const next = Math.max(0, Number(value || 0));
+      if (!Number.isFinite(next)) return;
+      merged[key] = Math.max(Number(merged[key] || 0), next);
+    });
+  });
+  return merged;
+}
+
+function mergeMissionBucket(leftBucket, rightBucket, periodKey) {
+  const left = normalizeMissionBucket(leftBucket, periodKey);
+  const right = normalizeMissionBucket(rightBucket, periodKey);
+  return {
+    periodKey,
+    progress: mergeMissionProgress(left.progress, right.progress),
+    rewarded: mergeTruthyRecord(left.rewarded, right.rewarded),
+    seen: mergeTruthyRecord(left.seen, right.seen),
+  };
+}
+
+function getRewardedMissionXp(bucket, definitions) {
+  if (!bucket?.rewarded || typeof bucket.rewarded !== "object") return 0;
+  return definitions.reduce((sum, mission) => (bucket.rewarded[mission.id] ? sum + mission.xp : sum), 0);
+}
+
+function getCurrentMissionRewardXp(state) {
+  return (
+    getRewardedMissionXp(state.daily, DAILY_MISSION_DEFINITIONS) +
+    getRewardedMissionXp(state.weekly, WEEKLY_MISSION_DEFINITIONS)
+  );
+}
+
+function mergeMissionStates(leftState, rightState, dateKey = getKstDateKey()) {
+  const left = normalizeMissionState(leftState, dateKey);
+  const right = normalizeMissionState(rightState, dateKey);
+  const daily = mergeMissionBucket(left.daily, right.daily, dateKey);
+  const weekly = mergeMissionBucket(left.weekly, right.weekly, getMissionWeekKey(dateKey));
+  const leftBaseXp = Math.max(0, Number(left.totalXp || 0) - getCurrentMissionRewardXp(left));
+  const rightBaseXp = Math.max(0, Number(right.totalXp || 0) - getCurrentMissionRewardXp(right));
+  const mergedRewardXp = getCurrentMissionRewardXp({ daily, weekly });
+  return {
+    version: 1,
+    totalXp: Math.max(leftBaseXp, rightBaseXp) + mergedRewardXp,
+    daily,
+    weekly,
+  };
 }
 
 function getMissionLevelNeed(level) {
@@ -2438,7 +2525,15 @@ function App() {
   const [isCoarsePointer, setIsCoarsePointer] = useState(false);
   const [showMultiResultModal, setShowMultiResultModal] = useState(false);
   const [nowMs, setNowMs] = useState(Date.now());
-  const soundVolume = 100;
+  const [soundEnabled, setSoundEnabled] = useState(() => {
+    try {
+      return localStorage.getItem(SOUND_ENABLED_KEY) !== "0";
+    } catch {
+      return true;
+    }
+  });
+  const soundVolume = soundEnabled ? 100 : 0;
+  const [showExitConfirmModal, setShowExitConfirmModal] = useState(false);
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [profileModalMode, setProfileModalMode] = useState("self"); // self | public
   const [profileModalLoading, setProfileModalLoading] = useState(false);
@@ -2531,6 +2626,9 @@ function App() {
   const raceProgressBusyRef = useRef(false);
   const audioCtxRef = useRef(null);
   const masterGainRef = useRef(null);
+  const audioPausedByVisibilityRef = useRef(false);
+  const exitConfirmedRef = useRef(false);
+  const playModeRef = useRef(playMode);
   const countdownCueRef = useRef(-1);
   const inactivityWarnCueRef = useRef(-1);
   const prevRacePhaseRef = useRef("idle");
@@ -2543,6 +2641,11 @@ function App() {
   const dailyResultCalendarTimerRef = useRef(0);
   const missionToastTimerRef = useRef(0);
   const missionRewardFxTimerRef = useRef(0);
+  const dailyPuzzleHistoryRef = useRef(dailyPuzzleHistory);
+  const missionStateRef = useRef(missionState);
+  const appStateSaveTimerRef = useRef(0);
+  const appStateHydratingRef = useRef(false);
+  const appStateLastSavedJsonRef = useRef("");
   const puzzleStartedAtMsRef = useRef(0);
   const cellInputFxIdRef = useRef(0);
   const cellInputFxTimerRef = useRef(0);
@@ -2560,8 +2663,147 @@ function App() {
   }, [adminCreatorKey, authHeaders]);
   const isLoggedIn = Boolean(authToken && authUser);
 
+  useEffect(() => {
+    dailyPuzzleHistoryRef.current = dailyPuzzleHistory;
+  }, [dailyPuzzleHistory]);
+
+  useEffect(() => {
+    missionStateRef.current = missionState;
+  }, [missionState]);
+
+  const saveUserAppState = useCallback(async (dailyHistory, missions, { keepalive = false } = {}) => {
+    const payload = {
+      dailyPuzzleHistory: normalizeDailyPuzzleHistory(dailyHistory),
+      missionState: normalizeMissionState(missions),
+    };
+    const payloadJson = JSON.stringify(payload);
+    if (!authToken || !isLoggedIn) return false;
+    if (!keepalive && payloadJson === appStateLastSavedJsonRef.current) return true;
+    try {
+      const res = await fetch(`${API_BASE}/app-state/me`, {
+        method: "PUT",
+        headers: {
+          Authorization: `Bearer ${authToken}`,
+          "Content-Type": "application/json",
+        },
+        body: payloadJson,
+        keepalive,
+      });
+      if (!res.ok) return false;
+      appStateLastSavedJsonRef.current = payloadJson;
+      return true;
+    } catch {
+      return false;
+    }
+  }, [authToken, isLoggedIn]);
+
   const L = (ko, en) => (IS_APPS_IN_TOSS || lang === "ko" ? ko : en);
   const normalizeClientEmail = (value) => String(value || "").trim().toLowerCase();
+
+  useEffect(() => {
+    playModeRef.current = playMode;
+  }, [playMode]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(SOUND_ENABLED_KEY, soundEnabled ? "1" : "0");
+    } catch {
+      // Sound preference should never block play.
+    }
+  }, [soundEnabled]);
+
+  useEffect(() => {
+    if (appStateSaveTimerRef.current) {
+      window.clearTimeout(appStateSaveTimerRef.current);
+      appStateSaveTimerRef.current = 0;
+    }
+    if (!isLoggedIn || !authToken) {
+      appStateHydratingRef.current = false;
+      appStateLastSavedJsonRef.current = "";
+      return undefined;
+    }
+
+    let cancelled = false;
+    appStateHydratingRef.current = true;
+    (async () => {
+      try {
+        const res = await fetch(`${API_BASE}/app-state/me`, {
+          headers: { Authorization: `Bearer ${authToken}` },
+        });
+        const data = await parseJsonSafe(res);
+        if (!res.ok || !data?.ok || cancelled) return;
+        const remoteState = data.state || {};
+        const mergedDailyHistory = mergeDailyPuzzleHistories(
+          dailyPuzzleHistoryRef.current,
+          remoteState.dailyPuzzleHistory
+        );
+        const mergedMissionState = mergeMissionStates(
+          missionStateRef.current,
+          remoteState.missionState,
+          getKstDateKey()
+        );
+        setDailyPuzzleHistory(mergedDailyHistory);
+        writeDailyPuzzleHistory(mergedDailyHistory);
+        setMissionState(mergedMissionState);
+        writeMissionState(mergedMissionState);
+        appStateHydratingRef.current = false;
+        void saveUserAppState(mergedDailyHistory, mergedMissionState);
+      } catch {
+        // Server state sync is best-effort; local cache keeps the app usable.
+      } finally {
+        if (!cancelled) appStateHydratingRef.current = false;
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+      appStateHydratingRef.current = false;
+    };
+  }, [authToken, authUser?.id, isLoggedIn, saveUserAppState]);
+
+  useEffect(() => {
+    writeDailyPuzzleHistory(dailyPuzzleHistory);
+    writeMissionState(missionState);
+    if (typeof window === "undefined") return undefined;
+    if (appStateSaveTimerRef.current) {
+      window.clearTimeout(appStateSaveTimerRef.current);
+      appStateSaveTimerRef.current = 0;
+    }
+    if (!isLoggedIn || !authToken || appStateHydratingRef.current) return undefined;
+    appStateSaveTimerRef.current = window.setTimeout(() => {
+      appStateSaveTimerRef.current = 0;
+      void saveUserAppState(dailyPuzzleHistory, missionState);
+    }, APP_STATE_SAVE_DEBOUNCE_MS);
+    return () => {
+      if (appStateSaveTimerRef.current) {
+        window.clearTimeout(appStateSaveTimerRef.current);
+        appStateSaveTimerRef.current = 0;
+      }
+    };
+  }, [authToken, dailyPuzzleHistory, isLoggedIn, missionState, saveUserAppState]);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || !isLoggedIn || !authToken) return undefined;
+    const flushAppState = () => {
+      if (appStateSaveTimerRef.current) {
+        window.clearTimeout(appStateSaveTimerRef.current);
+        appStateSaveTimerRef.current = 0;
+      }
+      void saveUserAppState(dailyPuzzleHistoryRef.current, missionStateRef.current, { keepalive: true });
+    };
+    const onVisibilityChange = () => {
+      if (document.visibilityState === "hidden") flushAppState();
+    };
+    window.addEventListener("pagehide", flushAppState);
+    window.addEventListener("beforeunload", flushAppState);
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    return () => {
+      window.removeEventListener("pagehide", flushAppState);
+      window.removeEventListener("beforeunload", flushAppState);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+    };
+  }, [authToken, isLoggedIn, saveUserAppState]);
+
   const clearVictoryConfettiTimers = useCallback(() => {
     if (!victoryConfettiTimersRef.current.length) return;
     victoryConfettiTimersRef.current.forEach((timerId) => clearTimeout(timerId));
@@ -2659,6 +2901,7 @@ function App() {
     if (dailyResultCalendarTimerRef.current) window.clearTimeout(dailyResultCalendarTimerRef.current);
     if (missionToastTimerRef.current) window.clearTimeout(missionToastTimerRef.current);
     if (missionRewardFxTimerRef.current) window.clearTimeout(missionRewardFxTimerRef.current);
+    if (appStateSaveTimerRef.current) window.clearTimeout(appStateSaveTimerRef.current);
   }, []);
 
   useEffect(() => {
@@ -3194,6 +3437,29 @@ function App() {
 
   useEffect(() => {
     if (typeof window === "undefined") return;
+    if (IS_APPS_IN_TOSS) {
+      const syncGuardState = () => {
+        const guardedMode = playModeRef.current || "menu";
+        window.history.pushState({ mode: guardedMode, appsInTossBackGuard: true }, "", getPathFromMode(guardedMode));
+      };
+      try {
+        const guardedMode = playModeRef.current || "menu";
+        window.history.replaceState({ mode: guardedMode, appsInTossBackGuard: true }, "", getPathFromMode(guardedMode));
+        syncGuardState();
+      } catch {
+        // History may be locked by the host shell.
+      }
+      const onAppsBack = () => {
+        try {
+          syncGuardState();
+        } catch {
+          // ignore host history errors
+        }
+        setShowExitConfirmModal(true);
+      };
+      window.addEventListener("popstate", onAppsBack);
+      return () => window.removeEventListener("popstate", onAppsBack);
+    }
     const onPopState = () => {
       const modeFromPath = getModeFromPath(window.location.pathname);
       setPlayMode((prev) => (prev === modeFromPath ? prev : modeFromPath));
@@ -3218,8 +3484,28 @@ function App() {
     const currentPath = normalizePath(window.location.pathname);
     if (CONTENT_PAGE_REDIRECTS[currentPath]) return;
     if (currentPath === targetPath) return;
+    if (IS_APPS_IN_TOSS) {
+      window.history.replaceState({ mode: playMode, appsInTossBackGuard: true }, "", targetPath);
+      return;
+    }
     window.history.pushState({ mode: playMode }, "", targetPath);
   }, [playMode]);
+
+  useEffect(() => {
+    if (!IS_APPS_IN_TOSS) return undefined;
+    setIosSwipeGestureEnabled({ isEnabled: false }).catch(() => {});
+    const onBeforeUnload = (event) => {
+      if (exitConfirmedRef.current) return undefined;
+      event.preventDefault();
+      event.returnValue = "";
+      return "";
+    };
+    window.addEventListener("beforeunload", onBeforeUnload);
+    return () => {
+      window.removeEventListener("beforeunload", onBeforeUnload);
+      setIosSwipeGestureEnabled({ isEnabled: true }).catch(() => {});
+    };
+  }, []);
 
   useEffect(() => {
     const players = Array.isArray(raceState?.players) ? raceState.players : [];
@@ -3429,12 +3715,13 @@ function App() {
 
   useEffect(() => {
     const unlock = () => {
+      if (!soundEnabled) return;
       const ctx = ensureAudio();
       if (ctx && ctx.state === "suspended") ctx.resume().catch(() => {});
     };
     window.addEventListener("pointerdown", unlock, { passive: true });
     return () => window.removeEventListener("pointerdown", unlock);
-  }, []);
+  }, [soundEnabled]);
 
   const rowHints = useMemo(() => {
     if (playMode === "create" && puzzle) {
@@ -3658,6 +3945,8 @@ function App() {
   const isPuzzleHpGameOver = isHpPuzzleMode && puzzleHp <= 0 && !isBoardCompleteByHints;
   const puzzleSolutionCells = useMemo(() => getPuzzleSolutionCells(puzzle), [puzzle]);
   const canUsePuzzleHint = isHpPuzzleMode && !isPuzzleHpGameOver && !isBoardCompleteByHints;
+  const canRequestRewardAd =
+    !IS_APPS_IN_TOSS || Boolean(REVIVE_AD_GROUP_ID) || REVIVE_AD_TEST_FALLBACK || isLocalNativeRuntime();
 
   useEffect(() => {
     puzzleHpRef.current = puzzleHp;
@@ -4097,6 +4386,48 @@ function App() {
     if (!master) return;
     master.gain.value = SOUND_MASTER_GAIN_MAX * (soundVolume / 100);
   }, [soundVolume]);
+
+  useEffect(() => {
+    const ctx = audioCtxRef.current;
+    if (!soundEnabled && ctx && ctx.state === "running") {
+      ctx.suspend().catch(() => {});
+    } else if (soundEnabled && ctx && ctx.state === "suspended" && document.visibilityState !== "hidden") {
+      ctx.resume().catch(() => {});
+    }
+  }, [soundEnabled]);
+
+  useEffect(() => {
+    const pauseAudio = () => {
+      const ctx = audioCtxRef.current;
+      if (ctx && ctx.state === "running") {
+        audioPausedByVisibilityRef.current = true;
+        ctx.suspend().catch(() => {});
+      }
+    };
+    const resumeAudio = () => {
+      if (!soundEnabled) return;
+      const ctx = audioCtxRef.current;
+      if (audioPausedByVisibilityRef.current && ctx && ctx.state === "suspended") {
+        ctx.resume().catch(() => {});
+      }
+      audioPausedByVisibilityRef.current = false;
+    };
+    const onVisibilityChange = () => {
+      if (document.visibilityState === "hidden") pauseAudio();
+      else resumeAudio();
+    };
+
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    window.addEventListener("pagehide", pauseAudio);
+    window.addEventListener("blur", pauseAudio);
+    window.addEventListener("focus", resumeAudio);
+    return () => {
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+      window.removeEventListener("pagehide", pauseAudio);
+      window.removeEventListener("blur", pauseAudio);
+      window.removeEventListener("focus", resumeAudio);
+    };
+  }, [soundEnabled]);
 
   const getVoteOptionImageSrc = (option) => {
     const optionKey = String(option?.key || "");
@@ -5677,6 +6008,29 @@ function App() {
     setStatus("");
   };
 
+  const toggleSoundEnabled = () => {
+    setSoundEnabled((value) => !value);
+  };
+
+  const requestMiniAppExit = () => {
+    playSfx("ui");
+    setShowExitConfirmModal(true);
+  };
+
+  const confirmMiniAppExit = async () => {
+    exitConfirmedRef.current = true;
+    setShowExitConfirmModal(false);
+    try {
+      await closeView();
+    } catch {
+      try {
+        window.close();
+      } catch {
+        setStatus(L("상단 닫기 버튼으로 앱을 종료해줘.", "Use the top close button to exit."));
+      }
+    }
+  };
+
   const storeAuth = (token, user) => {
     setAuthToken(token);
     localStorage.setItem(AUTH_TOKEN_KEY, token);
@@ -7063,7 +7417,7 @@ function App() {
   };
 
   const shouldUseReviveAdFallback = () =>
-    !IS_APPS_IN_TOSS || !REVIVE_AD_GROUP_ID || REVIVE_AD_TEST_FALLBACK || isLocalNativeRuntime();
+    !IS_APPS_IN_TOSS || REVIVE_AD_TEST_FALLBACK || isLocalNativeRuntime();
 
   const canUseRealReviveAd = () =>
     Boolean(REVIVE_AD_GROUP_ID) && isBridgeMethodSupported(GoogleAdMob.showAppsInTossAdMob);
@@ -7125,6 +7479,10 @@ function App() {
 
   const handleReviveWithAd = async () => {
     if (!isPuzzleHpGameOver || reviveAdLoading) return;
+    if (!canRequestRewardAd) {
+      setReviveAdError(L("광고가 아직 연결되지 않았어요.", "Reward ads are not configured yet."));
+      return;
+    }
     setReviveAdLoading(true);
     setReviveAdError("");
 
@@ -7184,6 +7542,10 @@ function App() {
 
   const handleHintAd = async () => {
     if (!canUsePuzzleHint || hintAdLoading) return;
+    if (!canRequestRewardAd) {
+      setStatus(L("광고가 아직 연결되지 않았어요.", "Reward ads are not configured yet."));
+      return;
+    }
     setHintAdLoading(true);
     setStatus("");
 
@@ -8892,10 +9254,13 @@ function App() {
         ? L(`힌트 ${puzzleHints}`, `${puzzleHints} hints`)
         : hintAdLoading
           ? L("광고", "Ad")
-          : L("광고 힌트", "Ad hint");
+          : canRequestRewardAd
+            ? L("광고 힌트", "Ad hint")
+            : L("광고 준비 중", "Ad unavailable");
     const hintButtonDisabled =
       !canUsePuzzleHint ||
       hintAdLoading ||
+      (puzzleHints <= 0 && !canRequestRewardAd) ||
       (puzzleHints > 0 && !Array.isArray(puzzleSolutionCells));
     return (
       <div className="boardControlLayer">
@@ -8957,7 +9322,7 @@ function App() {
                 title={hintButtonLabel}
               >
                 <Lightbulb size={17} />
-                <span>{hintAdLoading ? "..." : puzzleHints > 0 ? puzzleHints : "AD"}</span>
+                <span>{hintAdLoading ? "..." : puzzleHints > 0 ? puzzleHints : canRequestRewardAd ? "AD" : "-"}</span>
               </button>
             </div>
           )}
@@ -9074,6 +9439,28 @@ function App() {
           </motion.div>
         </div>
       )}
+      {showExitConfirmModal && (
+        <div className="modalBackdrop appsExitConfirmBackdrop" role="presentation" onClick={() => setShowExitConfirmModal(false)}>
+          <div
+            className="modalCard appsExitConfirmCard"
+            role="dialog"
+            aria-modal="true"
+            aria-label={L("미니앱 종료 확인", "Exit app confirmation")}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2>{L("앱을 종료할까요?", "Exit this app?")}</h2>
+            <p>{L("진행 중인 퍼즐은 저장 가능한 상태로 보관됩니다.", "Your current puzzle progress will be kept when possible.")}</p>
+            <div className="modalActions appsExitConfirmActions">
+              <button type="button" onClick={() => setShowExitConfirmModal(false)}>
+                {L("계속하기", "Stay")}
+              </button>
+              <button type="button" onClick={confirmMiniAppExit}>
+                {L("종료하기", "Exit")}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       <motion.section
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
@@ -9119,6 +9506,28 @@ function App() {
                   </button>
                   <button className="primaryBtn" onClick={() => openAuthScreen("signup", "menu")}>
                     <UserPlus size={15} /> Sign Up
+                  </button>
+                </>
+              )}
+              {IS_APPS_IN_TOSS && (
+                <>
+                  <button
+                    type="button"
+                    className={`appSoundToggleBtn ${soundEnabled ? "on" : "off"}`}
+                    onClick={toggleSoundEnabled}
+                    aria-label={soundEnabled ? L("사운드 끄기", "Turn sound off") : L("사운드 켜기", "Turn sound on")}
+                    title={soundEnabled ? L("사운드 끄기", "Turn sound off") : L("사운드 켜기", "Turn sound on")}
+                  >
+                    {soundEnabled ? <Volume2 size={18} /> : <VolumeX size={18} />}
+                  </button>
+                  <button
+                    type="button"
+                    className="appExitBtn"
+                    onClick={requestMiniAppExit}
+                    aria-label={L("앱 종료", "Exit app")}
+                    title={L("앱 종료", "Exit app")}
+                  >
+                    <X size={19} />
                   </button>
                 </>
               )}
@@ -11272,10 +11681,23 @@ function App() {
             <div className="modalCard puzzleHpGameOverCard">
               <div className="puzzleHpGameOverHearts" aria-hidden="true">♡ ♡ ♡</div>
               <h2>{L("기회를 모두 사용했어요", "No HP Left")}</h2>
-              <p>{L("광고를 보면 HP 1로 이어서 할 수 있어요.", "Watch an ad to revive with 1 HP.")}</p>
+              <p>
+                {canRequestRewardAd
+                  ? L("광고를 보면 HP 1로 이어서 할 수 있어요.", "Watch an ad to revive with 1 HP.")
+                  : L("광고 연결이 완료되면 부활 기능을 사용할 수 있어요.", "Revive will be available after reward ads are configured.")}
+              </p>
               <div className="modalActions puzzleHpGameOverActions">
-                <button type="button" className="puzzleHpReviveBtn" onClick={handleReviveWithAd} disabled={reviveAdLoading}>
-                  {reviveAdLoading ? L("광고 준비 중...", "Loading Ad...") : L("광고 보고 부활", "Watch Ad")}
+                <button
+                  type="button"
+                  className="puzzleHpReviveBtn"
+                  onClick={handleReviveWithAd}
+                  disabled={reviveAdLoading || !canRequestRewardAd}
+                >
+                  {reviveAdLoading
+                    ? L("광고 준비 중...", "Loading Ad...")
+                    : canRequestRewardAd
+                      ? L("광고 보고 부활", "Watch Ad")
+                      : L("광고 준비 중", "Ad unavailable")}
                 </button>
                 <button type="button" className="puzzleHpRetryBtn" onClick={resetGrid} disabled={reviveAdLoading}>
                   {L("처음부터 다시", "Try Again")}

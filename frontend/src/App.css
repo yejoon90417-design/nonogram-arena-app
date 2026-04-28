@@ -15120,7 +15120,7 @@ button:disabled {
   width: min(calc(100% - (var(--apps-rail-x) * 2)), var(--apps-content-max));
   margin: 0 auto;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(86px, auto);
+  grid-template-columns: minmax(0, 1fr) minmax(78px, auto) 42px 42px;
   align-items: stretch;
   justify-content: stretch;
   gap: 0.42rem;
@@ -15128,6 +15128,10 @@ button:disabled {
 
 .page.appsInToss .topAuth > .userChipBtn:only-child {
   grid-column: 1 / -1;
+}
+
+.page.appsInToss .topAuth:has(> .userChipBtn:first-child:nth-last-child(3)) {
+  grid-template-columns: minmax(0, 1fr) 42px 42px;
 }
 
 .page.appsInToss .topAuth > .userChipBtn {
@@ -15148,6 +15152,30 @@ button:disabled {
   white-space: nowrap;
 }
 
+.page.appsInToss .topAuth > .appSoundToggleBtn,
+.page.appsInToss .topAuth > .appExitBtn {
+  min-width: 42px;
+  width: 42px;
+  min-height: 42px;
+  padding: 0;
+  border: 2px solid #b8c8d9;
+  background: #f7fbff;
+  color: #173e62;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.page.appsInToss .topAuth > .appSoundToggleBtn.off {
+  color: #64748b;
+  background: #f1f5f9;
+}
+
+.page.appsInToss .topAuth > .appExitBtn {
+  color: #be123c;
+  background: #fff7f8;
+}
+
 .page.appsInToss .userChipText {
   min-width: 0;
 }
@@ -15163,6 +15191,36 @@ button:disabled {
 
 .page.appsInToss .modalBackdrop {
   padding: 0.7rem var(--apps-rail-x);
+}
+
+.appsExitConfirmBackdrop {
+  z-index: 45;
+}
+
+.appsExitConfirmCard {
+  width: min(360px, calc(100vw - 32px));
+  border: 3px solid #173e62;
+  border-radius: 12px;
+  padding: 1rem;
+  gap: 0.76rem;
+  text-align: center;
+}
+
+.appsExitConfirmCard h2 {
+  color: #142f4d;
+  font-size: 1.22rem;
+  font-weight: 900;
+}
+
+.appsExitConfirmCard p {
+  color: #52677f;
+  font-size: 0.9rem;
+  font-weight: 800;
+  line-height: 1.45;
+}
+
+.appsExitConfirmActions {
+  grid-template-columns: 1fr 1fr;
 }
 
 .page.appsInToss .profileModal {
