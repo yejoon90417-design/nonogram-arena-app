@@ -5,6 +5,7 @@ import EmojiPicker from "emoji-picker-react";
 import { motion } from "framer-motion";
 import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, BookOpen, CalendarDays, CheckCircle2, ChevronDown, Eraser, Flame, Home, Lightbulb, Lock, LogIn, Palette, Redo2, Shuffle, Square, Trophy, Undo2, User, UserPlus, X } from "lucide-react";
 import { GENERATED_CREATOR_SAMPLE_PUZZLES } from "./creatorSamples.generated";
+import { GENERATED_DAILY_PUZZLES } from "./dailyPuzzles.generated";
 import "./App.css";
 
 const DEFAULT_API_BASE = "https://nonogram-api.onrender.com";
@@ -1733,6 +1734,18 @@ const DEFAULT_CREATOR_SAMPLE_PUZZLES = GENERATED_CREATOR_SAMPLE_PUZZLES
     solveCount: Number(sample.solveCount || 0),
   }));
 
+const DEFAULT_DAILY_SAMPLE_PUZZLES = GENERATED_DAILY_PUZZLES
+  .map((sample) => ({
+    ...createCreatorSample(sample.id, sample.titleKo, sample.titleEn, sample.rows),
+    sourceIconId: sample.sourceIconId || "",
+    sourcePack: sample.sourcePack || "",
+    sourceName: sample.sourceName || "",
+    sizeGroup: "daily",
+    groupTitleKo: "일일퀴즈",
+    groupTitleEn: "Daily",
+  }))
+  .filter((sample) => sample.width > 0 && sample.height > 0 && sample.cells?.length === sample.width * sample.height);
+
 const DAY_MS = 24 * 60 * 60 * 1000;
 const KST_OFFSET_MS = 9 * 60 * 60 * 1000;
 const DAILY_WEEKDAY_LABELS_KO = ["일", "월", "화", "수", "목", "금", "토"];
@@ -1823,7 +1836,7 @@ function getDailyPuzzleIndex(dateKey, count) {
 }
 
 function getDailyPuzzleForDate(samples, dateKey) {
-  const pool = Array.isArray(samples) ? samples.filter((sample) => sample?.sizeGroup === "small") : [];
+  const pool = Array.isArray(samples) ? samples.filter((sample) => sample?.cells?.length) : [];
   if (!pool.length) return null;
   return pool[getDailyPuzzleIndex(dateKey, pool.length)];
 }
@@ -2478,6 +2491,8 @@ function App() {
   const strokeBaseRef = useRef(null);
   const strokeChangedRef = useRef(false);
   const strokeMistakeChargedRef = useRef(false);
+  const activePointerIdRef = useRef(null);
+  const puzzleHpRef = useRef(PUZZLE_MAX_HP);
   const cellValuesRef = useRef([]);
   const pendingPaintRef = useRef(new Map());
   const frameRef = useRef(0);
@@ -3645,6 +3660,10 @@ function App() {
   const canUsePuzzleHint = isHpPuzzleMode && !isPuzzleHpGameOver && !isBoardCompleteByHints;
 
   useEffect(() => {
+    puzzleHpRef.current = puzzleHp;
+  }, [puzzleHp]);
+
+  useEffect(() => {
     if (!IS_APPS_IN_TOSS || !shouldShowPuzzleBoard || isModeCreate) {
       setBoardStageTop(0);
       return undefined;
@@ -3704,6 +3723,22 @@ function App() {
     };
   }, [cells, isModeCreate, puzzle]);
 
+  const releaseActivePointerCapture = () => {
+    const pointerId = activePointerIdRef.current;
+    activePointerIdRef.current = null;
+    if (pointerId == null) return;
+    try {
+      const target = boardRef.current;
+      if (target?.hasPointerCapture?.(pointerId)) {
+        target.releasePointerCapture(pointerId);
+      } else {
+        target?.releasePointerCapture?.(pointerId);
+      }
+    } catch {
+      // Pointer capture can already be released by the browser.
+    }
+  };
+
   const finishActiveStroke = () => {
     if (dragRef.current && strokeChangedRef.current && strokeBaseRef.current) {
       pushUndo(strokeBaseRef.current);
@@ -3713,6 +3748,7 @@ function App() {
     strokeBaseRef.current = null;
     strokeChangedRef.current = false;
     strokeMistakeChargedRef.current = false;
+    releaseActivePointerCapture();
   };
 
   useEffect(() => {
@@ -4411,6 +4447,7 @@ function App() {
     setPuzzle(p);
     applySnapshot(initial);
     setActiveHints(new Set());
+    puzzleHpRef.current = PUZZLE_MAX_HP;
     setPuzzleHp(PUZZLE_MAX_HP);
     setPuzzleHpDamage(null);
     setPuzzleHints(PUZZLE_MAX_HINTS);
@@ -6999,8 +7036,11 @@ function App() {
   };
 
   const triggerPuzzleMistake = (index) => {
-    if (!isHpPuzzleMode || puzzleHp <= 0 || isBoardCompleteByHints) return;
-    const nextHp = Math.max(0, puzzleHp - 1);
+    if (!isHpPuzzleMode || isBoardCompleteByHints) return;
+    const currentHp = puzzleHpRef.current;
+    if (currentHp <= 0) return;
+    const nextHp = Math.max(0, currentHp - 1);
+    puzzleHpRef.current = nextHp;
     setPuzzleHp(nextHp);
     setPuzzleHpDamage({ id: Date.now(), index, hpAfter: nextHp });
     setStatus("");
@@ -7013,6 +7053,7 @@ function App() {
   };
 
   const revivePuzzleFromAdReward = () => {
+    puzzleHpRef.current = 1;
     setPuzzleHp(1);
     setPuzzleHpDamage(null);
     setReviveAdError("");
@@ -7262,13 +7303,28 @@ function App() {
     setCells(completedNext);
   };
 
+  const stopActivePaintAfterMistake = () => {
+    if (dragRef.current && strokeBaseRef.current) {
+      pushUndo(strokeBaseRef.current);
+    }
+    dragRef.current = null;
+    lastPaintIndexRef.current = null;
+    strokeBaseRef.current = null;
+    strokeChangedRef.current = false;
+    strokeMistakeChargedRef.current = false;
+    releaseActivePointerCapture();
+    if (document.activeElement instanceof HTMLElement) {
+      document.activeElement.blur();
+    }
+  };
+
   const queueCellPaint = (index, value) => {
-    if (!isModeCreate && lockedCellIndicesRef.current.has(index)) return;
+    if (!isModeCreate && lockedCellIndicesRef.current.has(index)) return true;
     const pending = pendingPaintRef.current;
     const current = pending.has(index) ? pending.get(index) : (cellValuesRef.current[index] ?? 0);
     // Keep filled cells and X marks from overwriting each other during drag paint.
-    if (value === 1 && current === 2) return;
-    if (value === 2 && current === 1) return;
+    if (value === 1 && current === 2) return true;
+    if (value === 2 && current === 1) return true;
     const isMistake = isWrongPuzzleInput(index, value, current);
     const nextValue = isMistake ? 2 : value;
     if (!strokeMistakeChargedRef.current && isMistake) {
@@ -7279,6 +7335,11 @@ function App() {
     if (!frameRef.current) {
       frameRef.current = requestAnimationFrame(flushQueuedPaint);
     }
+    if (isMistake) {
+      stopActivePaintAfterMistake();
+      return false;
+    }
+    return true;
   };
 
   const paintLine = (fromIndex, toIndex, value) => {
@@ -7298,7 +7359,8 @@ function App() {
     let err = dx - dy;
 
     while (true) {
-      queueCellPaint(y * width + x, value);
+      const shouldContinue = queueCellPaint(y * width + x, value);
+      if (shouldContinue === false || !dragRef.current) break;
       if (x === x1 && y === y1) break;
       const e2 = err * 2;
       if (e2 > -dy) {
@@ -7316,12 +7378,15 @@ function App() {
     const dragState = dragRef.current;
     if (!dragState) return;
     const last = lastPaintIndexRef.current;
+    let shouldContinue = true;
     if (last == null) {
-      queueCellPaint(index, dragState.paintValue);
+      shouldContinue = queueCellPaint(index, dragState.paintValue);
     } else {
       paintLine(last, index, dragState.paintValue);
     }
-    lastPaintIndexRef.current = index;
+    if (shouldContinue !== false && dragRef.current) {
+      lastPaintIndexRef.current = index;
+    }
   };
 
   const startPaint = (index, buttonType, options = {}) => {
@@ -7348,7 +7413,8 @@ function App() {
     dragRef.current = { button: buttonType, paintValue, ignoreButtons: options.ignoreButtons === true };
     lastPaintIndexRef.current = index;
     const mistakeChargedBeforePaint = strokeMistakeChargedRef.current;
-    queueCellPaint(index, paintValue);
+    const shouldContinue = queueCellPaint(index, paintValue);
+    if (shouldContinue === false) return;
     const now = Date.now();
     if ((mistakeChargedBeforePaint || !strokeMistakeChargedRef.current) && now - lastPaintSfxAtRef.current > 30) {
       playSfx(paintValue === 2 ? "paint-x" : "paint-fill");
@@ -7358,6 +7424,7 @@ function App() {
 
   const onCellPointerDown = (event, index) => {
     event.preventDefault();
+    activePointerIdRef.current = event.pointerId;
     boardRef.current?.setPointerCapture?.(event.pointerId);
     const pointerType = String(event.pointerType || "").toLowerCase();
     const isTouchLike =
@@ -7592,6 +7659,7 @@ function App() {
     lockedCellIndicesRef.current = new Set(fixedMarkIndicesRef.current);
     applySnapshot(new Array(puzzle.width * puzzle.height).fill(0));
     setActiveHints(new Set());
+    puzzleHpRef.current = PUZZLE_MAX_HP;
     setPuzzleHp(PUZZLE_MAX_HP);
     setPuzzleHpDamage(null);
     setPuzzleHints(PUZZLE_MAX_HINTS);
@@ -8253,8 +8321,8 @@ function App() {
     : 0;
   const todayDailyDateKey = getKstDateKey(new Date(nowMs));
   const dailyPuzzleHistorySafe = normalizeDailyPuzzleHistory(dailyPuzzleHistory);
-  const dailyPuzzleSample = getDailyPuzzleForDate(creatorSamples, todayDailyDateKey);
-  const dailyPuzzleTitle = dailyPuzzleSample ? (lang === "ko" ? dailyPuzzleSample.titleKo : dailyPuzzleSample.titleEn) || dailyPuzzleSample.id : L("준비 중", "Preparing");
+  const dailyPuzzleSample = getDailyPuzzleForDate(DEFAULT_DAILY_SAMPLE_PUZZLES, todayDailyDateKey);
+  const dailyPuzzleTitle = dailyPuzzleSample ? L("오늘의 퍼즐", "Daily Puzzle") : L("준비 중", "Preparing");
   const dailyPuzzleSizeText = dailyPuzzleSample ? `${dailyPuzzleSample.width}x${dailyPuzzleSample.height}` : "";
   const isDailyPuzzleSolvedToday = Boolean(dailyPuzzleHistorySafe.solves[todayDailyDateKey]);
   const dailyPuzzleStreak = getDailyPuzzleStreak(dailyPuzzleHistorySafe, todayDailyDateKey);
@@ -8371,10 +8439,11 @@ function App() {
     initializePuzzle(dailyPuzzle, {
       resume: false,
       startTimer: true,
+      fixedMarks: buildThemeStarterMarkIndices(dailyPuzzle),
       message:
         lang === "ko"
-          ? `오늘의 퍼즐 "${dailyPuzzleSample.titleKo || dailyPuzzleSample.id}"을 불러왔습니다.`
-          : `Loaded daily puzzle "${dailyPuzzleSample.titleEn || dailyPuzzleSample.id}".`,
+          ? "오늘의 퍼즐을 불러왔습니다."
+          : "Loaded daily puzzle.",
     });
     setSingleSection("daily");
     setPlayMode("single");
@@ -8390,7 +8459,7 @@ function App() {
           </div>
           <div className="appsDailyResultTitle">
             <small>{dailyCompletionResult.sizeText || dailyPuzzleSizeText}</small>
-            <strong>{(lang === "ko" ? dailyCompletionResult.titleKo : dailyCompletionResult.titleEn) || dailyPuzzleTitle}</strong>
+            <strong>{L("오늘의 퍼즐", "Daily Puzzle")}</strong>
           </div>
           <div className="appsDailyResultStats">
             <span>

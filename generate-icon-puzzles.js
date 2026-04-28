@@ -2013,7 +2013,9 @@ module.exports = {
   getTargetForGroup,
   guessKoreanTitle,
   humanizeIconName,
+  analyzePuzzle,
   parseCliArgs,
+  renderIconRows,
 };
 
 if (require.main === module) {

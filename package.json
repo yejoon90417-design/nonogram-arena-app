@@ -6,6 +6,9 @@
   "scripts": {
     "start": "node server.js",
     "db:seed-app-users": "node seed_app_test_users.js",
+    "daily:build": "node build-daily-puzzles.js",
+    "daily:make-candidates": "node daily-icon-candidate-builder.js",
+    "daily:select": "node daily-source-selector.js",
     "themes:select": "node theme-source-selector.js",
     "themes:build": "node generate-icon-puzzles.js --selection theme-source-selection.json --dedupe-variants",
     "test": "echo \"Error: no test specified\" && exit 1"
