@@ -1485,6 +1485,73 @@ function getPuzzleSolutionCells(puzzle) {
   return null;
 }
 
+function hashTextToUint(text) {
+  let hash = 2166136261;
+  const source = String(text || "");
+  for (let i = 0; i < source.length; i += 1) {
+    hash ^= source.charCodeAt(i);
+    hash = Math.imul(hash, 16777619) >>> 0;
+  }
+  return hash >>> 0;
+}
+
+function seededCellScore(seed, index) {
+  let value = (seed + Math.imul(index + 1, 0x9e3779b1)) >>> 0;
+  value ^= value >>> 16;
+  value = Math.imul(value, 0x85ebca6b) >>> 0;
+  value ^= value >>> 13;
+  value = Math.imul(value, 0xc2b2ae35) >>> 0;
+  return (value ^ (value >>> 16)) >>> 0;
+}
+
+function buildThemeStarterMarkIndices(puzzle) {
+  const width = Number(puzzle?.width);
+  const height = Number(puzzle?.height);
+  const solution = getPuzzleSolutionCells(puzzle);
+  if (!solution || !Number.isInteger(width) || !Number.isInteger(height) || width <= 0 || height <= 0) return [];
+
+  const total = width * height;
+  const blankIndices = [];
+  for (let index = 0; index < Math.min(total, solution.length); index += 1) {
+    if (solution[index] !== 1) blankIndices.push(index);
+  }
+  if (!blankIndices.length) return [];
+
+  const sizeTarget =
+    total <= 25
+      ? 4
+      : total <= 100
+        ? 12
+        : total <= 225
+          ? 22
+          : Math.round(total * 0.085);
+  const target = Math.max(1, Math.min(blankIndices.length, Math.min(sizeTarget, Math.round(blankIndices.length * 0.32))));
+  const rowCap = Math.max(1, Math.ceil(width * 0.26));
+  const colCap = Math.max(1, Math.ceil(height * 0.26));
+  const seed = hashTextToUint(`${puzzle.id || ""}:${puzzle.creatorPuzzleId || ""}:${width}x${height}`);
+  const candidates = blankIndices
+    .map((index) => ({ index, score: seededCellScore(seed, index) }))
+    .sort((a, b) => a.score - b.score);
+
+  const picked = [];
+  const rowCounts = new Array(height).fill(0);
+  const colCounts = new Array(width).fill(0);
+  for (const candidate of candidates) {
+    const x = candidate.index % width;
+    const y = Math.floor(candidate.index / width);
+    if (rowCounts[y] >= rowCap || colCounts[x] >= colCap) continue;
+    picked.push(candidate.index);
+    rowCounts[y] += 1;
+    colCounts[x] += 1;
+    if (picked.length >= target) break;
+  }
+  for (const candidate of candidates) {
+    if (picked.length >= target) break;
+    if (!picked.includes(candidate.index)) picked.push(candidate.index);
+  }
+  return picked.sort((a, b) => a - b);
+}
+
 function getRuns(line) {
   const runs = [];
   let count = 0;
@@ -1625,6 +1692,7 @@ function buildCreatorPuzzle(width, height, cells, meta = {}) {
     isCustom: true,
     isCustomPreview: Boolean(meta.isPreview),
     isCustomLibrary: Boolean(meta.isLibrary),
+    isThemePuzzle: Boolean(meta.isThemePuzzle),
     isCommunityPuzzle: Boolean(meta.isCommunity),
     isDailyPuzzle: Boolean(meta.isDailyPuzzle),
     dailyDate: meta.dailyDate || "",
@@ -2415,6 +2483,7 @@ function App() {
   const frameRef = useRef(0);
   const autoCompletedLinesRef = useRef({ key: "", rows: new Set(), cols: new Set(), silent: true });
   const lockedCellIndicesRef = useRef(new Set());
+  const fixedMarkIndicesRef = useRef(new Set());
   const undoStackRef = useRef([]);
   const redoStackRef = useRef([]);
   const autoSolvedShownRef = useRef(false);
@@ -3428,6 +3497,7 @@ function App() {
 
   useEffect(() => {
     if (!puzzle || playMode === "create") {
+      fixedMarkIndicesRef.current = new Set();
       lockedCellIndicesRef.current = new Set();
       autoCompletedLinesRef.current = { key: "", rows: new Set(), cols: new Set(), silent: true };
       setLineClearFx(null);
@@ -3444,6 +3514,7 @@ function App() {
 
   useEffect(() => {
     if (!puzzle || playMode === "create") {
+      fixedMarkIndicesRef.current = new Set();
       lockedCellIndicesRef.current = new Set();
       return;
     }
@@ -3463,7 +3534,7 @@ function App() {
       if (!solvedColSet.has(col)) tracker.cols.delete(col);
     }
 
-    const locked = new Set();
+    const locked = new Set(fixedMarkIndicesRef.current);
     for (const row of solvedRowSet) {
       for (let x = 0; x < puzzle.width; x += 1) locked.add(row * puzzle.width + x);
     }
@@ -4276,9 +4347,20 @@ function App() {
     setCanRedo(false);
   };
 
+  const enforceFixedMarks = (sourceCells) => {
+    const next = Array.isArray(sourceCells) ? sourceCells.slice() : [];
+    fixedMarkIndicesRef.current.forEach((index) => {
+      if (Number.isInteger(index) && index >= 0 && index < next.length) {
+        next[index] = 2;
+      }
+    });
+    return next;
+  };
+
   const applySnapshot = (nextCells) => {
-    setCells(nextCells);
-    cellValuesRef.current = nextCells;
+    const normalized = enforceFixedMarks(nextCells);
+    setCells(normalized);
+    cellValuesRef.current = normalized;
   };
 
   const undo = () => {
@@ -4303,7 +4385,7 @@ function App() {
 
   const initializePuzzle = (
     p,
-    { resume = true, message = "", startTimer = true, suppressStatus = false } = {}
+    { resume = true, message = "", startTimer = true, suppressStatus = false, fixedMarks = [] } = {}
   ) => {
     const saveKey = `nonogram-progress-${p.id}`;
     let initial = new Array(p.width * p.height).fill(0);
@@ -4320,6 +4402,12 @@ function App() {
         }
       }
     }
+    const total = p.width * p.height;
+    const nextFixedMarks = Array.isArray(fixedMarks)
+      ? fixedMarks.filter((index) => Number.isInteger(index) && index >= 0 && index < total)
+      : [];
+    fixedMarkIndicesRef.current = new Set(nextFixedMarks);
+    lockedCellIndicesRef.current = new Set(nextFixedMarks);
     setPuzzle(p);
     applySnapshot(initial);
     setActiveHints(new Set());
@@ -4414,6 +4502,8 @@ function App() {
   };
 
   const clearPuzzleViewState = () => {
+    fixedMarkIndicesRef.current = new Set();
+    lockedCellIndicesRef.current = new Set();
     setPuzzle(null);
     applySnapshot([]);
     setActiveHints(new Set());
@@ -4433,6 +4523,8 @@ function App() {
     const creatorPuzzle = buildCreatorPuzzle(safeWidth, safeHeight, normalized, {
       id: `custom-editor-${safeWidth}x${safeHeight}`,
     });
+    fixedMarkIndicesRef.current = new Set();
+    lockedCellIndicesRef.current = new Set();
     setCreatorWidthInput(String(safeWidth));
     setCreatorHeightInput(String(safeHeight));
     setPuzzle(creatorPuzzle);
@@ -4762,6 +4854,7 @@ function App() {
     const samplePuzzle = buildCreatorPuzzle(sample.width, sample.height, sample.cells, {
       id: `custom-library-${sample.id}`,
       isLibrary: true,
+      isThemePuzzle: true,
       creatorPuzzleId: sample.id,
       titleKo: sample.titleKo || "",
       titleEn: sample.titleEn || "",
@@ -4769,6 +4862,7 @@ function App() {
     initializePuzzle(samplePuzzle, {
       resume: false,
       startTimer: true,
+      fixedMarks: buildThemeStarterMarkIndices(samplePuzzle),
       message:
         lang === "ko"
           ? `테마 퍼즐 "${sample.titleKo || sample.id}"을 불러왔습니다.`
@@ -7104,7 +7198,7 @@ function App() {
     }
 
     const next = sourceCells.slice();
-    const locked = new Set();
+    const locked = new Set(fixedMarkIndicesRef.current);
     const newRows = [];
     const newCols = [];
     let changed = false;
@@ -7231,6 +7325,7 @@ function App() {
   };
 
   const startPaint = (index, buttonType, options = {}) => {
+    if (!isModeCreate && lockedCellIndicesRef.current.has(index)) return;
     const current = cellValuesRef.current[index] ?? 0;
     const paintValue =
       isModeCreate
@@ -7494,7 +7589,7 @@ function App() {
     if (!puzzle) return;
     pushUndo(cellValuesRef.current.slice());
     autoCompletedLinesRef.current = { key: `${puzzle.id || "puzzle"}:${puzzle.width}x${puzzle.height}`, rows: new Set(), cols: new Set(), silent: true };
-    lockedCellIndicesRef.current = new Set();
+    lockedCellIndicesRef.current = new Set(fixedMarkIndicesRef.current);
     applySnapshot(new Array(puzzle.width * puzzle.height).fill(0));
     setActiveHints(new Set());
     setPuzzleHp(PUZZLE_MAX_HP);
