@@ -1945,21 +1945,6 @@ function mergeDailyPuzzleHistories(leftHistory, rightHistory) {
   return { solves };
 }
 
-function buildDailyCompletionResult(solvedPuzzle, history, elapsedMs, elapsedSec = 0) {
-  const dateKey = getDailySolvedDateKey(solvedPuzzle);
-  const nextHistory = buildDailySolvedHistory(history, solvedPuzzle);
-  return {
-    dateKey,
-    titleKo: solvedPuzzle?.titleKo || "",
-    titleEn: solvedPuzzle?.titleEn || "",
-    sizeText: solvedPuzzle?.width && solvedPuzzle?.height ? `${solvedPuzzle.width}x${solvedPuzzle.height}` : "",
-    elapsedMs: Math.max(0, Number(elapsedMs || 0)),
-    elapsedSec: Math.max(0, Number(elapsedSec || 0)),
-    streak: getDailyPuzzleStreak(nextHistory, dateKey),
-    monthSolvedCount: getDailyMonthSolvedCount(nextHistory, dateKey),
-  };
-}
-
 const DAILY_MISSION_DEFINITIONS = [
   {
     id: "daily-quiz",
@@ -2361,20 +2346,6 @@ async function parseJsonSafe(res) {
   );
 }
 
-function isRaceOnlyStatusMessage(message) {
-  if (!message) return false;
-  return (
-    message === "승리하였습니다." ||
-    message === "패배하였습니다." ||
-    message === "완주! 다른 플레이어 결과 대기중..." ||
-    message === "5초 후 시작합니다." ||
-    message === "Victory." ||
-    message === "Defeat." ||
-    message === "Finished! Waiting for other players..." ||
-    message === "Starting in 5 seconds."
-  );
-}
-
 function App() {
   const [playMode, setPlayMode] = useState(() => {
     if (typeof window === "undefined") return "menu";
@@ -2394,7 +2365,6 @@ function App() {
   const [creatorMyPuzzlesOpen, setCreatorMyPuzzlesOpen] = useState(false);
   const [dailyPuzzleHistory, setDailyPuzzleHistory] = useState(() => readDailyPuzzleHistory());
   const [dailyPuzzleStampDate, setDailyPuzzleStampDate] = useState("");
-  const [dailyCompletionResult, setDailyCompletionResult] = useState(null);
   const [missionState, setMissionState] = useState(() => readMissionState());
   const [missionToast, setMissionToast] = useState(null);
   const [missionRewardFx, setMissionRewardFx] = useState(null);
@@ -2638,7 +2608,6 @@ function App() {
   const victoryConfettiTimersRef = useRef([]);
   const solvedRevealRafRef = useRef(0);
   const dailyStampTimerRef = useRef(0);
-  const dailyResultCalendarTimerRef = useRef(0);
   const missionToastTimerRef = useRef(0);
   const missionRewardFxTimerRef = useRef(0);
   const dailyPuzzleHistoryRef = useRef(dailyPuzzleHistory);
@@ -2898,7 +2867,6 @@ function App() {
 
   useEffect(() => () => {
     if (dailyStampTimerRef.current) window.clearTimeout(dailyStampTimerRef.current);
-    if (dailyResultCalendarTimerRef.current) window.clearTimeout(dailyResultCalendarTimerRef.current);
     if (missionToastTimerRef.current) window.clearTimeout(missionToastTimerRef.current);
     if (missionRewardFxTimerRef.current) window.clearTimeout(missionRewardFxTimerRef.current);
     if (appStateSaveTimerRef.current) window.clearTimeout(appStateSaveTimerRef.current);
@@ -3425,7 +3393,7 @@ function App() {
               : prev.me,
         };
       });
-      setStatus(L("프로필이 저장되었습니다.", "Profile saved."));
+      setStatus("");
       closeProfileModal();
     } catch (err) {
       setProfileModalError(String(err?.message || L("프로필 저장 실패", "Failed to save profile.")));
@@ -3762,19 +3730,21 @@ function App() {
     if (IS_APPS_IN_TOSS && playMode !== "create") {
       const totalColumns = puzzle.width + Math.max(maxRowHintDepth, 1);
       const totalRows = puzzle.height + Math.max(maxColHintDepth, 1);
-      const usableWidth = Math.max(320, viewportWidth) - (viewportWidth >= 700 ? 132 : 20);
-      const measuredStageTop = boardStageTop > 0 ? boardStageTop : raceRoomCode ? 180 : 300;
-      const hpReserve = raceRoomCode ? 0 : viewportWidth <= 380 ? 44 : 48;
-      const controlsReserve = viewportWidth <= 380 ? 72 : 76;
-      const stageGapsReserve = raceRoomCode ? 16 : 26;
-      const safeBottomReserve = viewportWidth <= 380 ? 10 : 14;
+      const isRacePuzzle = Boolean(raceRoomCode);
+      const hasHpTools = !isRacePuzzle && !puzzle?.isBattlePracticePuzzle;
+      const usableWidth = Math.max(320, viewportWidth) - (viewportWidth >= 700 ? 132 : 16);
+      const measuredStageTop = boardStageTop > 0 ? boardStageTop : isRacePuzzle ? 220 : 260;
+      const hpReserve = hasHpTools ? (viewportWidth <= 380 ? 28 : 30) : 0;
+      const controlsReserve = viewportWidth <= 380 ? 62 : 66;
+      const stageGapsReserve = hasHpTools ? 8 : 4;
+      const safeBottomReserve = viewportWidth <= 380 ? 8 : 10;
       const usableHeight = Math.max(
-        220,
+        isRacePuzzle ? 170 : 190,
         viewportHeight - measuredStageTop - hpReserve - controlsReserve - stageGapsReserve - safeBottomReserve
       );
       const widthFit = Math.floor(usableWidth / Math.max(totalColumns, 1));
       const heightFit = Math.floor(usableHeight / Math.max(totalRows, 1));
-      const comfortMax = puzzle.width <= 5 ? 44 : puzzle.width <= 10 ? 31 : 23;
+      const comfortMax = puzzle.width <= 5 ? 52 : puzzle.width <= 10 ? 34 : 26;
       return Math.max(13, Math.min(comfortMax, widthFit || comfortMax, heightFit || comfortMax));
     }
     return puzzle.width >= 25 ? 20 : 24;
@@ -3938,10 +3908,10 @@ function App() {
       ((((isModeSingle || isModePlacementTest) && !isInRaceRoom) || (isModeCreate && !isInRaceRoom)) ||
         ((isModeMulti || isModePvp) && isInRaceRoom))
   );
-  const isHpPuzzleMode = shouldShowPuzzleBoard && !isModeCreate && !isInRaceRoom;
+  const isHpPuzzleMode = shouldShowPuzzleBoard && !isModeCreate && !isInRaceRoom && !puzzle?.isBattlePracticePuzzle;
   const shouldStopSoloElapsedTimer = !isInRaceRoom && (isModeSingle || isModeTutorial);
   const shouldShowSingleTimer = shouldShowPuzzleBoard && isModePlacementTest && !isInRaceRoom;
-  const shouldReserveStatusSlot = shouldShowPuzzleBoard && !isInRaceRoom && !isModeAuth;
+  const shouldReserveStatusSlot = shouldShowPuzzleBoard && !isInRaceRoom && !isModeAuth && !IS_APPS_IN_TOSS;
   const isPuzzleHpGameOver = isHpPuzzleMode && puzzleHp <= 0 && !isBoardCompleteByHints;
   const puzzleSolutionCells = useMemo(() => getPuzzleSolutionCells(puzzle), [puzzle]);
   const canUsePuzzleHint = isHpPuzzleMode && !isPuzzleHpGameOver && !isBoardCompleteByHints;
@@ -4097,9 +4067,9 @@ function App() {
   const raceResultText = useMemo(() => {
     if (!raceState?.winner) return "";
     if (raceState.winner.playerId === racePlayerId) {
-      return L("승리하였습니다", "Victory");
+      return L("승리", "Victory");
     }
-    return L("패배하였습니다", "Defeat");
+    return L("패배", "Defeat");
   }, [raceState, racePlayerId, lang]);
   const raceResultKey = useMemo(() => {
     if (!isModeMulti || !isInRaceRoom || !raceRoomCode || !raceState?.gameStartAt) return "";
@@ -4799,7 +4769,7 @@ function App() {
     setElapsedMs(0);
     setElapsedSec(0);
     setTimerRunning(shouldStartElapsedTimer);
-    setStatus(suppressStatus ? "" : message || `Puzzle ${p.id} loaded.`);
+    setStatus(suppressStatus ? "" : message || "");
   };
 
   const fetchRandomPuzzleBySize = async (width, height) => {
@@ -4811,7 +4781,7 @@ function App() {
     if (!res.ok || !data.ok || !data.puzzle) {
       throw new Error(data.error || "Failed to load random puzzle.");
     }
-    return data.puzzle;
+    return { ...data.puzzle, isBattlePracticePuzzle: true };
   };
 
   const fetchBattlePracticePuzzleBySize = async (width, height) => {
@@ -4848,14 +4818,7 @@ function App() {
       setSelectedSize(safeSizeKey);
       initializePuzzle(puzzleData, {
         resume: true,
-        message: L(
-          IS_APPS_IN_TOSS
-            ? `${puzzleData.width}x${puzzleData.height} 배틀 퍼즐을 불러왔습니다.`
-            : `${puzzleData.width}x${puzzleData.height} 퍼즐을 불러왔습니다.`,
-          IS_APPS_IN_TOSS
-            ? `Battle puzzle ${puzzleData.width}x${puzzleData.height} loaded.`
-            : `Puzzle ${puzzleData.id} (${puzzleData.width}x${puzzleData.height}) loaded.`
-        ),
+        suppressStatus: true,
       });
       playSfx("ui");
     } catch (err) {
@@ -5231,10 +5194,7 @@ function App() {
       resume: false,
       startTimer: true,
       fixedMarks: buildThemeStarterMarkIndices(samplePuzzle),
-      message:
-        lang === "ko"
-          ? `테마 퍼즐 "${sample.titleKo || sample.id}"을 불러왔습니다.`
-          : `Loaded themed puzzle "${sample.titleEn || sample.id}".`,
+      suppressStatus: true,
     });
     playSfx("ui");
   };
@@ -5252,10 +5212,7 @@ function App() {
     initializePuzzle(communityPuzzle, {
       resume: true,
       startTimer: true,
-      message:
-        lang === "ko"
-          ? `유저 퍼즐 "${sample.titleKo || sample.id}"을 불러왔습니다.`
-          : `Loaded user puzzle "${sample.titleEn || sample.id}".`,
+      suppressStatus: true,
     });
     setSingleSection("community");
     void loadCommunityDiscussion(sample.id, { silent: true });
@@ -5644,7 +5601,7 @@ function App() {
     if (!isLoggedIn) {
       if (!isInRaceRoom) clearPuzzleViewState();
       setPlayMode("pvp");
-      setStatus(L("상대를 찾고 같은 퍼즐로 대결합니다.", "Find an opponent and race on the same puzzle."));
+      setStatus("");
       return;
     }
     if (!isInRaceRoom) clearPuzzleViewState();
@@ -5835,12 +5792,7 @@ function App() {
       const assigned = await applyPlacementResultToCurrentUser(finalResults, elapsed, stageProgress, evaluated);
       const resolved = assigned || evaluated;
       setPlacementResultCard(resolved);
-      setStatus(
-        L(
-          `배치고사 완료. 초기 레이팅 R ${resolved.rating}이 계정에 반영되었습니다.`,
-          `Placement complete. Initial rating R ${resolved.rating} has been assigned to your account.`
-        )
-      );
+      setStatus("");
     } catch (err) {
       setPlacementResultCard(evaluated);
       setStatus(
@@ -5871,12 +5823,7 @@ function App() {
         startTimer: false,
         suppressStatus: true,
       });
-      setStatus(
-        L(
-          `${stageIdx + 1}단계 진행 중 (${stage.sizeKey})`,
-          `Stage ${stageIdx + 1} in progress (${stage.sizeKey})`
-        )
-      );
+      setStatus("");
     } finally {
       if (placementSessionRef.current === sessionId) {
         setPlacementLoading(false);
@@ -5891,7 +5838,7 @@ function App() {
       return;
     }
     if (hasPlacementQualification) {
-      setStatus(L("배치고사가 이미 완료되었습니다.", "Placement has already been completed."));
+      setStatus("");
       return;
     }
     const sessionId = Date.now();
@@ -5904,7 +5851,7 @@ function App() {
     setPlacementStageIndex(0);
     setPlacementResultCard(null);
     setPlacementResults(PLACEMENT_STAGES.map((s) => ({ ...s, status: "pending", solvedAtSec: null })));
-    setStatus(L("배치고사 시작! 1단계 퍼즐 로딩 중...", "Placement started! Loading stage 1..."));
+    setStatus("");
     try {
       await loadPlacementStage(0, sessionId);
       playSfx("ui");
@@ -5938,11 +5885,7 @@ function App() {
       solvedSequential,
       elapsedSec,
     });
-    setStatus(
-      preset
-        ? L(`${tier.labelKo} 연출 테스트 실행`, `${tier.labelEn} reveal test started`)
-        : L("연출 테스트 실행", "Reveal animation test started")
-    );
+    setStatus("");
     playSfx("ui");
   };
 
@@ -5971,7 +5914,7 @@ function App() {
     }
     const nextIdx = idx + 1;
     setPlacementStageIndex(nextIdx);
-    setStatus(L(`${idx + 1}단계 완료! 다음 퍼즐 로딩 중...`, `Stage ${idx + 1} cleared! Loading next puzzle...`));
+    setStatus("");
     try {
       await loadPlacementStage(nextIdx, sessionId);
       playSfx("ui");
@@ -6068,7 +6011,7 @@ function App() {
   const loginWithTossGame = async (returnMode = "menu") => {
     if (!IS_APPS_IN_TOSS || tossLoginLoading) return;
     setTossLoginLoading(true);
-    setStatus(L("토스 계정으로 연결 중...", "Connecting with Toss..."));
+    setStatus("");
     try {
       const keyResult = await getAnonymousKey();
       if (!keyResult || keyResult === "ERROR" || typeof keyResult !== "object" || !keyResult.hash) {
@@ -6108,7 +6051,7 @@ function App() {
       }
 
       storeAuth(data.token, data.user);
-      setStatus(L(`토스 계정 연결 완료: ${data.user.nickname}`, `Connected with Toss: ${data.user.nickname}`));
+      setStatus("");
       routeAfterAuth(data.user, returnMode);
     } catch (err) {
       const code = String(err?.message || "");
@@ -6213,7 +6156,7 @@ function App() {
       storeAuth(data.token, data.user);
       setLoginUsername("");
       setLoginPassword("");
-      setStatus(L(`로그인 완료: ${data.user.nickname}`, `Logged in: ${data.user.nickname}`));
+      setStatus("");
       routeAfterAuth(data.user, authReturnMode);
     } catch (err) {
       const msg = String(err.message || "");
@@ -6259,7 +6202,7 @@ function App() {
       }
       setActiveVote(data.vote);
       setShowVoteModal(false);
-      setStatus(L("투표가 반영되었습니다.", "Your vote has been recorded."));
+      setStatus("");
     } catch (err) {
       setVoteError(String(err.message || L("투표 저장 실패", "Vote submission failed")));
     } finally {
@@ -6532,23 +6475,6 @@ function App() {
       result: outcome.result,
       isTest: true,
     });
-    pushMatchSimLog(
-      mode === "promotion"
-        ? "승급 결과 연출 실행"
-        : mode === "demotion"
-          ? "강등 결과 연출 실행"
-          : mode === "loss"
-            ? "패배 결과 연출 실행"
-            : "승리 결과 연출 실행",
-      mode === "promotion"
-        ? "Promotion result FX triggered"
-        : mode === "demotion"
-          ? "Demotion result FX triggered"
-          : mode === "loss"
-            ? "Defeat result FX triggered"
-            : "Victory result FX triggered",
-      "accent"
-    );
   };
 
   const clearMatchFlowTimers = () => {
@@ -6601,7 +6527,7 @@ function App() {
       },
       opponent: MATCH_FLOW_TEST_OPPONENT,
     });
-    setStatus(L("풀 시퀀스 테스트 시작", "Full flow test started"));
+    setStatus("");
     playSfx("ui");
 
     const schedule = (delay, callback) => {
@@ -6779,7 +6705,7 @@ function App() {
     initializePuzzle(data.puzzle, {
       resume: false,
       startTimer: false,
-      message: L("5초 카운트다운 후 시작됩니다.", "Starting after a 5-second countdown."),
+      suppressStatus: true,
     });
     setPlayMode("pvp");
     startRacePolling(data.roomCode, data.playerId);
@@ -6857,7 +6783,7 @@ function App() {
     setPvpSearching(true);
     setPvpServerState("waiting");
     setPvpQueueSize(1);
-    setStatus(L("상대를 찾는 중...", "Searching for opponent..."));
+    setStatus("");
     try {
       await new Promise((resolve) => window.setTimeout(resolve, 1400 + Math.floor(Math.random() * 1800)));
       if (pvpGuestStartSeqRef.current !== startSeq) return;
@@ -6871,7 +6797,7 @@ function App() {
       const data = await parseJsonSafe(res);
       if (!res.ok || !data.ok) throw new Error(data.error || L("매칭 시작 실패", "Failed to start matchmaking"));
       applyPvpMatch(data);
-      setStatus(IS_APPS_IN_TOSS ? "" : L("상대와 같은 퍼즐로 대결합니다.", "Battle started on the same puzzle."));
+      setStatus("");
     } catch (err) {
       setStatus(err.message || L("매칭을 시작하지 못했습니다.", "Could not start matchmaking."));
       resetPvpQueueState();
@@ -6903,11 +6829,7 @@ function App() {
       if (nextState === "ready" || nextState === "cancelled") {
         return;
       }
-      setStatus(
-        nextState === "matching"
-          ? L("상대가 잡혔습니다. 시작하기를 눌러주세요.", "Opponent found. Press start.")
-          : L("상대를 찾는 중...", "Searching for opponent...")
-      );
+      setStatus("");
       setPlayMode("pvp");
       startPvpPolling(String(data.ticketId || ""));
       playSfx("ui");
@@ -6936,7 +6858,7 @@ function App() {
       // ignore cancellation errors
     }
     resetPvpQueueState();
-    if (!silent) setStatus(L("매칭 대기를 취소했습니다.", "Matchmaking cancelled."));
+    if (!silent) setStatus("");
   };
 
   const acceptPvpMatch = async () => {
@@ -7256,7 +7178,7 @@ function App() {
       if (!res.ok || !data.ok) throw new Error(data.error || "Failed to start race.");
       applyRaceRoomState(data.room);
       playSfx("ui");
-      setStatus(L("5초 후 시작합니다.", "Starting in 5 seconds."));
+      setStatus("");
     } catch (err) {
       setStatus(err.message);
     }
@@ -7278,7 +7200,7 @@ function App() {
         initializePuzzle(data.puzzle, {
           resume: false,
           startTimer: false,
-          message: L("새 게임 준비 완료. 다시 Ready를 눌러 시작해.", "New game is ready. Press Ready again."),
+          suppressStatus: true,
         });
         playSfx("ui");
       }
@@ -8034,7 +7956,7 @@ function App() {
     setElapsedMs(0);
     setElapsedSec(0);
     setTimerRunning(shouldRestartElapsedTimer);
-    setStatus(isModeCreate ? L("캔버스를 비웠습니다.", "Cleared the canvas.") : "Grid cleared.");
+    setStatus("");
     playSfx("clear");
   };
 
@@ -8209,12 +8131,7 @@ function App() {
           "success"
         );
         pushMatchSimLog(foundCandidate.reasonKo, foundCandidate.reasonEn, foundCandidate.source === "bot" ? "warn" : "accent");
-        setStatus(
-          L(
-            `${foundCandidate.nickname}와 매칭되었습니다.`,
-            `Matched with ${foundCandidate.nickname}.`
-          )
-        );
+        setStatus("");
         playSfx("ui");
       }
     }, 180);
@@ -8237,35 +8154,28 @@ function App() {
       startSolvedReveal();
       setTimerRunning(false);
       if (isModePlacementTest && !isInRaceRoom && placementRunning) {
-        setStatus(L("단계 완료! 다음 퍼즐로 이동합니다.", "Stage cleared! Moving to next puzzle."));
+        setStatus("");
         void handlePlacementStageSolved();
       } else if (isModeTutorial) {
         // Tutorial completion status is handled by tutorial progress effect.
       } else if (isInRaceRoom && isRacePlaying) {
-        setStatus(L("완주! 다른 플레이어 결과 대기중...", "Finished! Waiting for other players..."));
+        setStatus("");
         submitRaceFinish();
       } else {
-        setStatus(puzzle?.isDailyPuzzle ? L("오늘의 퍼즐 완료! 달력에 표시했어요.", "Daily puzzle cleared and marked on the calendar.") : "Success! Puzzle solved.");
+        setStatus("");
         if (isModeSingle && !isInRaceRoom) {
           if (puzzle?.isCustom) {
             triggerVictoryFx("single");
           }
           if (puzzle?.isDailyPuzzle) {
-            setDailyCompletionResult(buildDailyCompletionResult(puzzle, dailyPuzzleHistory, elapsedMs, elapsedSec));
             trackMissionEvent("daily_solve", {
               dateKey: getDailySolvedDateKey(puzzle),
               eventToken: getDailySolvedDateKey(puzzle),
             });
             markDailyPuzzleSolved(puzzle);
-            if (typeof window !== "undefined") {
-              if (dailyResultCalendarTimerRef.current) window.clearTimeout(dailyResultCalendarTimerRef.current);
-              dailyResultCalendarTimerRef.current = window.setTimeout(() => {
-                clearPuzzleViewState();
-                setSingleSection("daily");
-                setPlayMode("single");
-                dailyResultCalendarTimerRef.current = 0;
-              }, SOLVED_REVEAL_DURATION_MS + 900);
-            }
+            clearPuzzleViewState();
+            setSingleSection("daily");
+            setPlayMode("single");
           }
           if (puzzle?.isCustomLibrary && !puzzle?.isDailyPuzzle) {
             trackMissionEvent("theme_solve");
@@ -8295,9 +8205,6 @@ function App() {
     isModeTutorial,
     isModeSingle,
     isModeCreate,
-    dailyPuzzleHistory,
-    elapsedMs,
-    elapsedSec,
     markDailyPuzzleSolved,
     markCustomSampleSolved,
     submitCommunityPuzzleSolve,
@@ -8312,7 +8219,7 @@ function App() {
     if (!isInRaceRoom || racePhase !== "finished" || !raceState?.winnerPlayerId || raceResultShownRef.current) return;
     raceResultShownRef.current = true;
     if (raceState.winnerPlayerId === racePlayerId) {
-      setStatus(L("승리하였습니다.", "Victory."));
+      setStatus("");
       playSfx("win");
     } else {
       if (myRacePlayer?.loseReason === "inactive_timeout") {
@@ -8323,7 +8230,7 @@ function App() {
           )
         );
       } else {
-        setStatus(L("패배하였습니다.", "Defeat."));
+        setStatus("");
       }
       setTimerRunning(false);
       playSfx("lose");
@@ -8588,13 +8495,6 @@ function App() {
   }, [isLoggedIn]);
 
   useEffect(() => {
-    if (isInRaceRoom) return;
-    if (isRaceOnlyStatusMessage(status)) {
-      setStatus("");
-    }
-  }, [isInRaceRoom, status]);
-
-  useEffect(() => {
     if (!isModeTutorial) return;
     if (tutorialAllDone) {
       if (!tutorialCompleteShownRef.current) {
@@ -8781,10 +8681,6 @@ function App() {
     if (pvpSearching && !isInRaceRoom) {
       void cancelPvpQueue({ silent: true });
     }
-    if (typeof window !== "undefined" && dailyResultCalendarTimerRef.current) {
-      window.clearTimeout(dailyResultCalendarTimerRef.current);
-      dailyResultCalendarTimerRef.current = 0;
-    }
     const dailyPuzzle = buildCreatorPuzzle(dailyPuzzleSample.width, dailyPuzzleSample.height, dailyPuzzleSample.cells, {
       id: `daily-${todayDailyDateKey}-${dailyPuzzleSample.id}`,
       isLibrary: true,
@@ -8797,59 +8693,19 @@ function App() {
     if (typeof window !== "undefined") {
       clearStoredDailyPuzzleState();
     }
-    setDailyCompletionResult(null);
     initializePuzzle(dailyPuzzle, {
       resume: false,
       startTimer: true,
       fixedMarks: buildThemeStarterMarkIndices(dailyPuzzle),
-      message:
-        lang === "ko"
-          ? "오늘의 퍼즐을 불러왔습니다."
-          : "Loaded daily puzzle.",
+      suppressStatus: true,
     });
     setSingleSection("daily");
     setPlayMode("single");
     playSfx("ui");
   };
+  const isDailyCalendarCelebrating = dailyPuzzleStampDate === todayDailyDateKey;
   const renderDailyPanel = () => (
-    <div className={`appsDailyPanel ${isDailyPuzzleSolvedToday ? "solved" : ""}`}>
-      {dailyCompletionResult && (
-        <div className="appsDailyResultCard">
-          <div className="appsDailyResultBadge">
-            <Trophy size={18} />
-            <span>{L("오늘 완료", "Cleared Today")}</span>
-          </div>
-          <div className="appsDailyResultTitle">
-            <small>{dailyCompletionResult.sizeText || dailyPuzzleSizeText}</small>
-            <strong>{L("오늘의 퍼즐", "Daily Puzzle")}</strong>
-          </div>
-          <div className="appsDailyResultStats">
-            <span>
-              <CheckCircle2 size={15} />
-              {formatRaceElapsedMs(dailyCompletionResult.elapsedMs, dailyCompletionResult.elapsedSec)}
-            </span>
-            <span>
-              <Flame size={15} />
-              {L(`연속 ${dailyCompletionResult.streak}일`, `${dailyCompletionResult.streak} day streak`)}
-            </span>
-            <span>
-              <CalendarDays size={15} />
-              {L(`${dailyCompletionResult.monthSolvedCount}일 완료`, `${dailyCompletionResult.monthSolvedCount} days cleared`)}
-            </span>
-          </div>
-          <div className="appsDailyResultActions">
-            <button type="button" onClick={loadDailyPuzzle}>
-              <Shuffle size={15} />
-              <span>{L("다시 테스트", "Test Again")}</span>
-            </button>
-            <button type="button" onClick={() => setDailyCompletionResult(null)}>
-              <CheckCircle2 size={15} />
-              <span>{L("확인", "OK")}</span>
-            </button>
-          </div>
-        </div>
-      )}
-
+    <div className={`appsDailyPanel ${isDailyPuzzleSolvedToday ? "solved" : ""} ${isDailyCalendarCelebrating ? "calendarFocus" : ""}`}>
       <button type="button" className="appsDailyCard" onClick={loadDailyPuzzle}>
         <span className="appsDailyIcon">
           {isDailyPuzzleSolvedToday ? <CheckCircle2 size={28} /> : <CalendarDays size={28} />}
@@ -9483,7 +9339,7 @@ function App() {
                       <span>R {Number.isFinite(Number(authUser?.rating)) ? Number(authUser.rating) : 0}</span>
                     </span>
                   </button>
-                  <button onClick={logout}>{L("로그아웃", "Logout")}</button>
+                  {!IS_APPS_IN_TOSS && <button onClick={logout}>{L("로그아웃", "Logout")}</button>}
                 </>
               ) : IS_APPS_IN_TOSS ? (
                 <button
@@ -9519,15 +9375,6 @@ function App() {
                     title={soundEnabled ? L("사운드 끄기", "Turn sound off") : L("사운드 켜기", "Turn sound on")}
                   >
                     {soundEnabled ? <Volume2 size={18} /> : <VolumeX size={18} />}
-                  </button>
-                  <button
-                    type="button"
-                    className="appExitBtn"
-                    onClick={requestMiniAppExit}
-                    aria-label={L("앱 종료", "Exit app")}
-                    title={L("앱 종료", "Exit app")}
-                  >
-                    <X size={19} />
                   </button>
                 </>
               )}
@@ -11425,7 +11272,7 @@ function App() {
             <div className="raceBoardPane">
               <div
                 ref={boardStageRef}
-                className="boardWrap hasTopToolbar"
+                className={`boardWrap hasTopToolbar ${isHpPuzzleMode ? "hasHpTools" : "compactTools"}`}
                 onContextMenu={(e) => e.preventDefault()}
               >
                 {renderBoardTopToolbar()}
@@ -12312,7 +12159,7 @@ function App() {
         {shouldShowPuzzleBoard && !isInRaceRoom && (
           <div
                 ref={boardStageRef}
-                className={`boardWrap puzzleBoardStage ${!isModeCreate ? "hasTopToolbar" : ""}`}
+                className={`boardWrap puzzleBoardStage ${!isModeCreate ? "hasTopToolbar" : ""} ${isHpPuzzleMode ? "hasHpTools" : "compactTools"}`}
                 onContextMenu={(e) => e.preventDefault()}
                 data-tutorial={isSingleSoloMode ? "single-board" : undefined}
               >

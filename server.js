@@ -56,7 +56,7 @@ const PVP_BOT_RETRY_MAX_MS = Math.max(
   PVP_BOT_RETRY_MIN_MS,
   Number(process.env.PVP_BOT_RETRY_MAX_MS || 4200)
 );
-const PVP_BOT_POOL_MIN = 50;
+const PVP_BOT_POOL_MIN = 53;
 const PVP_BOT_EXCLUDE_EASY = process.env.PVP_BOT_EXCLUDE_EASY !== "false";
 const PVP_BOT_LADDER_ENABLED = process.env.PVP_BOT_LADDER_ENABLED !== "false";
 const PVP_BOT_LADDER_INTERVAL_MS = Math.max(
@@ -287,6 +287,9 @@ const PVP_BOT_NAME_POOL = [
   "오늘도맑음",
   "행운의편지",
   "비밀의숲",
+  "별빛소다",
+  "느긋한감자",
+  "무지개조각",
 ];
 const BOT_DIFFICULTY_WEIGHTS = [
   ["easy", 20],
@@ -371,7 +374,7 @@ const BOT_SOLVE_TIME_RANGE_SEC = {
     expert: [650, 1000],
   },
 };
-const ELO_DEFAULT_RATING = 1500;
+const ELO_DEFAULT_RATING = 500;
 const RATING_WIN_BASE = Math.max(1, Number(process.env.RATING_WIN_BASE || 30));
 const RATING_LOSS_BASE = Math.max(1, Number(process.env.RATING_LOSS_BASE || 20));
 const RATING_LOSS_MIN = Math.max(0, Number(process.env.RATING_LOSS_MIN || 7));
@@ -1416,6 +1419,7 @@ async function ensureAuthTables() {
       ADD COLUMN IF NOT EXISTS placement_solved_sequential INTEGER NOT NULL DEFAULT 0,
       ADD COLUMN IF NOT EXISTS placement_elapsed_sec INTEGER NOT NULL DEFAULT 0;
   `);
+  await pool.query(`ALTER TABLE users ALTER COLUMN rating SET DEFAULT ${ELO_DEFAULT_RATING}`);
   await pool.query(`UPDATE users SET ui_lang = 'ko' WHERE ui_lang IS NULL OR ui_lang NOT IN ('ko', 'en')`);
   await pool.query(`UPDATE users SET ui_theme = 'light' WHERE ui_theme IS NULL OR ui_theme NOT IN ('light', 'dark')`);
   await pool.query(
@@ -4295,6 +4299,20 @@ function buildUserAppStatePayload(row) {
   };
 }
 
+function getMissionLevelNeed(level) {
+  return 180 + Math.max(0, Number(level || 1) - 1) * 70;
+}
+
+function getMissionLevelByTotalXp(totalXp) {
+  let remaining = Math.max(0, Number(totalXp || 0));
+  let level = 1;
+  while (remaining >= getMissionLevelNeed(level) && level < 999) {
+    remaining -= getMissionLevelNeed(level);
+    level += 1;
+  }
+  return level;
+}
+
 async function getOrCreateUserAppState(userId) {
   const numericUserId = Number(userId || 0);
   const insertResult = await pool.query(
@@ -4576,18 +4594,39 @@ app.get("/ratings/leaderboard", async (req, res) => {
     const authUser = await getAuthUserFromReq(req);
     const listSql = legacyView
       ? `SELECT id, username, nickname, rating, rating_games, rating_wins, rating_losses,
-                win_streak_current, win_streak_best, profile_avatar_key, placement_done
-         FROM users
-         ORDER BY rating DESC, rating_wins DESC, rating_games DESC, id ASC
+                win_streak_current, win_streak_best, profile_avatar_key, placement_done,
+                CASE
+                  WHEN jsonb_typeof(state.mission_state->'totalXp') = 'number'
+                    THEN (state.mission_state->>'totalXp')::int
+                  ELSE 0
+                END AS mission_total_xp
+         FROM users u
+         LEFT JOIN user_app_state state
+           ON state.user_id = u.id
+         ORDER BY u.rating DESC, u.rating_wins DESC, u.rating_games DESC, u.id ASC
          LIMIT $1 OFFSET $2`
       : `SELECT id, username, nickname,
                 rating,
                 rating_games, rating_wins, rating_losses,
-                win_streak_current, win_streak_best, profile_avatar_key, placement_done
-         FROM users
-         ORDER BY rating DESC, rating_wins DESC, rating_games DESC, id ASC
+                win_streak_current, win_streak_best, profile_avatar_key, placement_done,
+                CASE
+                  WHEN jsonb_typeof(state.mission_state->'totalXp') = 'number'
+                    THEN (state.mission_state->>'totalXp')::int
+                  ELSE 0
+                END AS mission_total_xp
+         FROM users u
+         LEFT JOIN user_app_state state
+           ON state.user_id = u.id
+         ORDER BY u.rating DESC, u.rating_wins DESC, u.rating_games DESC, u.id ASC
          LIMIT $1 OFFSET $2`;
     const { rows } = await pool.query(listSql, [limit, offset]);
+    const users = rows.map((row) => {
+      const { mission_total_xp: missionTotalXp, ...user } = row;
+      return {
+        ...user,
+        mission_level: getMissionLevelByTotalXp(missionTotalXp),
+      };
+    });
     let myRank = null;
     if (authUser && Number.isInteger(Number(authUser.id))) {
       const rankSql = legacyView
@@ -4616,7 +4655,7 @@ app.get("/ratings/leaderboard", async (req, res) => {
     const totalUsers = totalRows.length ? Number(totalRows[0].total_users) : rows.length;
     return res.json({
       ok: true,
-      users: rows,
+      users,
       myRank,
       myUserId: authUser ? Number(authUser.id) : null,
       totalUsers,

@@ -2,8 +2,9 @@ const crypto = require("crypto");
 const { Pool } = require("pg");
 const { buildDbConfig, describeDbTarget, getDbName } = require("./db-config");
 
-const DEFAULT_COUNT = 50;
+const DEFAULT_COUNT = 53;
 const DEFAULT_PREFIX = "app_user";
+const STARTING_RATING = 500;
 const CURRENT_PLACEMENT_VERSION = Math.max(1, Number(process.env.PLACEMENT_VERSION || 1));
 
 const PROFILE_AVATAR_KEYS = [
@@ -73,9 +74,12 @@ const BASE_NICKNAMES = [
   "오늘도맑음",
   "행운의편지",
   "비밀의숲",
+  "별빛소다",
+  "느긋한감자",
+  "무지개조각",
 ];
 
-const BOT_SKILLS = ["normal", "hard", "normal", "expert", "hard"];
+const BOT_SKILLS = ["easy", "normal", "normal", "hard"];
 
 function isEnabled(value) {
   return String(value || "").trim().toLowerCase() === "true";
@@ -114,16 +118,17 @@ function tierKeyForRating(rating) {
 function buildPersona(index, prefix) {
   const serial = String(index + 1).padStart(3, "0");
   const name = BASE_NICKNAMES[index % BASE_NICKNAMES.length];
-  const rating = 820 + ((index * 97 + 180) % 1680);
-  const games = 16 + ((index * 11 + 9) % 96);
-  const ratingFactor = Math.max(0, Math.min(1, (rating - 820) / 1680));
-  const wobble = (((index * 17) % 15) - 7) / 100;
-  const winRate = Math.max(0.28, Math.min(0.82, 0.34 + ratingFactor * 0.38 + wobble));
+  const rating = 520 + ((index * 37 + 11) % 420);
+  const games = 2 + ((index * 5 + 3) % 13);
+  const ratingFactor = Math.max(0, Math.min(1, (rating - 520) / 420));
+  const wobble = (((index * 17) % 13) - 6) / 100;
+  const winRate = Math.max(0.35, Math.min(0.72, 0.42 + ratingFactor * 0.2 + wobble));
   const wins = Math.max(0, Math.min(games, Math.round(games * winRate)));
   const losses = games - wins;
-  const currentStreak = wins > 0 ? (index * 3) % 7 : 0;
-  const bestStreak = Math.max(currentStreak, 2 + ((index * 5) % 13));
+  const currentStreak = wins > 0 ? (index % 3) : 0;
+  const bestStreak = Math.max(currentStreak, index % 4);
   const avatarKey = PROFILE_AVATAR_KEYS[index % PROFILE_AVATAR_KEYS.length];
+  const missionTotalXp = index % 4 === 0 ? 190 : index % 5 === 0 ? 120 : 0;
   return {
     username: `${prefix}_${serial}`.slice(0, 24),
     nickname: name.slice(0, 24),
@@ -138,6 +143,7 @@ function buildPersona(index, prefix) {
     tierKey: tierKeyForRating(rating),
     botSkill: BOT_SKILLS[index % BOT_SKILLS.length],
     botSpawnWeight: 3 + ((index * 5) % 7),
+    missionTotalXp,
   };
 }
 
@@ -176,7 +182,7 @@ async function ensureUsersTable(pool) {
   `);
   await pool.query(`
     ALTER TABLE users
-      ADD COLUMN IF NOT EXISTS rating INTEGER NOT NULL DEFAULT 1500,
+      ADD COLUMN IF NOT EXISTS rating INTEGER NOT NULL DEFAULT ${STARTING_RATING},
       ADD COLUMN IF NOT EXISTS rating_games INTEGER NOT NULL DEFAULT 0,
       ADD COLUMN IF NOT EXISTS rating_wins INTEGER NOT NULL DEFAULT 0,
       ADD COLUMN IF NOT EXISTS rating_losses INTEGER NOT NULL DEFAULT 0,
@@ -202,8 +208,17 @@ async function ensureUsersTable(pool) {
       ADD COLUMN IF NOT EXISTS placement_solved_sequential INTEGER NOT NULL DEFAULT 0,
       ADD COLUMN IF NOT EXISTS placement_elapsed_sec INTEGER NOT NULL DEFAULT 0;
   `);
+  await pool.query(`ALTER TABLE users ALTER COLUMN rating SET DEFAULT ${STARTING_RATING}`);
   await pool.query(`CREATE INDEX IF NOT EXISTS idx_users_rating_desc ON users (rating DESC, rating_games DESC, id ASC);`);
   await pool.query(`CREATE INDEX IF NOT EXISTS idx_users_is_bot ON users (is_bot);`);
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS user_app_state (
+      user_id BIGINT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+      daily_puzzle_history JSONB NOT NULL DEFAULT '{}'::jsonb,
+      mission_state JSONB NOT NULL DEFAULT '{}'::jsonb,
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+  `);
 }
 
 async function seedFakeUsers(pool, personas) {
@@ -211,8 +226,8 @@ async function seedFakeUsers(pool, personas) {
   await pool.query("BEGIN");
   try {
     for (const persona of personas) {
-      const completedAtMs = Date.now() - ((persona.rating % 31) + 1) * 86400000;
-      const elapsedSec = 260 + (persona.rating % 420);
+      const completedAtMs = Date.now() - ((persona.rating % 7) + 1) * 86400000;
+      const elapsedSec = 360 + (persona.rating % 180);
       const { rows } = await pool.query(
         `INSERT INTO users (
           username, nickname, password_hash, is_bot, bot_skill, bot_spawn_weight,
@@ -226,7 +241,7 @@ async function seedFakeUsers(pool, personas) {
           $4, $5, $6, $7,
           $8, $9, $10,
           true, $4, $11, $12,
-          $13, 5, $14,
+          $13, CASE WHEN $4 >= 700 THEN 1 ELSE 0 END, $14,
           'ko', 'light', true, 100
         )
         ON CONFLICT (username) DO UPDATE SET
@@ -272,6 +287,22 @@ async function seedFakeUsers(pool, personas) {
           persona.botSpawnWeight,
         ]
       );
+      const userId = Number(rows[0].id);
+      await pool.query(
+        `INSERT INTO user_app_state (user_id, daily_puzzle_history, mission_state, updated_at)
+         VALUES ($1, '{}'::jsonb, $2::jsonb, now())
+         ON CONFLICT (user_id) DO UPDATE SET
+           mission_state = EXCLUDED.mission_state,
+           updated_at = now()`,
+        [
+          userId,
+          JSON.stringify({
+            totalXp: persona.missionTotalXp,
+            daily: {},
+            weekly: {},
+          }),
+        ]
+      );
       seeded.push(rows[0]);
     }
     await pool.query("COMMIT");
@@ -294,11 +325,17 @@ async function main() {
     await ensureUsersTable(pool);
     const seeded = await seedFakeUsers(pool, personas);
     const { rows } = await pool.query(
-      `SELECT COUNT(*)::int AS count FROM users WHERE username = ANY($1::varchar[])`,
+      `SELECT
+         COUNT(*)::int AS count,
+         MIN(rating)::int AS min_rating,
+         MAX(rating)::int AS max_rating
+       FROM users
+       WHERE username = ANY($1::varchar[])`,
       [personas.map((persona) => persona.username)]
     );
     console.log(`Seeded ${seeded.length} app fake users into ${describeDbTarget(config)}.`);
     console.log(`Current ${prefix}_* users: ${rows[0]?.count || seeded.length}`);
+    console.log(`Rating range: ${rows[0]?.min_rating || 0}-${rows[0]?.max_rating || 0}`);
     console.log(`Sample: ${seeded.slice(0, 5).map((user) => `${user.nickname}(${user.rating})`).join(", ")}`);
   } finally {
     await pool.end();
