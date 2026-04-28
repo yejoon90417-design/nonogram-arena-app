@@ -290,19 +290,6 @@ const DEFAULT_PROFILE_AVATAR_OPTIONS = [
   { key: "default-magnet", labelKo: "자석", labelEn: "Magnet", emoji: "🧲", colorA: "#ffb4b4", colorB: "#9c4052" },
   { key: "default-anchor", labelKo: "앵커", labelEn: "Anchor", emoji: "⚓", colorA: "#c6d5e6", colorB: "#516a86" },
 ];
-const HALL_PROFILE_AVATAR_OPTIONS = PVP_SIZE_KEYS.flatMap((sizeKey) =>
-  [1, 2, 3].map((rank) => ({
-    key: `hall-${sizeKey}-${rank}`,
-    sizeKey,
-    rank,
-    group: "hall",
-    labelKo: `${sizeKey} ${rank}위`,
-    labelEn: `${sizeKey} Rank ${rank}`,
-    unlockHintKo: `${sizeKey} 명예의 전당 ${rank}위`,
-    unlockHintEn: `${sizeKey} Hall of Fame Rank ${rank}`,
-    imageSrc: `/profile/hall/${sizeKey}-${rank}.png`,
-  }))
-);
 const LEGACY_SPECIAL_AVATAR_KEY_MAP = {
   "default-rank-1": "special-rating-1",
   "default-rank-2": "special-rating-2",
@@ -344,7 +331,6 @@ const TIER_SPECIAL_PROFILE_AVATAR_OPTIONS = ["bronze", "silver", "gold", "diamon
   };
 });
 const SPECIAL_PROFILE_AVATAR_OPTIONS = [
-  ...HALL_PROFILE_AVATAR_OPTIONS,
   ...TIER_SPECIAL_PROFILE_AVATAR_OPTIONS,
   ...RATING_SPECIAL_PROFILE_AVATAR_OPTIONS,
   ...STREAK_SPECIAL_PROFILE_AVATAR_OPTIONS,
@@ -771,8 +757,9 @@ function getTierInfoByRating(ratingRaw, rankRaw = null) {
 }
 
 function getRankingTierInfoByRating(ratingRaw, rankRaw = null) {
+  const rating = Math.max(0, Math.round(Number(ratingRaw || 0)));
   const rank = Number(rankRaw || 0);
-  if (Number.isInteger(rank) && rank >= 1 && rank <= 3) {
+  if (rating >= 2500 && Number.isInteger(rank) && rank >= 1 && rank <= 3) {
     return { key: "challenger", labelKo: "챌린저", labelEn: "Challenger" };
   }
   return getTierInfoByRating(ratingRaw, rankRaw);
@@ -819,14 +806,6 @@ function getAllowedPvpSizeKeys(players, viewerUser) {
     getTierInfoByRating(viewerUser?.placement_rating ?? viewerUser?.rating, viewerUser?.ratingRank).key;
 
   return getPvpAllowedSizeKeysForBracket(getPvpSizeBracketByTierKey(viewerTierKey));
-}
-
-function parseHallProfileAvatarKey(raw) {
-  const value = String(raw || "").trim().toLowerCase();
-  const normalized = LEGACY_SPECIAL_AVATAR_KEY_MAP[value] || value;
-  const option = HALL_PROFILE_AVATAR_OPTIONS.find((entry) => entry.key === normalized);
-  if (!option) return null;
-  return option;
 }
 
 function getSpecialProfileAvatarOption(raw) {
@@ -3096,7 +3075,6 @@ function App() {
       nickname: baseUser?.nickname,
     });
     const specialRewards = mergeSpecialRewards(
-      hallRewards,
       buildTierRewardsFromSource(baseUser),
       buildRatingRewardsFromSnapshot(ratingSnapshot, { id: baseUser?.id, nickname: baseUser?.nickname }),
       buildStreakRewardsFromSnapshot(rewardSnapshot?.streakTop || [], { id: baseUser?.id, nickname: baseUser?.nickname })
@@ -3145,7 +3123,6 @@ function App() {
       nickname: source?.nickname,
     });
     const specialRewards = mergeSpecialRewards(
-      hallRewards,
       buildTierRewardsFromSource(source),
       buildRatingRewardsFromSnapshot(ratingSnapshot, { id: targetUserId, nickname: source?.nickname }),
       buildStreakRewardsFromSnapshot(rewardSnapshot?.streakTop || [], { id: targetUserId, nickname: source?.nickname })
@@ -8853,7 +8830,6 @@ function App() {
       ? profileModalData.unlockedSpecialAvatarKeys.map((key) => normalizeProfileAvatarKey(key))
       : []
   );
-  const profileModalHallRewards = Array.isArray(profileModalData?.hallRewards) ? profileModalData.hallRewards : [];
   const profileAvatarDirty =
     profileModalMode === "self" &&
     normalizeProfileAvatarKey(profileModalData?.profile_avatar_key || DEFAULT_PROFILE_AVATAR_KEY) !==
@@ -12118,26 +12094,6 @@ function App() {
                             </div>
                           )}
                         </>
-                      ) : profileModalHallRewards.length > 0 ? (
-                        <div className="profileSection">
-                          <div className="profileSectionHead">
-                            <div className="profileSectionTitle">{L("명예의 전당 기록", "Hall of Fame Records")}</div>
-                          </div>
-                          <div className="profileRewardList">
-                            {profileModalHallRewards.map((reward) => {
-                              const option = HALL_PROFILE_AVATAR_OPTIONS.find((entry) => entry.key === reward.key);
-                              return (
-                                <div key={`${reward.key}-${reward.finishedAtMs}`} className="profileRewardItem">
-                                  <ProfileAvatar avatarKey={reward.key} nickname={profileModalData.nickname} size="md" />
-                                  <div>
-                                    <strong>{lang === "ko" ? option?.labelKo || reward.key : option?.labelEn || reward.key}</strong>
-                                    <span>{formatRaceElapsedSec(Math.max(0, Number(reward.elapsedSec || 0)))}</span>
-                                  </div>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        </div>
                       ) : null}
                     </>
                   )}

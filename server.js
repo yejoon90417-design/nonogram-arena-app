@@ -799,7 +799,7 @@ async function fetchUnlockedHallAvatarRewards(userId) {
 async function fetchUnlockedSpecialAvatarRewards(userId) {
   const numericUserId = Number(userId);
   if (!Number.isInteger(numericUserId) || numericUserId <= 0) return [];
-  const rewards = [...(await fetchUnlockedHallAvatarRewards(numericUserId))];
+  const rewards = [];
 
   const { rows: tierRows } = await pool.query(
     `SELECT rating
@@ -2619,11 +2619,137 @@ function startPvpBotLadderLoop() {
   }, PVP_BOT_LADDER_INTERVAL_MS);
 }
 
+function isSameUserId(a, b) {
+  const aText = String(a ?? "");
+  const bText = String(b ?? "");
+  return aText !== "" && aText === bText;
+}
+
+function isPvpRaceRoom(room) {
+  return room?.mode === "pvp_ranked" || room?.mode === "pvp_bot";
+}
+
+function awardForfeitWinIfNeeded(room, leavingPlayerId, now = Date.now()) {
+  if (!isPvpRaceRoom(room)) return;
+  if (room.state !== "countdown" && room.state !== "playing") return;
+  if (room.winnerPlayerId) return;
+
+  const leavingPlayer = room.players.get(leavingPlayerId);
+  if (!leavingPlayer || Number.isInteger(leavingPlayer.elapsedSec)) return;
+
+  const candidates = Array.from(room.players.values()).filter(
+    (p) =>
+      p.playerId !== leavingPlayerId &&
+      !p.disconnectedAt &&
+      !Number.isInteger(p.elapsedSec) &&
+      !p.loseReason
+  );
+  if (candidates.length !== 1) return;
+
+  const winner = candidates[0];
+  const gameStartAt = Number(room.gameStartAt || now);
+  const elapsedMs = Math.max(0, now - Math.min(gameStartAt, now));
+  winner.elapsedMs = elapsedMs;
+  winner.elapsedSec = Math.max(0, Math.ceil(elapsedMs / 1000));
+  winner.finishedAt = new Date(now).toISOString();
+  winner.loseReason = null;
+  winner.correctAnswerCells = Math.max(Number(winner.correctAnswerCells || 0), Number(room.totalAnswerCells || 0));
+  room.winnerPlayerId = winner.playerId;
+}
+
+async function markRoomPlayerLeft(room, playerId, reason = "left", now = Date.now()) {
+  if (!room || !playerId) return { ok: false, roomDeleted: false, leavePenalty: { applied: false, points: 0 } };
+  const player = room.players.get(playerId);
+  if (!player) return { ok: false, roomDeleted: false, leavePenalty: { applied: false, points: 0 } };
+
+  maybeFinalizeRoom(room);
+
+  if (room.state === "lobby") {
+    const wasHost = room.hostPlayerId === playerId;
+    room.players.delete(playerId);
+
+    if (room.players.size === 0) {
+      raceRooms.delete(room.roomCode);
+      return { ok: true, roomDeleted: true, leavePenalty: { applied: false, points: 0 } };
+    }
+
+    if (wasHost) {
+      const nextHost = Array.from(room.players.values()).sort((a, b) =>
+        a.joinedAt > b.joinedAt ? 1 : -1
+      )[0];
+      room.hostPlayerId = nextHost.playerId;
+    }
+    await applyRatedResultIfNeeded(room);
+    return { ok: true, roomDeleted: false, leavePenalty: { applied: false, points: 0 } };
+  }
+
+  const leavePenalty = await applyLeaveRoomPenaltyIfNeeded(room, player);
+  const alreadyFinished = room.state === "finished" || Number.isInteger(player.elapsedSec);
+
+  if (!player.disconnectedAt) {
+    player.disconnectedAt = new Date(now).toISOString();
+  }
+  if (!alreadyFinished) {
+    player.loseReason = player.loseReason || reason;
+  }
+  player.isReady = false;
+
+  awardForfeitWinIfNeeded(room, playerId, now);
+
+  if (!room.winnerPlayerId) {
+    const alive = Array.from(room.players.values()).filter(
+      (p) => !p.disconnectedAt && !Number.isInteger(p.elapsedSec) && !p.loseReason
+    );
+    if (alive.length === 1) {
+      room.winnerPlayerId = alive[0].playerId;
+    }
+  }
+
+  if (isPvpRaceRoom(room) && room.winnerPlayerId && (room.state === "countdown" || room.state === "playing")) {
+    room.state = "finished";
+  }
+
+  maybeFinalizeRoom(room);
+  await applyRatedResultIfNeeded(room);
+  await persistMatchLogIfNeeded(room);
+  await persistBestReplayRecordIfNeeded(room);
+
+  return { ok: true, roomDeleted: false, leavePenalty };
+}
+
+function removePvpTicketsForUser(userId) {
+  for (const [ticketId, ticket] of Array.from(pvpQueueTickets.entries())) {
+    if (isSameUserId(ticket?.userId, userId)) removePvpTicket(ticketId);
+  }
+}
+
+async function releaseUserFromPvpRooms(userId, reason = "requeue") {
+  let released = 0;
+  for (const [, room] of Array.from(raceRooms.entries())) {
+    if (!isPvpRaceRoom(room)) continue;
+    for (const [playerId, player] of Array.from(room.players.entries())) {
+      if (!isSameUserId(player?.userId, userId) || player.disconnectedAt) continue;
+      await markRoomPlayerLeft(room, playerId, reason);
+      released += 1;
+    }
+  }
+  if (released > 0) removePvpTicketsForUser(userId);
+  return released;
+}
+
+function isDetachedPvpTicket(ticket) {
+  if (!ticket || ticket.state !== "matched" || !ticket.roomCode || !ticket.playerId) return false;
+  const room = raceRooms.get(String(ticket.roomCode || "").trim().toUpperCase());
+  if (!room) return true;
+  const player = room.players.get(ticket.playerId);
+  return !player || Boolean(player.disconnectedAt) || room.state === "finished";
+}
+
 function isUserInAnyRoom(userId) {
   if (!userId) return false;
   for (const room of raceRooms.values()) {
     for (const p of room.players.values()) {
-      if (p.userId === userId && !p.disconnectedAt) return true;
+      if (isSameUserId(p.userId, userId) && !p.disconnectedAt) return true;
     }
   }
   return false;
@@ -5799,6 +5925,8 @@ app.post("/pvp/guest/start", async (req, res) => {
 app.post("/pvp/queue/join", requireAuth, async (req, res) => {
   cleanupPvpQueue(Date.now());
 
+  await releaseUserFromPvpRooms(req.authUser.id, "requeue");
+
   if (isUserInAnyRoom(req.authUser.id)) {
     return res.status(400).json({ ok: false, error: "You are already in a room" });
   }
@@ -5808,22 +5936,26 @@ app.post("/pvp/queue/join", requireAuth, async (req, res) => {
   if (existingTicketId) {
     const existing = pvpQueueTickets.get(existingTicketId);
     if (existing) {
-      existing.updatedAt = now;
-      existing.profileAvatarKey = normalizeProfileAvatarKey(req.authUser.profile_avatar_key);
-      const hasRating = Number.isFinite(Number(existing.rating));
-      const hasRank = Number.isInteger(Number(existing.ratingRank)) && Number(existing.ratingRank) > 0;
-      if (!hasRating || !hasRank) {
-        const existingSnapshot = await fetchUserRatingSnapshot(existing.userId);
-        existing.rating = normalizeRatingValue(existingSnapshot?.rating ?? getDisplayRating(req.authUser));
-        existing.ratingRank = normalizeRatingRank(existingSnapshot?.rank);
-      }
-      const payload = await buildPvpStatusPayload(existing, req.authUser.id);
-      if (!payload) {
-        removePvpTicket(existingTicketId);
-      } else if (payload.state === "cancelled") {
+      if (isDetachedPvpTicket(existing)) {
         removePvpTicket(existingTicketId);
       } else {
-        return res.json(payload);
+        existing.updatedAt = now;
+        existing.profileAvatarKey = normalizeProfileAvatarKey(req.authUser.profile_avatar_key);
+        const hasRating = Number.isFinite(Number(existing.rating));
+        const hasRank = Number.isInteger(Number(existing.ratingRank)) && Number(existing.ratingRank) > 0;
+        if (!hasRating || !hasRank) {
+          const existingSnapshot = await fetchUserRatingSnapshot(existing.userId);
+          existing.rating = normalizeRatingValue(existingSnapshot?.rating ?? getDisplayRating(req.authUser));
+          existing.ratingRank = normalizeRatingRank(existingSnapshot?.rank);
+        }
+        const payload = await buildPvpStatusPayload(existing, req.authUser.id);
+        if (!payload) {
+          removePvpTicket(existingTicketId);
+        } else if (payload.state === "cancelled") {
+          removePvpTicket(existingTicketId);
+        } else {
+          return res.json(payload);
+        }
       }
     } else {
       pvpUserTicket.delete(req.authUser.id);
@@ -5835,14 +5967,14 @@ app.post("/pvp/queue/join", requireAuth, async (req, res) => {
   const ratingSnapshot = await fetchUserRatingSnapshot(req.authUser.id);
   const myRating = normalizeRatingValue(ratingSnapshot?.rating ?? getDisplayRating(req.authUser));
   const myRatingRank = normalizeRatingRank(ratingSnapshot?.rank);
-    const myTicket = {
-      ticketId: myTicketId,
-      userId: req.authUser.id,
-      nickname: req.authUser.nickname,
-      rating: myRating,
-      ratingRank: myRatingRank,
-      profileAvatarKey: normalizeProfileAvatarKey(req.authUser.profile_avatar_key),
-      state: "waiting",
+  const myTicket = {
+    ticketId: myTicketId,
+    userId: req.authUser.id,
+    nickname: req.authUser.nickname,
+    rating: myRating,
+    ratingRank: myRatingRank,
+    profileAvatarKey: normalizeProfileAvatarKey(req.authUser.profile_avatar_key),
+    state: "waiting",
     createdAt: now,
     updatedAt: now,
     matchId: null,
@@ -5883,7 +6015,7 @@ app.get("/pvp/queue/status", requireAuth, async (req, res) => {
   return res.json(payload);
 });
 
-app.post("/pvp/queue/cancel", (req, res) => {
+app.post("/pvp/queue/cancel", async (req, res) => {
   const ticketId = String(req.body?.ticketId || "").trim();
   if (!ticketId) return res.status(400).json({ ok: false, error: "ticketId is required" });
   const ticket = pvpQueueTickets.get(ticketId);
@@ -5894,6 +6026,12 @@ app.post("/pvp/queue/cancel", (req, res) => {
     const match = pvpMatches.get(ticket.matchId);
     if (match && match.state !== "ready" && match.state !== "cancelled") {
       cancelPvpMatch(match, "cancelled_by_user", ticket.userId);
+    }
+  }
+  if (ticket.state === "matched" && ticket.roomCode && ticket.playerId) {
+    const room = raceRooms.get(String(ticket.roomCode || "").trim().toUpperCase());
+    if (room && room.players.has(ticket.playerId)) {
+      await markRoomPlayerLeft(room, ticket.playerId, "cancelled_by_user");
     }
   }
   removePvpTicket(ticketId);
@@ -6539,50 +6677,11 @@ app.post("/race/leave", async (req, res) => {
     return res.status(404).json({ ok: false, error: "Player not found in room" });
   }
 
-  // Finalize first if finish conditions are already satisfied.
-  maybeFinalizeRoom(room);
-
-  if (room.state === "lobby") {
-    const wasHost = room.hostPlayerId === playerId;
-    room.players.delete(playerId);
-
-    if (room.players.size === 0) {
-      raceRooms.delete(roomCode);
-      return res.json({ ok: true, roomDeleted: true });
-    }
-
-    if (wasHost) {
-      const nextHost = Array.from(room.players.values()).sort((a, b) =>
-        a.joinedAt > b.joinedAt ? 1 : -1
-      )[0];
-      room.hostPlayerId = nextHost.playerId;
-    }
-    await applyRatedResultIfNeeded(room);
-    return res.json({ ok: true, leavePenalty: { applied: false, points: 0 }, room: roomPublicState(room) });
+  const result = await markRoomPlayerLeft(room, playerId, "left");
+  if (result.roomDeleted) {
+    return res.json({ ok: true, roomDeleted: true, leavePenalty: result.leavePenalty });
   }
-
-  const leavePenalty = await applyLeaveRoomPenaltyIfNeeded(room, player);
-
-  if (!player.disconnectedAt) {
-    player.disconnectedAt = new Date().toISOString();
-  }
-  player.loseReason = player.loseReason || "left";
-  player.isReady = false;
-
-  if (!room.winnerPlayerId) {
-    const alive = Array.from(room.players.values()).filter(
-      (p) => !p.disconnectedAt && !Number.isInteger(p.elapsedSec) && !p.loseReason
-    );
-    if (alive.length === 1) {
-      room.winnerPlayerId = alive[0].playerId;
-    }
-  }
-  maybeFinalizeRoom(room);
-  await applyRatedResultIfNeeded(room);
-  await persistMatchLogIfNeeded(room);
-  await persistBestReplayRecordIfNeeded(room);
-
-  return res.json({ ok: true, leavePenalty, room: roomPublicState(room) });
+  return res.json({ ok: true, leavePenalty: result.leavePenalty, room: roomPublicState(room) });
 });
 
 app.post("/single/finish", async (req, res) => {
