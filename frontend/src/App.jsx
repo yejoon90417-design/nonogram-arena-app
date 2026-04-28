@@ -2318,6 +2318,7 @@ function App() {
   });
   const [authTab, setAuthTab] = useState("login"); // login | signup | reset
   const [authReturnMode, setAuthReturnMode] = useState("menu");
+  const [boardStageTop, setBoardStageTop] = useState(0);
   const [showNeedLoginPopup, setShowNeedLoginPopup] = useState(false);
   const [needLoginReturnMode, setNeedLoginReturnMode] = useState("multi");
   const [tossLoginLoading, setTossLoginLoading] = useState(false);
@@ -2398,6 +2399,7 @@ function App() {
   const [matchSimLogs, setMatchSimLogs] = useState([]);
   const [matchSimFound, setMatchSimFound] = useState(null);
   const [matchFlowTest, setMatchFlowTest] = useState(null);
+  const boardStageRef = useRef(null);
   const boardRef = useRef(null);
   const canvasRef = useRef(null);
   const chatBodyRef = useRef(null);
@@ -3390,16 +3392,22 @@ function App() {
       const totalColumns = puzzle.width + Math.max(maxRowHintDepth, 1);
       const totalRows = puzzle.height + Math.max(maxColHintDepth, 1);
       const usableWidth = Math.max(320, viewportWidth) - (viewportWidth >= 700 ? 132 : 20);
-      const bottomControlsReserve = viewportWidth <= 380 ? 142 : 150;
-      const topUiReserve = raceRoomCode ? 164 : 212;
-      const usableHeight = Math.max(260, viewportHeight - topUiReserve - bottomControlsReserve);
+      const measuredStageTop = boardStageTop > 0 ? boardStageTop : raceRoomCode ? 180 : 300;
+      const hpReserve = raceRoomCode ? 0 : viewportWidth <= 380 ? 44 : 48;
+      const controlsReserve = viewportWidth <= 380 ? 72 : 76;
+      const stageGapsReserve = raceRoomCode ? 16 : 26;
+      const safeBottomReserve = viewportWidth <= 380 ? 10 : 14;
+      const usableHeight = Math.max(
+        220,
+        viewportHeight - measuredStageTop - hpReserve - controlsReserve - stageGapsReserve - safeBottomReserve
+      );
       const widthFit = Math.floor(usableWidth / Math.max(totalColumns, 1));
       const heightFit = Math.floor(usableHeight / Math.max(totalRows, 1));
-      const comfortMax = puzzle.width <= 5 ? 44 : puzzle.width <= 10 ? 31 : 21;
-      return Math.max(12, Math.min(comfortMax, widthFit || comfortMax, heightFit || comfortMax));
+      const comfortMax = puzzle.width <= 5 ? 44 : puzzle.width <= 10 ? 31 : 23;
+      return Math.max(13, Math.min(comfortMax, widthFit || comfortMax, heightFit || comfortMax));
     }
     return puzzle.width >= 25 ? 20 : 24;
-  }, [maxColHintDepth, maxRowHintDepth, playMode, puzzle, raceRoomCode, viewportHeight, viewportWidth]);
+  }, [boardStageTop, maxColHintDepth, maxRowHintDepth, playMode, puzzle, raceRoomCode, viewportHeight, viewportWidth]);
   const excelSheetCols = useMemo(() => Array.from({ length: 40 }, (_, idx) => toSheetColumnLabel(idx)), []);
   const excelSheetRows = useMemo(() => Array.from({ length: 120 }, (_, idx) => idx + 1), []);
   const excelBoardCols = useMemo(() => {
@@ -3564,6 +3572,50 @@ function App() {
   const isPuzzleHpGameOver = isHpPuzzleMode && puzzleHp <= 0 && !isBoardCompleteByHints;
   const puzzleSolutionCells = useMemo(() => getPuzzleSolutionCells(puzzle), [puzzle]);
   const canUsePuzzleHint = isHpPuzzleMode && !isPuzzleHpGameOver && !isBoardCompleteByHints;
+
+  useEffect(() => {
+    if (!IS_APPS_IN_TOSS || !shouldShowPuzzleBoard || isModeCreate) {
+      setBoardStageTop(0);
+      return undefined;
+    }
+
+    let frameId = 0;
+    const measureBoardStage = () => {
+      frameId = 0;
+      const rect = boardStageRef.current?.getBoundingClientRect?.();
+      if (!rect) return;
+      const nextTop = Math.max(0, Math.round(rect.top));
+      setBoardStageTop((prev) => (Math.abs(prev - nextTop) <= 1 ? prev : nextTop));
+    };
+    const scheduleMeasure = () => {
+      if (frameId) window.cancelAnimationFrame(frameId);
+      frameId = window.requestAnimationFrame(measureBoardStage);
+    };
+
+    scheduleMeasure();
+    window.addEventListener("resize", scheduleMeasure);
+    window.visualViewport?.addEventListener("resize", scheduleMeasure);
+    window.addEventListener("scroll", scheduleMeasure, true);
+    return () => {
+      if (frameId) window.cancelAnimationFrame(frameId);
+      window.removeEventListener("resize", scheduleMeasure);
+      window.visualViewport?.removeEventListener("resize", scheduleMeasure);
+      window.removeEventListener("scroll", scheduleMeasure, true);
+    };
+  }, [
+    isModeCreate,
+    playMode,
+    puzzle?.id,
+    puzzle?.width,
+    puzzle?.height,
+    raceRoomCode,
+    shouldShowPuzzleBoard,
+    singleSection,
+    status,
+    viewportHeight,
+    viewportWidth,
+  ]);
+
   const racePhase = raceState?.state || "idle";
   const isRaceLobby = isInRaceRoom && racePhase === "lobby";
   const isRaceCountdown = isInRaceRoom && racePhase === "countdown";
@@ -3861,6 +3913,13 @@ function App() {
   }, [pvpMatchState, pvpMatch, nowMs]);
   const isPvpRevealSpinning =
     pvpMatchState === "reveal" && pvpRevealLeftMs > PVP_REVEAL_RESULT_HOLD_MS;
+  const shouldRunPvpRevealRoulette =
+    isModePvp &&
+    pvpSearching &&
+    !isInRaceRoom &&
+    pvpMatchState === "reveal" &&
+    !isPvpShowdownActive &&
+    isPvpRevealSpinning;
   const isPvpCancelHomeLocked =
     isModePvp &&
     pvpSearching &&
@@ -4299,6 +4358,15 @@ function App() {
     return data.puzzle;
   };
 
+  const fetchBattlePracticePuzzleBySize = async (width, height) => {
+    const res = await fetch(`${API_BASE}/pvp/practice-puzzle?width=${width}&height=${height}`);
+    const data = await parseJsonSafe(res);
+    if (!res.ok || !data.ok || !data.puzzle) {
+      throw new Error(data.error || "Failed to load battle puzzle.");
+    }
+    return data.puzzle;
+  };
+
   const loadRandomBySizeKey = async (sizeKey = selectedSize) => {
     if (isInRaceRoom) {
       setStatus(L("방 플레이 중에는 퍼즐을 바꿀 수 없습니다.", "You cannot change puzzle while in a race room."));
@@ -4318,7 +4386,9 @@ function App() {
     setIsLoading(true);
     setStatus("");
     try {
-      const puzzleData = await fetchRandomPuzzleBySize(width, height);
+      const puzzleData = IS_APPS_IN_TOSS
+        ? await fetchBattlePracticePuzzleBySize(width, height)
+        : await fetchRandomPuzzleBySize(width, height);
       setSelectedSize(safeSizeKey);
       initializePuzzle(puzzleData, {
         resume: true,
@@ -5822,6 +5892,33 @@ function App() {
   const dismissPvpRatingFx = () => {
     stopPvpRatingAnimation();
     setPvpRatingFx(null);
+  };
+
+  const confirmPvpRatingFx = () => {
+    const shouldReturnHome = Boolean(pvpRatingFx && !pvpRatingFx.isTest);
+    stopPvpRatingAnimation();
+    setPvpRatingFx(null);
+    if (!shouldReturnHome) return;
+    if (raceRoomCode || racePlayerId) {
+      void leaveRace();
+    } else {
+      resetPvpQueueState();
+    }
+    clearPuzzleViewState();
+    setRaceRoomCode("");
+    setRacePlayerId("");
+    setRaceState(null);
+    setRaceSubmitting(false);
+    setChatInput("");
+    setShowEmojiPicker(false);
+    setShowMultiResultModal(false);
+    setPublicRooms([]);
+    raceFinishedSentRef.current = false;
+    raceResultShownRef.current = false;
+    raceProgressLastSentRef.current = 0;
+    setTimerRunning(false);
+    setPlayMode("menu");
+    setStatus("");
   };
 
   const startPvpRatingAnimation = (fromRating, toRating, roomCode, options = {}) => {
@@ -7776,7 +7873,7 @@ function App() {
         const toRating = didWin
           ? Number(ratedResult.winnerRatingAfter)
           : Number(ratedResult.loserRatingAfter);
-        if (Number.isFinite(fromRating) && Number.isFinite(toRating) && fromRating !== toRating) {
+        if (Number.isFinite(fromRating) && Number.isFinite(toRating)) {
           pvpRatingFxDoneRoomRef.current = raceRoomCode;
           startPvpRatingAnimation(fromRating, toRating, raceRoomCode, {
             result: didWin ? "win" : "loss",
@@ -7883,7 +7980,7 @@ function App() {
       stopPvpRevealAnimation();
       return;
     }
-    if (!isPvpRevealSpinning) {
+    if (!shouldRunPvpRevealRoulette) {
       stopPvpRevealAnimation();
       const chosenIdx = pvpDisplayOptions.findIndex((o) => o.sizeKey === pvpMatch?.chosenSizeKey);
       if (chosenIdx >= 0) setPvpRevealIndex(chosenIdx);
@@ -7901,18 +7998,26 @@ function App() {
     return () => {
       stopPvpRevealAnimation();
     };
-  }, [isModePvp, pvpSearching, isInRaceRoom, pvpMatchState, pvpDisplayOptions, pvpMatch?.chosenSizeKey, isPvpRevealSpinning]);
+  }, [
+    isModePvp,
+    pvpSearching,
+    isInRaceRoom,
+    pvpMatchState,
+    pvpDisplayOptions,
+    pvpMatch?.chosenSizeKey,
+    shouldRunPvpRevealRoulette,
+  ]);
 
   useEffect(() => {
     if (pvpMatchState !== "reveal") {
       pvpRevealSpinPrevRef.current = false;
       return;
     }
-    if (pvpRevealSpinPrevRef.current && !isPvpRevealSpinning) {
+    if (pvpRevealSpinPrevRef.current && !shouldRunPvpRevealRoulette && !isPvpShowdownActive) {
       playSfx("roulette-stop");
     }
-    pvpRevealSpinPrevRef.current = isPvpRevealSpinning;
-  }, [pvpMatchState, isPvpRevealSpinning]);
+    pvpRevealSpinPrevRef.current = shouldRunPvpRevealRoulette;
+  }, [pvpMatchState, shouldRunPvpRevealRoulette, isPvpShowdownActive]);
 
   useEffect(() => {
     if (!isInRaceRoom || !raceState?.puzzleId) return;
@@ -10746,6 +10851,7 @@ function App() {
 
             <div className="raceBoardPane">
               <div
+                ref={boardStageRef}
                 className="boardWrap hasTopToolbar"
                 onContextMenu={(e) => e.preventDefault()}
               >
@@ -11017,7 +11123,10 @@ function App() {
         )}
 
         {pvpRatingFx && (
-          <div className={`rankedFxOverlay ${pvpFxTierClass}`} onClick={dismissPvpRatingFx}>
+          <div
+            className={`rankedFxOverlay ${pvpFxTierClass}`}
+            onClick={pvpRatingFx.isTest ? dismissPvpRatingFx : undefined}
+          >
             <motion.div
               className={`rankedFxCard ${pvpFxTierClass} ${pvpRatingFx.result === "loss" ? "loss" : "win"} ${
                 pvpRatingFx.done ? "done" : ""
@@ -11027,7 +11136,7 @@ function App() {
               transition={{ type: "spring", stiffness: 230, damping: 24, mass: 0.94 }}
               onClick={(e) => e.stopPropagation()}
             >
-              <div className="rankedFxEyebrow">{pvpRatingFx.isTest ? L("연출 테스트", "FX Test") : "RANKED RESULT"}</div>
+              <div className="rankedFxEyebrow">{pvpRatingFx.isTest ? L("연출 테스트", "FX Test") : L("배틀 결과", "Battle Result")}</div>
               <div className={`rankedFxOutcome ${pvpRatingFx.result === "loss" ? "loss" : "win"}`}>{pvpFxOutcomeLabel}</div>
               <div className="rankedFxSub">{pvpFxOutcomeSub}</div>
 
@@ -11078,6 +11187,12 @@ function App() {
                 <div className="rankedFxScoreNow">R {pvpRatingFx.ratingNow}</div>
                 <div className={`rankedFxScoreDelta ${pvpRatingFx.delta >= 0 ? "plus" : "minus"}`}>{pvpFxDeltaText}</div>
               </div>
+              <div className={`rankedFxDeltaSummary ${pvpRatingFx.delta >= 0 ? "plus" : "minus"}`}>
+                {L(
+                  `이번 경기 ${pvpRatingFx.delta >= 0 ? "+" : ""}${pvpRatingFx.delta}점`,
+                  `This match ${pvpRatingFx.delta >= 0 ? "+" : ""}${pvpRatingFx.delta}`
+                )}
+              </div>
 
               <div className="rankedFxTrackBlock">
                 <div className="rankedFxTrackRail">
@@ -11097,8 +11212,8 @@ function App() {
               </div>
 
               <div className="rankedFxActions">
-                <button type="button" className="singleHomeBtn" onClick={dismissPvpRatingFx}>
-                  {L("닫기", "Close")}
+                <button type="button" className="singleHomeBtn" onClick={confirmPvpRatingFx}>
+                  {pvpRatingFx.isTest ? L("닫기", "Close") : L("확인", "OK")}
                 </button>
               </div>
             </motion.div>
@@ -11610,6 +11725,7 @@ function App() {
 
         {shouldShowPuzzleBoard && !isInRaceRoom && (
           <div
+                ref={boardStageRef}
                 className={`boardWrap puzzleBoardStage ${!isModeCreate ? "hasTopToolbar" : ""}`}
                 onContextMenu={(e) => e.preventDefault()}
                 data-tutorial={isSingleSoloMode ? "single-board" : undefined}

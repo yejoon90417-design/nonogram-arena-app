@@ -5304,6 +5304,36 @@ const getRandomPuzzleBySize = async (req, res) => {
 
 app.get("/puzzles-random", getRandomPuzzleBySize);
 app.get("/puzzles/random", getRandomPuzzleBySize);
+
+const isPvpBattleSize = (width, height) =>
+  PVP_BATTLE_SIZE_OPTIONS.some(([optionWidth, optionHeight]) => optionWidth === width && optionHeight === height);
+
+app.get("/pvp/practice-puzzle", async (req, res) => {
+  const width = Number(req.query?.width);
+  const height = Number(req.query?.height);
+
+  if (!Number.isInteger(width) || !Number.isInteger(height)) {
+    return res.status(400).json({ ok: false, error: "width/height are required" });
+  }
+  if (!isPvpBattleSize(width, height)) {
+    return res.status(400).json({ ok: false, error: "Only battle puzzle sizes are allowed" });
+  }
+
+  try {
+    const puzzle = await fetchRandomPuzzleForSize(width, height);
+    const resolvedPuzzle = puzzle || buildGuestFallbackPuzzle(width, height);
+    return res.json({
+      ok: true,
+      source: "pvp_battle",
+      puzzle: puzzlePracticeClientView(resolvedPuzzle),
+      fallback: !puzzle,
+    });
+  } catch (err) {
+    const puzzle = buildGuestFallbackPuzzle(width, height);
+    return res.json({ ok: true, source: "pvp_battle", puzzle: puzzlePracticeClientView(puzzle), fallback: true });
+  }
+});
+
 app.get("/race-rooms", (_req, res) => {
   const rooms = Array.from(raceRooms.values())
     .map(roomListItem)
